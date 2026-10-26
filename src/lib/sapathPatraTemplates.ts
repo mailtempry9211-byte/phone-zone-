@@ -48,18 +48,20 @@ export function formatAadhaarNumber(idNum: string): string {
 }
 
 export function buildSapathPatraHtml(data: SapathPatraData): string {
-  const lang = data.language || "both";
+  const d = data || ({} as any);
+  const lang = d.language || "both";
   const showHindi = lang === "hindi" || lang === "both";
   const showEnglish = lang === "english" || lang === "both";
 
-  const numWords = Number(data.amount) ? Number(data.amount).toLocaleString("en-IN") : data.amount;
-  const fullModel = `${data.brand} ${data.model} ${data.variant || ""}`.trim();
+  const numWords = Number(d.amount) ? Number(d.amount).toLocaleString("en-IN") : (d.amount || "0");
+  const fullModel = `${d.brand || ""} ${d.model || ""} ${d.variant || ""}`.trim() || "Mobile Phone";
+  const refNo = d.refNo || "PUR-REF";
 
   return `<!DOCTYPE html>
 <html lang="hi">
 <head>
   <meta charset="utf-8">
-  <title>शपथ पत्र - ${data.refNo}</title>
+  <title>शपथ पत्र - ${refNo}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -295,7 +297,7 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       </div>
       <div class="meta-item">
         <strong>Ref No. (संदर्भ सं.):</strong>
-        <span>${data.refNo}</span>
+        <span>${refNo}</span>
       </div>
       <div class="meta-item">
         <strong>Seller Name (नाम):</strong>

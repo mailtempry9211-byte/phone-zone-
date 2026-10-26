@@ -61,7 +61,7 @@ export const SapathPatraModal: React.FC<SapathPatraModalProps> = ({
     language: (phone.sapath_patra_language as any) || "both",
   } : null);
 
-  if (!effectiveData) return null;
+  if (!open || !effectiveData) return null;
 
   const currentData: SapathPatraData = {
     ...effectiveData,
@@ -124,7 +124,7 @@ export const SapathPatraModal: React.FC<SapathPatraModalProps> = ({
               विक्रेता शपथ पत्र (Declaration & Undertaking)
             </DialogTitle>
             <p className="text-xs text-gray-500 mt-0.5">
-              Ref: {data.refNo} • {data.sellerName} • {data.brand} {data.model}
+              Ref: {effectiveData.refNo} • {effectiveData.sellerName} • {effectiveData.brand} {effectiveData.model}
             </p>
           </div>
 
