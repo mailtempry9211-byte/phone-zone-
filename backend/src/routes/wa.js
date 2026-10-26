@@ -128,12 +128,15 @@ export function buildWaRouter(staffAuth, adminAuth) {
   }));
 
   r.post("/gateway/send-invoice-pdf", staffAuth, wrap(async (req, res) => {
-    const { phone, invoiceId, invoiceHtml, filename, caption, channel } = req.body || {};
+    const { phone, invoiceId, invoiceHtml, pdfBase64, filename, caption, message, channel } = req.body || {};
     if (!phone) throw badRequest("phone is required.");
     const { getInvoicePdf, htmlToPdfBuffer, attachPdf } = await import("../services/invoiceService.js");
 
     let pdfBuf = null;
-    if (invoiceId) {
+    if (pdfBase64) {
+      const cleanB64 = String(pdfBase64).replace(/^data:application\/pdf;base64,/, "");
+      pdfBuf = Buffer.from(cleanB64, "base64");
+    } else if (invoiceId) {
       pdfBuf = getInvoicePdf(invoiceId);
     }
 
@@ -144,28 +147,88 @@ export function buildWaRouter(staffAuth, adminAuth) {
       }
     }
 
+    const textToSend = message || caption || "";
+    let textResult = null;
+    let pdfResult = null;
+
+    // 1. Send text receipt / invoice summary first
+    if (textToSend) {
+      try {
+        textResult = await openWaService.sendTextMessage({
+          phone,
+          message: textToSend,
+          channel: channel || "sales",
+        });
+      } catch (err) {
+        // If text sending had an issue, continue to attempt PDF
+      }
+    }
+
+    // 2. Send PDF document
     if (pdfBuf) {
-      const result = await openWaService.sendDocumentMessage({
+      pdfResult = await openWaService.sendDocumentMessage({
         phone,
         pdfBuffer: pdfBuf,
         filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
-        caption: caption || "Thank you for your business with PhoneZone! Here is your official invoice.",
+        caption: "", // text already sent cleanly above
         channel: channel || "sales",
       });
-      return res.json({ ok: true, type: "pdf", result });
     }
 
-    // Fallback: If PDF could not be generated, send clean text invoice
-    if (caption) {
-      const textResult = await openWaService.sendTextMessage({
+    if (textResult || pdfResult) {
+      return res.json({
+        ok: true,
+        textSent: !!textResult,
+        pdfSent: !!pdfResult,
+        type: pdfResult && textResult ? "text_and_pdf" : pdfResult ? "pdf" : "text",
+        textResult,
+        pdfResult,
+      });
+    }
+
+    throw badRequest("Could not dispatch message or generate invoice PDF buffer.");
+  }));
+
+  r.post("/gateway/send", staffAuth, wrap(async (req, res) => {
+    // Alias route that accepts { phone, message, pdfBase64, filename, channel }
+    const { phone, message, caption, pdfBase64, filename, channel } = req.body || {};
+    if (!phone) throw badRequest("phone is required.");
+
+    const textToSend = message || caption || "";
+    let textResult = null;
+    let pdfResult = null;
+
+    if (textToSend) {
+      try {
+        textResult = await openWaService.sendTextMessage({
+          phone,
+          message: textToSend,
+          channel: channel || "sales",
+        });
+      } catch (err) {
+        // Continue
+      }
+    }
+
+    if (pdfBase64) {
+      const cleanB64 = String(pdfBase64).replace(/^data:application\/pdf;base64,/, "");
+      const pdfBuf = Buffer.from(cleanB64, "base64");
+      pdfResult = await openWaService.sendDocumentMessage({
         phone,
-        message: caption,
+        pdfBuffer: pdfBuf,
+        filename: filename || "PhoneZone_Document.pdf",
+        caption: "",
         channel: channel || "sales",
       });
-      return res.json({ ok: true, type: "text_fallback", result: textResult });
     }
 
-    throw badRequest("Could not generate invoice PDF buffer.");
+    return res.json({
+      ok: true,
+      textSent: !!textResult,
+      pdfSent: !!pdfResult,
+      textResult,
+      pdfResult,
+    });
   }));
 
   return r;

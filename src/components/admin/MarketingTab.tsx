@@ -488,12 +488,12 @@ export default function MarketingTab() {
                   </div>
 
                   <div className="p-3 bg-slate-50 border rounded-lg space-y-1.5 text-xs text-slate-700">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-gray-500">Connection Status:</span>
                       <span className="font-semibold flex items-center gap-1">
                         {isConnected ? (
-                          <span className="text-emerald-600 flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Connected & Ready
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Connected: +{activeSession?.phone}
                           </span>
                         ) : (
                           <span className="text-amber-600 flex items-center gap-1">
@@ -570,14 +570,21 @@ export default function MarketingTab() {
                   </div>
 
                   {isConnected ? (
-                    <div className="text-center space-y-2 py-6">
-                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                        <CheckCircle2 className="h-7 w-7" />
+                    <div className="text-center space-y-3 py-6">
+                      <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-600" />
                       </div>
-                      <h4 className="font-bold text-sm text-slate-800">WhatsApp Number Linked & Active</h4>
-                      <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                        This session is active. Invoices, sapath patra, and repair job updates will be dispatched automatically.
-                      </p>
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-base text-slate-800">
+                          WhatsApp Linked & Active!
+                        </h4>
+                        <div className="inline-block bg-emerald-100 text-emerald-900 font-mono text-sm font-bold px-3 py-1 rounded-full border border-emerald-300">
+                          +{activeSession?.phone} {activeSession?.pushName ? `(${activeSession.pushName})` : ""}
+                        </div>
+                        <p className="text-xs text-gray-500 max-w-xs mx-auto pt-1">
+                          This session is connected and ready. Invoices, PDFs, and updates will be dispatched automatically in the background.
+                        </p>
+                      </div>
                     </div>
                   ) : linkMode === "qr" ? (
                     /* QR Code Mode */

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const SettingsTab = () => {
@@ -33,8 +33,40 @@ const SettingsTab = () => {
       const res = await fetch('/api/wa/gateway/server-status');
       return res.ok ? res.json() : { running: false, port: 2785 };
     },
-    refetchInterval: 6000,
+    refetchInterval: 5000,
   });
+
+  const { data: salesSession } = useQuery({
+    queryKey: ['openwa-session-sales'],
+    queryFn: async () => {
+      const res = await fetch('/api/wa/gateway/session/sales');
+      return res.ok ? res.json() : null;
+    },
+    refetchInterval: 5000,
+  });
+
+  const handleChannelChange = async (value: string) => {
+    setFormData((prev) => ({ ...prev, whatsapp_channel: value }));
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsapp_channel: value }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+        toast.success(
+          value === "openwa"
+            ? "WhatsApp Channel saved: OpenWA Gateway active!"
+            : value === "chrome_extension"
+            ? "WhatsApp Channel saved: Chrome Extension active!"
+            : "WhatsApp Channel saved: Click-to-Chat active!"
+        );
+      }
+    } catch {
+      toast.error("Failed to save WhatsApp channel setting");
+    }
+  };
 
   const [formData, setFormData] = useState({
     business_name: "",
@@ -921,8 +953,8 @@ const SettingsTab = () => {
                   name="whatsapp_channel"
                   value={value}
                   checked={formData.whatsapp_channel === value}
-                  onChange={() => setFormData({ ...formData, whatsapp_channel: value })}
-                  className="mt-1 h-4 w-4 text-emerald-600"
+                  onChange={() => handleChannelChange(value)}
+                  className="mt-1 h-4 w-4 text-emerald-600 cursor-pointer"
                 />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-gray-900">{label}</div>
@@ -933,7 +965,7 @@ const SettingsTab = () => {
           </div>
 
           {formData.whatsapp_channel === "openwa" && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-900 space-y-2">
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-950 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="font-semibold flex items-center gap-1.5">
                   <Radio className="h-4 w-4 text-emerald-600" />
@@ -980,8 +1012,25 @@ const SettingsTab = () => {
                   )}
                 </div>
               </div>
-              <p className="text-gray-600">
-                To link your WhatsApp via QR code or 8-digit Pairing Code, open the <strong>Marketing</strong> tab &rarr; <strong>OpenWA Gateway</strong> card.
+
+              {salesSession?.connected ? (
+                <div className="bg-white border border-emerald-200 p-2.5 rounded-md flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 font-medium text-emerald-900">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <strong>WhatsApp Linked:</strong> +{salesSession.phone} {salesSession.pushName ? `(${salesSession.pushName})` : ""}
+                  </span>
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    Ready to Dispatch
+                  </span>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 p-2 rounded text-amber-800">
+                  ⚠️ WhatsApp not linked yet. Open the <strong>Marketing</strong> tab &rarr; <strong>OpenWA Gateway</strong> to scan QR code or enter Pairing Code.
+                </div>
+              )}
+
+              <p className="text-gray-600 text-[11px]">
+                Invoices and Sapath Patra will now be dispatched automatically as <strong>BOTH Text Receipt and PDF Document</strong> via this WhatsApp connection!
               </p>
             </div>
           )}

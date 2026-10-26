@@ -35,10 +35,21 @@ export async function dispatchWhatsApp({
     return { success: false, channel: "unknown" };
   }
 
-  const channel = adminSettings?.whatsapp_channel || "click_to_chat";
+  // Fetch latest settings if channel is not defined on adminSettings
+  let effectiveChannel = adminSettings?.whatsapp_channel;
+  if (!effectiveChannel) {
+    try {
+      const sRes = await fetch("/api/settings");
+      if (sRes.ok) {
+        const s = await sRes.json();
+        effectiveChannel = s.whatsapp_channel;
+      }
+    } catch {}
+  }
+  const channel = effectiveChannel || "click_to_chat";
 
-  // Check if Web Share API with files is available (Android / mobile browser / APK)
-  if (pdfBlob && typeof navigator !== "undefined" && navigator.canShare) {
+  // Check if Web Share API with files is available (Android / mobile browser / APK) when in click_to_chat mode
+  if (channel === "click_to_chat" && pdfBlob && typeof navigator !== "undefined" && navigator.canShare) {
     try {
       const file = new File([pdfBlob], pdfFileName, { type: "application/pdf" });
       if (navigator.canShare({ files: [file] })) {
@@ -61,22 +72,42 @@ export async function dispatchWhatsApp({
 
   if (channel === "openwa") {
     try {
-      const res = await fetch("/api/wa/gateway/send", {
+      let pdfBase64: string | undefined = undefined;
+      if (pdfBlob) {
+        pdfBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(pdfBlob);
+        });
+      }
+
+      const res = await fetch("/api/wa/gateway/send-invoice-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: cleanPhone,
           message,
-          session: "sales",
+          pdfBase64,
+          filename: pdfFileName,
+          channel: "sales",
         }),
       });
-      if (res.ok) {
-        toast.success("Message dispatched via OpenWA Gateway");
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        if (data.type === "text_and_pdf") {
+          toast.success("Invoice text message and PDF document sent via WhatsApp!");
+        } else if (data.type === "pdf") {
+          toast.success("Invoice PDF document sent via WhatsApp!");
+        } else {
+          toast.success("Invoice text sent via WhatsApp!");
+        }
         return { success: true, channel: "openwa" };
       }
       toast.warning("OpenWA gateway not responsive, opening Click-to-Chat fallback");
-    } catch {
-      toast.warning("OpenWA gateway offline, opening Click-to-Chat fallback");
+    } catch (err: any) {
+      toast.warning("OpenWA gateway unreachable, opening Click-to-Chat fallback");
     }
   } else if (channel === "chrome_extension") {
     try {
