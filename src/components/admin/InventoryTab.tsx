@@ -217,14 +217,14 @@ const InventoryTab = () => {
       ? []
       : (phone.purchase_documents || []);
 
-    // Sold phones on this tab generate a sale invoice (selling price); unsold ones a
-    // purchase invoice. A broker copy overrides the amount - accounts stay untouched.
+    // In Inventory Tab, invoice is always the Purchase Invoice (from seller).
+    // For sales invoices to customers, users go to the Sold tab.
     const invoiceAmount = photos.broker && photos.brokerAmount > 0
       ? photos.brokerAmount
-      : Number(phone.is_sold ? (phone.selling_price || 0) : (phone.purchase_price || 0));
+      : Number(phone.purchase_price || 0);
 
     return buildInvoiceHtml({
-      kind: phone.is_sold ? 'sale' : 'purchase',
+      kind: 'purchase',
       style: photos.style,
       settings: adminSettings,
       phone,
@@ -235,7 +235,7 @@ const InventoryTab = () => {
       photoChoice: photos.photos,
       productPhotos,
       documentPhotos,
-      documentLabel: phone.is_sold ? 'Sales Documents' : 'Purchase Documents',
+      documentLabel: 'Purchase Documents',
       terms: (adminSettings.terms_and_conditions_purchase || adminSettings.terms_and_conditions || '').split('\n').filter(Boolean),
       fallbackTerms: DEFAULT_PURCHASE_TERMS,
     });
@@ -593,24 +593,12 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
                   Docs
                 </Button>
                 
-                {phone.is_sold && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => viewPhotos(phone, 'sales')}
-                    disabled={!phone.payment_proof_photos?.length}
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Sales Doc
-                  </Button>
-                )}
-                
                 <div className="flex flex-wrap gap-1">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => { setInvoiceDialogPhone(phone); setInvoiceDialogOpen(true); }}
-                    title="Customize & generate invoice"
+                    title="Customize & generate purchase invoice"
                   >
                     <Receipt className="h-4 w-4 mr-1" />
                     Invoice
@@ -625,27 +613,29 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
                     <ShieldCheck className="h-4 w-4 mr-1 text-blue-600" />
                     शपथ पत्र
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      downloadSaleWallpaper({
-                        phoneId: phone.id,
-                        phoneName: phone.phone_name,
-                        imei: phone.imei_number,
-                        storage: phone.variant,
-                        sellingPrice: phone.selling_price,
-                      })
-                    }
-                    title="Download Sale QR Wallpaper (set on phone screen to sell instantly)"
-                  >
-                    <QrCode className="h-4 w-4 text-blue-600" />
-                  </Button>
+                  {!phone.is_sold && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        downloadSaleWallpaper({
+                          phoneId: phone.id,
+                          phoneName: phone.phone_name,
+                          imei: phone.imei_number,
+                          storage: phone.variant,
+                          sellingPrice: phone.selling_price,
+                        })
+                      }
+                      title="Download Sale QR Wallpaper (set on phone screen to sell instantly)"
+                    >
+                      <QrCode className="h-4 w-4 text-blue-600" />
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => generateInvoice(phone, 'whatsapp')}
-                    title="WhatsApp Invoice"
+                    title="WhatsApp Purchase Invoice"
                     className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
                   >
                     <Share className="h-4 w-4 mr-1" />
@@ -713,11 +703,11 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
       <InvoiceCustomizeDialog
         open={invoiceDialogOpen}
         onOpenChange={setInvoiceDialogOpen}
-        kind={invoiceDialogPhone?.is_sold ? "sale" : "purchase"}
+        kind="purchase"
         productCount={invoiceDialogPhone?.product_photos?.length || 0}
         purchaseCount={invoiceDialogPhone?.purchase_documents?.length || 0}
-        saleCount={invoiceDialogPhone?.payment_proof_photos?.length || 0}
-        baseAmount={invoiceDialogPhone?.is_sold ? Number(invoiceDialogPhone?.selling_price || 0) : Number(invoiceDialogPhone?.purchase_price || 0)}
+        saleCount={0}
+        baseAmount={Number(invoiceDialogPhone?.purchase_price || 0)}
         onGenerate={(c) => {
           if (!invoiceDialogPhone) return;
           generateInvoice(invoiceDialogPhone, c.action || 'pdf', c);

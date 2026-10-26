@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit, Eye, Receipt, Search, Filter, Download, Share } from "lucide-react";
+import { Edit, Eye, Receipt, Search, Filter, Download, Share, ShieldCheck } from "lucide-react";
 import EditPhoneDialog from "./EditPhoneDialog";
 import PhotoViewer from "./PhotoViewer";
 import InvoiceCustomizeDialog, { type InvoiceCustomization } from "./InvoiceCustomizeDialog";
+import SapathPatraModal from "./SapathPatraModal";
 import { buildInvoiceHtml, DEFAULT_SALE_TERMS } from "@/lib/invoiceTemplates";
 import { toast } from "sonner";
 import { numberToWords } from "@/utils/numberToWords";
@@ -21,6 +22,7 @@ const SoldTab = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [invoicePhone, setInvoicePhone] = useState<any | null>(null);
+  const [sapathPatraPhone, setSapathPatraPhone] = useState<any | null>(null);
   const [currentPhotos, setCurrentPhotos] = useState<string[]>([]);
   const [currentPhotoTitle, setCurrentPhotoTitle] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -379,8 +381,20 @@ Thank you for purchasing with ${adminSettings?.business_name || ''}!`;
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => viewPhotos(phone, 'purchase')}
+                  disabled={!phone.purchase_documents?.length}
+                  title="Purchase Documents"
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  Docs
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => viewPhotos(phone, 'sales')}
                   disabled={!phone.payment_proof_photos?.length}
+                  title="Sales Documents"
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   Sales Doc
@@ -390,10 +404,21 @@ Thank you for purchasing with ${adminSettings?.business_name || ''}!`;
                   variant="outline"
                   size="sm"
                   onClick={() => setInvoicePhone(phone)}
-                  title="Customise & generate invoice"
+                  title="Customise & generate sale invoice"
                 >
                   <Receipt className="h-4 w-4 mr-1" />
                   Invoice
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSapathPatraPhone(phone)}
+                  title="Legal Sapath Patra (शपथ पत्र)"
+                  className="text-blue-700 hover:text-blue-800 hover:bg-blue-50"
+                >
+                  <ShieldCheck className="h-4 w-4 mr-1 text-blue-600" />
+                  शपथ पत्र
                 </Button>
 
                 <Button
@@ -443,6 +468,12 @@ Thank you for purchasing with ${adminSettings?.business_name || ''}!`;
           if (!invoicePhone) return;
           generateInvoice(invoicePhone, custom.action || 'pdf', custom);
         }}
+      />
+
+      <SapathPatraModal
+        phone={sapathPatraPhone}
+        open={!!sapathPatraPhone}
+        onOpenChange={(o) => { if (!o) setSapathPatraPhone(null); }}
       />
     </div>
   );
