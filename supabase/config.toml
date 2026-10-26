@@ -1,0 +1,4 @@
+project_id = "qzrclxbamvovrraizldj"
+
+[functions.mcp]
+verify_jwt = false

@@ -1,0 +1,66 @@
+# PhoneZone - repository hygiene.
+#
+# HARD RULE: real customer data must never be committed or zipped.
+# `data/`, `data11/` and every *.db / *.db-wal / *.db-shm / *.tar.gz hold
+# Aadhaar photos, customer names, phone numbers and the live business database.
+
+# ---- real business data (NEVER share, NEVER commit) ----
+data/
+data11/
+*.db
+*.db-wal
+*.db-shm
+*.tar.gz
+.env
+.env.*
+!.env.example
+
+# ---- agent backups / generated deliverables ----
+_backup_*/
+deliverables/
+*.zip
+ADHAR/
+mobile one/
+.agents/
+# VERIFY_OUTPUT.txt is deliberately NOT ignored: it is the evidence file the
+# owner must be able to find and send for review.
+
+# ---- logs and debug scratch ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+err.txt
+out.txt
+vite-out.log
+ngrok-*
+tmp-*.mjs
+.tmp-*.mjs
+tmp-*.png
+back-*.png
+scratch/
+
+# ---- builds / dependencies ----
+node_modules
+dist
+dist-ssr
+dist-electron
+release
+*.local
+
+# ---- OS / editor directories and files ----
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- OCR language data (the copy under public/ocr is what the app uses) ----
+/*.traineddata

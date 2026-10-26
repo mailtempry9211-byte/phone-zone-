@@ -1,0 +1,3 @@
+{"ts":"2026-08-08T12:59:12.040Z","level":"info","message":"Database ready","meta":{"file":"C:\\Users\\ASUS INDIA\\AppData\\Roaming\\PhoneZone\\database\\phonezone.db"}}
+{"ts":"2026-08-08T12:59:12.071Z","level":"info","message":"PhoneZone backend listening on http://127.0.0.1:47713"}
+Data directory: C:\Users\ASUS INDIA\AppData\Roaming\PhoneZone

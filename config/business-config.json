@@ -1,0 +1,33 @@
+{
+  "businessHours": {
+    "monday": {"open": "09:00", "close": "18:00"},
+    "tuesday": {"open": "09:00", "close": "18:00"},
+    "wednesday": {"open": "09:00", "close": "18:00"},
+    "thursday": {"open": "09:00", "close": "18:00"},
+    "friday": {"open": "09:00", "close": "18:00"},
+    "saturday": {"open": "09:00", "close": "18:00"},
+    "sunday": {"open": "10:00", "close": "16:00"}
+  },
+  "messageTemplates": {
+    "buyPhone": "Hi, I'm interested in buying a second-hand phone. Please share what's available.",
+    "repairService": "Hi! I need repair service for my phone. Can you help?",
+    "priceInquiry": "Hi, could you tell me the price for a phone I'm interested in?",
+    "visitStore": "Hi, I'd like to visit your store. Please confirm your timings.",
+    "productInquiry": "Hi, I'm interested in buying this phone:\n\nBrand/Model: {model}\nCondition: {condition}\nPrice: ₹{price}",
+    "repairServiceSpecific": "Hi, I need {service} service for my phone. Please let me know the availability and final price."
+  },
+  "repairServices": [
+    { "id": "screen",   "name": "Screen Replacement",   "startingFrom": 1500, "duration": "30-60 minutes",  "warranty": "Included", "description": "High-quality screen replacement for all major phone brands" },
+    { "id": "battery",  "name": "Battery Replacement",  "startingFrom": 800,  "duration": "15-30 minutes",  "warranty": "Included", "description": "Original battery replacement with warranty" },
+    { "id": "charging", "name": "Charging Port Repair", "startingFrom": 600,  "duration": "20-45 minutes",  "warranty": "Included", "description": "Fix charging issues and port replacement" },
+    { "id": "software", "name": "Software Issues",      "startingFrom": 300,  "duration": "30-90 minutes",  "warranty": "Included", "description": "OS updates, app fixes, and performance optimization" },
+    { "id": "water",    "name": "Water Damage Repair",  "startingFrom": 1200, "duration": "2-24 hours",     "warranty": "Included", "description": "Professional water damage restoration service" },
+    { "id": "general",  "name": "General Repair",       "startingFrom": 500,  "duration": "30-120 minutes", "warranty": "Included", "description": "Camera, speaker, mic, and other component repairs" }
+  ],
+  "invoiceSettings": {
+    "prefixes": { "purchase": "PUR", "sale": "SAL", "return": "RET" },
+    "currency": "INR",
+    "currencySymbol": "₹",
+    "warrantyDays": 30
+  }
+}

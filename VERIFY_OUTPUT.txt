@@ -1,0 +1,131 @@
+PhoneZone VERIFY_OUTPUT
+Stage            : 5
+Date             : 2026-10-26T10:05:34.144Z
+Node             : v24.21.0
+Platform         : win32 x64
+
+SUMMARY: PASSED 61 / FAILED 0 / SKIPPED 0
+  (Counts cover the A-numbers of PhoneZone_MASTER_PROMPT.md section 5 for this
+   stage, plus SUITE1/SUITE2 = backend/test/offline-suite.mjs and
+   backend/test/first-setup-suite.mjs, plus R01..R06 = the repair-round checks
+   for the storage listing, restore rate limit, Returns-tab compat filters and
+   backend-vs-browser accounting figures. A38..A43 are the Stage 1.1
+   follow-up guards: filterless/bogus-filter updates and selects, read-only
+   audit_logs, non-writable files metadata, and column-name injection.)
+
+FAILED ITEMS: none
+
+========================================================================
+
+PhoneZone VERIFY
+========================================================================
+Stage            : 5
+Date             : 2026-10-26T10:03:37.135Z
+Node             : v24.21.0
+Platform         : win32 x64 (10.0.26200)
+Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
+
+--- sha256 of security-critical files ---
+2dbed332b6ba15d3140658266a16f79cda50d4381cee60a17cb59c1f2d325505  backend/src/routes/index.js
+bfe4e401d8b2516de0bb0da7c20f59e2c267348de74897e32d90f2c01f282f2b  backend/src/routes/compat.js
+280ba2b0f413a39de9a9537cb86a905d753f0b299d6299fd65acdb2e3dd4f801  backend/src/services/inventoryService.js
+834ede395b0f0ce4a4ba04d31f960d587de41d60133a7fd676f986cd14cb9c41  backend/src/services/storageService.js
+e1354d385ddc68931a072751e80f0412304b63ef74762eccce7fc08afa451c2f  backend/src/services/authService.js
+24eff0d0ad18d04f72bbecd145cd2730eeee3fe20d7c3aa6d068d836f6fc168c  backend/src/services/backupService.js
+65610fe2538be0445ffcdd523c65248298388454ce47eeacb62f8ed0983439f2  package.json
+802c0161880cd94e4b736df7d63bce48f472a2b14888d0c55d734a953d516dd9  database/migrations/001_initial_schema.sql
+37490d92c93dea76f10125acffe8795cd3c49658797a2f5bd95dcff8ab77c915  database/migrations/002_business_settings.sql
+c45040ef1e5a24eadae21f0444152d07b2ae8aff05ed399fef72b3f02fa202f7  database/migrations/003_add_bank_verification_and_separate_terms.sql
+300cb7949ca2ed413e6377f62cb1913ff21a84613fbd6a6d443e09cbe23ac875  database/migrations/004_tac_and_hicelltek.sql
+297d45ad82af676f76c12803f158b50600ea41fb8fd203ddfb05d246798e97f4  database/migrations/005_phone_variant_colour.sql
+95bcad44bdaaca73b41ab3e1e88a9dc5c4e62e90d5b2102579f4f398569b0029  database/migrations/006_financial_years.sql
+f1f3d3d5ba157d9c4e19ef1f11ef328bbeb384d55264e3b13c185120b3d463ac  database/migrations/007_shops.sql
+9e1be90d2c3b2ec957f75a5c9c017d85c5ea2a78438e4935e6da2ade615367d0  database/migrations/009_hashed_sessions.sql
+fa12f7a0569b3da80e6cd3dbf2a5bb5a4d533993a08f788a17fe2ad32f563405  database/migrations/010_public_product_photos.sql
+3a864eb36dfae6f4767d25ab81e5025136315d6d2193fa6aedc7176967abff15  database/migrations/011_repairs.sql
+aa8108071dd90eb71663531878f6ae06dd036804b79e3e61c140f1e6274eab57  database/migrations/012_multi_shop.sql
+f5161b2f1d6a532eddb19f19364877d4bfae8bd02f5f779da45ae69e61cb1c29  database/migrations/013_whatsapp.sql
+64f88d93d2162ac9b50ada312301c4a3129e63a0444c7e896acc46d0d588042a  database/migrations/014_expand_user_roles.sql
+b370b3f007e105b3413f2b69bde52b413fa96bbfae224058be709c912bf20782  database/migrations/015_repair_jobs_optional_imei.sql
+684b70f0d719eb338e443c00d0e382a7d9add150f161ae6a5e5780f879e73d4c  database/migrations/016_openwa_settings.sql
+f7d92dfb363cecf28dbdb1fa6a2ea74c047608666fdb982882b94aa0ed4fad7c  database/migrations/017_financial_year_carry_forward.sql
+b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migrations/018_ngrok_settings.sql
+54b34edf6a217fcc01a5b6359f4523a5dd244b0232bff98aed1089d438e816e8  database/migrations/019_repair_rework.sql
+182090b632f19310db211d92dbbfb4f871d8b4c8206f0ee421286902e0fcb328  database/migrations/020_whatsapp_channel_and_sapath.sql
+
+--- A01: node --check on backend + scripts ---
+  A01 PASS  45 files checked, 0 failed
+
+--- A02 / A03: migrations ---
+  A02 PASS  19/19 migrations applied to a brand-new database
+  A03 PASS  7 pre-stamped, 19/19 after startup
+
+--- live backend on a throwaway data directory ---
+  server ready on http://127.0.0.1:48202/api
+  A04 PASS  GET /api/health -> 200
+  A05 PASS  users at startup = 0, password printed = false
+  A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
+  A05b PASS  setup -> 200, admin accounts = 1
+  A07a PASS  login -> 200
+  A11 PASS  no private fields
+  A07 PASS  POST /api/pg/phones/select -> 200, array = true
+  A12 PASS  anonymous object fetch -> 401
+  A08 PASS  empty filters -> 400, phones = 0
+  A09 PASS  injection filter -> 400, phones = 0
+  A10 PASS  phone row kept = true, deleted_at set = true, hidden from select = true
+  A38 PASS  empty filters -> 400, rows@1 = 0, unchanged = true
+  A39 PASS  bogus column -> 400, rows@1 = 0, unchanged = true
+  A40 PASS  insert 403, update 403, delete 403, rows 4 -> 4
+  A41 PASS  files insert 403, update 403, forged row true, private 404, public 404, db leaked = false
+  A42 PASS  bogus select -> 400
+  A43 PASS  values 400, filter column 400, filter op 400, unchanged = true
+  A13 PASS  html-as-jpg 400, real png 201, nosniff = nosniff
+  A15 PASS  Luhn-invalid IMEI -> 400
+  A16 PASS  first 201, duplicate 400
+  A17 PASS  rejected = 400 (That IMEI is not valid. Please check the 15 digits printed o), orphan seller rows = 0
+  A18 PASS  purchase_returned sale 400, 2nd purchase_return 400, 2nd sales_return 400
+  A19 PASS  FY 2026-27, format ok = true, unique 20/20, sample SAL-MAIN-2026-27-0001
+  A06 PASS  10 wrong = 401, 11th = 429, blocked correct = 429, after window = 200
+  R01 PASS  upload 201, listed yes, owner phone, bytes 70, public fetch 200
+  R02 PASS  delete 200, still listed = false, public after delete 404
+  R03 PASS  usage 2 file(s) / 4166 bytes, list 2 / 4166
+  R04 PASS  attempts 404,404,404,404,404,404,404,404,404,429 (blocked after 9), message readable = true
+  R05 PASS  fresh purchase 201, or+is select 200 with 1 row(s) and the fresh row listed = true, admin_settings single row = true
+  R06 PASS  seed sale 201, dashboard revenue 350 vs rows 350, profit 250 vs 250, rows 3
+  A47 PASS  runtime-config 200, contains offline flag = true
+  A56 PASS  forged file path -> 404
+  A21 PASS  repairs tables found: 4/4
+  A22 PASS  invalid Luhn repair IMEI -> 400
+  A23 PASS  status -> ready, ready_at = true, logs = 2
+  A24 PASS  board_replaced = 1
+  A25 PASS  found = 1, soft-deleted row kept = true
+  A26 PASS  by-phone found = Anand Repair, in customers table = 0
+  A27 PASS  repair data leaked in public routes = false
+  A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
+  A61 PASS  by-phone match returned repair customer 456a3973-dffc-44f5-881f-86134238b83d
+  A62 PASS  audit note status 201, rows in audit_logs = 1
+  A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
+  A63 PASS  cross-shop update status = 403
+  A64 PASS  shop1 SAL-MAIN-2026-27-0021 vs shop2 SAL-B2-2026-27-0001
+  A32 PASS  pg 404, setup 404, repair 404, public inventory 200
+  A33 PASS  handles not-installed = true, funnel blocked = true
+  A34 PASS  queued phones: 9876500001, non-opted excluded = true
+  A35 PASS  first item: 9876500001, second waitSeconds: 10
+  A36 PASS  revoked token call returned 401
+  A37 PASS  extension MV3 manifest valid = true
+  A65 PASS  masked = •••• •••• 7777, unmasked fetch = 200, audit logged = true
+  A66 PASS  viewer read 200, viewer insert blocked 403
+  A67 PASS  active sessions count = 1, current marked = true, revoke status = 200
+  A68 PASS  system optimize status 200
+
+--- backend regression suites ---
+  test/offline-suite.mjs: 138 passed, 0 failed
+  SUITE1 PASS  138 passed, 0 failed
+  test/first-setup-suite.mjs: 32 passed, 0 failed
+  SUITE2 PASS  32 passed, 0 failed
+
+--- A20: typecheck and production build ---
+  tsc exit 0
+  npm run build exit 0
+  A20 PASS  tsc 0 (0 error line(s) in 0 file(s); touched by this stage: none), build 0
+
