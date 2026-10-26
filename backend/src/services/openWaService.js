@@ -8,10 +8,13 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import net from "node:net";
+import { spawn } from "node:child_process";
 import { getDb } from "../db/index.js";
 import { logger } from "../lib/logger.js";
 
 const DEFAULT_OPENWA_URL = process.env.OPENWA_SERVER_URL || "http://127.0.0.1:2785";
+let openWaChildProcess = null;
 
 /**
  * Auto-detect OpenWA API key from known filesystem paths if not explicitly configured in DB
@@ -321,4 +324,126 @@ export async function sendDocumentMessage({ phone, pdfBuffer, filename, caption 
       caption: caption || "",
     }),
   });
+}
+
+export function findOpenWaDirectory() {
+  const candidates = [
+    "C:/Users/Kohinoor/Desktop/OpenWA",
+    path.resolve(process.env.USERPROFILE || "", "Desktop/OpenWA"),
+    path.resolve(process.cwd(), "../OpenWA"),
+    path.resolve(process.cwd(), "./OpenWA"),
+  ].filter(Boolean);
+
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, "dist", "main.js"))) {
+      return c;
+    }
+  }
+  return null;
+}
+
+export async function checkPortListening(port = 2785, host = "127.0.0.1", timeout = 1000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isConnected = false;
+    socket.setTimeout(timeout);
+    socket.on("connect", () => {
+      isConnected = true;
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on("error", () => {
+      resolve(false);
+    });
+    socket.connect(port, host);
+  });
+}
+
+export async function getServerStatus() {
+  const listening = await checkPortListening(2785);
+  let sessionCount = 0;
+  if (listening) {
+    try {
+      const res = await openWaFetch("/api/sessions");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      sessionCount = list.length;
+    } catch {}
+  }
+  return {
+    running: listening,
+    port: 2785,
+    pid: openWaChildProcess?.pid || null,
+    sessionCount,
+  };
+}
+
+export async function startOpenWaServer() {
+  const isListening = await checkPortListening(2785);
+  if (isListening) {
+    return { ok: true, message: "OpenWA server is already running on port 2785" };
+  }
+
+  const dir = findOpenWaDirectory();
+  if (!dir) {
+    throw new Error("OpenWA directory not found. Please ensure OpenWA folder exists on Desktop.");
+  }
+
+  const mainJs = path.join(dir, "dist", "main.js");
+  if (!fs.existsSync(mainJs)) {
+    throw new Error(`OpenWA build not found at ${mainJs}.`);
+  }
+
+  const child = spawn(process.execPath, [mainJs], {
+    cwd: dir,
+    env: { ...process.env, PORT: "2785" },
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+  openWaChildProcess = child;
+
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (await checkPortListening(2785)) {
+      return { ok: true, message: "OpenWA server started successfully", pid: child.pid };
+    }
+  }
+
+  return { ok: true, message: "OpenWA server launched, waiting for initialization...", pid: child.pid };
+}
+
+export async function stopOpenWaServer() {
+  if (openWaChildProcess) {
+    try {
+      openWaChildProcess.kill();
+    } catch {}
+    openWaChildProcess = null;
+  }
+  return { ok: true, message: "OpenWA server stopped" };
+}
+
+export async function requestPairingCode({ channel = "sales", phone }) {
+  if (!phone) throw new Error("Phone number is required for pairing code");
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.length === 10) digits = "91" + digits;
+
+  const sessionId = await getSessionIdForChannel(channel);
+
+  const res = await openWaFetch(`/api/sessions/${sessionId}/pairing-code`, {
+    method: "POST",
+    body: JSON.stringify({ phoneNumber: digits }),
+  });
+
+  return {
+    ok: true,
+    channel,
+    sessionId,
+    phoneNumber: digits,
+    pairingCode: res.pairingCode || res.code || (typeof res === "string" ? res : "CODE_SENT"),
+    status: res.status || "pairing_code_sent",
+  };
 }

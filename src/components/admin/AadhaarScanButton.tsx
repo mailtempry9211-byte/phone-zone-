@@ -52,7 +52,7 @@ const AadhaarScanButton = ({ onResult, onPhoto, disabled }: AadhaarScanButtonPro
     scanCounterRef.current += 1;
     photoRef.current = { file, side };
     setScannedSide(side);
-    await scan(file);
+    await scan(file, side);
   };
 
   useEffect(() => {

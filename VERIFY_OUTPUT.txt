@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-26T10:05:34.144Z
+Date             : 2026-10-26T13:44:11.120Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,7 +20,7 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-26T10:03:37.135Z
+Date             : 2026-10-26T13:43:02.168Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
@@ -51,7 +51,7 @@ b370b3f007e105b3413f2b69bde52b413fa96bbfae224058be709c912bf20782  database/migra
 f7d92dfb363cecf28dbdb1fa6a2ea74c047608666fdb982882b94aa0ed4fad7c  database/migrations/017_financial_year_carry_forward.sql
 b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migrations/018_ngrok_settings.sql
 54b34edf6a217fcc01a5b6359f4523a5dd244b0232bff98aed1089d438e816e8  database/migrations/019_repair_rework.sql
-182090b632f19310db211d92dbbfb4f871d8b4c8206f0ee421286902e0fcb328  database/migrations/020_whatsapp_channel_and_sapath.sql
+64db29b0e21167911e8b7f824cc44c564edcf46b1bb137112c5bd284b0adb894  database/migrations/020_whatsapp_channel_and_sapath.sql
 
 --- A01: node --check on backend + scripts ---
   A01 PASS  45 files checked, 0 failed
@@ -61,7 +61,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A03 PASS  7 pre-stamped, 19/19 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:48202/api
+  server ready on http://127.0.0.1:48288/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -102,7 +102,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 456a3973-dffc-44f5-881f-86134238b83d
+  A61 PASS  by-phone match returned repair customer 79c25b2b-c960-483f-878a-974610582b37
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Send, Key, FileText, CheckCircle2, XCircle, Clock, QrCode, Smartphone, Wrench, RefreshCw, Radio } from "lucide-react";
+import { AlertTriangle, Send, Key, FileText, CheckCircle2, XCircle, Clock, QrCode, Smartphone, Wrench, RefreshCw, Radio, Play, Square, Copy, Check, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function MarketingTab() {
@@ -29,6 +29,22 @@ export default function MarketingTab() {
   const [unifiedMode, setUnifiedMode] = useState(false);
   const [testingPhone, setTestingPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Hello from PhoneZone WhatsApp Gateway!");
+
+  // Server management & Pairing Code
+  const [linkMode, setLinkMode] = useState<"qr" | "pairing_code">("qr");
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [pairingCodeResult, setPairingCodeResult] = useState<{ code: string; status: string } | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+
+  const { data: serverStatus, refetch: refetchServerStatus } = useQuery({
+    queryKey: ["openwa-server-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/wa/gateway/server-status");
+      return res.ok ? res.json() : { running: false, port: 2785 };
+    },
+    refetchInterval: 5000,
+  });
 
   const { data: adminSettings } = useQuery({
     queryKey: ["admin-settings"],
@@ -69,6 +85,64 @@ export default function MarketingTab() {
       return res.ok ? res.json() : null;
     },
     refetchInterval: 8000,
+  });
+
+  const startServerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/wa/gateway/start-server", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start OpenWA server");
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({ title: "OpenWA Server Started", description: data.message || "Gateway server is now running on port 2785." });
+      refetchServerStatus();
+      refetchSales();
+      refetchRepair();
+    },
+    onError: (err: any) => {
+      toast({ title: "Start Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const stopServerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/wa/gateway/stop-server", { method: "POST" });
+      return res.ok ? res.json() : null;
+    },
+    onSuccess: () => {
+      toast({ title: "OpenWA Server Stopped", description: "Gateway server stopped." });
+      refetchServerStatus();
+      refetchSales();
+      refetchRepair();
+    },
+    onError: (err: any) => {
+      toast({ title: "Stop Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const requestPairingCodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!pairingPhone.trim()) throw new Error("Please enter your 10-digit WhatsApp phone number");
+      const res = await fetch("/api/wa/gateway/pairing-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: openWaTab, phone: pairingPhone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate pairing code");
+      return data;
+    },
+    onSuccess: (data) => {
+      setPairingCodeResult({ code: data.pairingCode, status: data.status });
+      toast({
+        title: "Pairing Code Generated!",
+        description: `Code: ${data.pairingCode}. Enter this in WhatsApp on your phone.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Pairing Code Error", description: err.message, variant: "destructive" });
+    },
   });
 
   const saveConfigMutation = useMutation({
@@ -275,23 +349,93 @@ export default function MarketingTab() {
       {/* OpenWA Direct WhatsApp Gateway Card */}
       <Card className="border-green-300 shadow-sm">
         <CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-white pb-3 border-b">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base text-emerald-950 font-bold">
                 <Radio className="h-5 w-5 text-emerald-600" /> OpenWA Self-Hosted WhatsApp API Gateway
               </CardTitle>
               <CardDescription className="text-xs">
-                Direct WhatsApp integration via OpenWA REST API. Scan QR once to send PDF Invoices and Repair Updates automatically.
+                Direct WhatsApp integration via OpenWA REST API. Scan QR or link via Phone Number to dispatch Invoices & Updates automatically.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-white">
-                Dual Session Support
-              </Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              {serverStatus?.running ? (
+                <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 font-semibold flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Gateway Running (Port 2785)
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 font-semibold flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" /> Gateway Offline
+                </Badge>
+              )}
+              {serverStatus?.running ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                  disabled={stopServerMutation.isPending}
+                  onClick={() => stopServerMutation.mutate()}
+                >
+                  <Square className="h-3 w-3 mr-1 fill-red-600 text-red-600" /> Stop Server
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={startServerMutation.isPending}
+                  onClick={() => startServerMutation.mutate()}
+                >
+                  <Play className="h-3 w-3 mr-1 fill-white text-white" />
+                  {startServerMutation.isPending ? "Starting Server..." : "Start Gateway Server"}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-emerald-800"
+                onClick={() => setShowGuide(!showGuide)}
+              >
+                <HelpCircle className="h-3.5 w-3.5 mr-1" />
+                {showGuide ? "Hide Guide" : "WhatsApp Guide"}
+                {showGuide ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-5">
+          {/* Detailed Guide Accordion */}
+          {showGuide && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs space-y-3">
+              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                📖 WhatsApp Features & Setup Complete Guide (व्हाट्सएप फीचर्स उपयोग करने की पूरी गाइड)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                <div className="border rounded-md p-3 bg-white space-y-1">
+                  <div className="font-bold text-emerald-700">1. Click-to-Chat (wa.me URL)</div>
+                  <p className="text-gray-600">
+                    बिल्कुल ज़ीरो सेटअप। मोबाइल, टैबलेट, APK या ब्राउज़र में तुरंत चलता है। इनवॉइस शेयर बटन दबाते ही कस्टमर का व्हाट्सएप चैट खुल जाएगा जहां से आप PDF शेयर कर सकते हैं।
+                  </p>
+                </div>
+                <div className="border rounded-md p-3 bg-white space-y-1">
+                  <div className="font-bold text-blue-700">2. OpenWA Gateway (पूर्ण ऑटोमेशन)</div>
+                  <p className="text-gray-600">
+                    ऊपर <strong>&quot;Start Gateway Server&quot;</strong> दबाएं। QR कोड स्कैन करें या <strong>&quot;Pairing Code&quot;</strong> से अपने फोन नंबर से लिंक करें। इनवॉइस और शपथ पत्र बैकग्राउंड में अपने-आप PDF बनकर कस्टमर को चले जाएंगे!
+                  </p>
+                </div>
+                <div className="border rounded-md p-3 bg-white space-y-1">
+                  <div className="font-bold text-purple-700">3. Chrome Extension (PC मार्केटिंग)</div>
+                  <p className="text-gray-600">
+                    अगर आप मेन कंप्यूटर से बल्क मार्केटिंग या ऑफर्स भेजना चाहते हैं, तो Chrome Extension का उपयोग करें। यह WhatsApp Web में सुरक्षित अंतराल (25-70 सेकंड) के साथ मैसेज कतार में भेजता है।
+                  </p>
+                </div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded text-emerald-900 flex items-center gap-2">
+                <span className="font-bold">📱 APK / सेम फोन यूज़र्स के लिए:</span>
+                अगर आप उसी फोन में PhoneZone चला रहे हैं जिसमें व्हाट्सएप है, तो <strong>&quot;Link with Phone Number (Pairing Code)&quot;</strong> टैब चुनें और 8-अंकों का कोड डालकर बिना कैमरा के सीधे लिंक करें!
+              </div>
+            </div>
+          )}
+
           {/* Channel Selector: Sales vs Repairs */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-4">
             <div className="flex gap-2">
@@ -329,12 +473,12 @@ export default function MarketingTab() {
             </label>
           </div>
 
-          {/* Active Session Status & QR Code */}
+          {/* Active Session Status & QR / Pairing Code */}
           {(() => {
             const activeSession = openWaTab === "sales" ? salesSession : repairSession;
             const isConnected = activeSession?.connected;
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">Active Channel:</span>
@@ -353,7 +497,7 @@ export default function MarketingTab() {
                           </span>
                         ) : (
                           <span className="text-amber-600 flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> Scan QR to Link Device
+                            <Clock className="h-3.5 w-3.5" /> Waiting to Link WhatsApp
                           </span>
                         )}
                       </span>
@@ -401,41 +545,147 @@ export default function MarketingTab() {
                   </div>
                 </div>
 
-                {/* QR Code Frame */}
-                <div className="flex flex-col items-center justify-center p-4 border rounded-xl bg-slate-50 text-center min-h-[220px]">
+                {/* Right Panel: QR Code OR Pairing Code Linking */}
+                <div className="border rounded-xl bg-slate-50 p-4 space-y-3">
+                  {/* Mode Selector */}
+                  <div className="flex border-b pb-2 gap-2 justify-center">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={linkMode === "qr" ? "default" : "ghost"}
+                      className={`h-7 text-xs ${linkMode === "qr" ? "bg-emerald-700 hover:bg-emerald-800" : ""}`}
+                      onClick={() => setLinkMode("qr")}
+                    >
+                      <QrCode className="h-3.5 w-3.5 mr-1" /> Scan QR Code
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={linkMode === "pairing_code" ? "default" : "ghost"}
+                      className={`h-7 text-xs ${linkMode === "pairing_code" ? "bg-emerald-700 hover:bg-emerald-800" : ""}`}
+                      onClick={() => setLinkMode("pairing_code")}
+                    >
+                      <Smartphone className="h-3.5 w-3.5 mr-1" /> Link with Phone Number (Pairing Code)
+                    </Button>
+                  </div>
+
                   {isConnected ? (
-                    <div className="text-center space-y-2">
+                    <div className="text-center space-y-2 py-6">
                       <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
                         <CheckCircle2 className="h-7 w-7" />
                       </div>
-                      <h4 className="font-bold text-sm text-slate-800">WhatsApp Number Linked</h4>
-                      <p className="text-xs text-gray-500 max-w-xs">
-                        This session is active. Invoices and repair job updates will be sent automatically.
+                      <h4 className="font-bold text-sm text-slate-800">WhatsApp Number Linked & Active</h4>
+                      <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                        This session is active. Invoices, sapath patra, and repair job updates will be dispatched automatically.
                       </p>
                     </div>
-                  ) : activeSession?.qrCode ? (
-                    <div className="space-y-2">
-                      <img
-                        src={activeSession.qrCode}
-                        alt="WhatsApp QR Code"
-                        className="w-44 h-44 border p-1 rounded-lg bg-white shadow-sm mx-auto"
-                      />
-                      <p className="text-xs text-gray-600 font-medium">
-                        Scan from WhatsApp &rarr; Linked Devices &rarr; Link a Device
-                      </p>
+                  ) : linkMode === "qr" ? (
+                    /* QR Code Mode */
+                    <div className="flex flex-col items-center justify-center text-center min-h-[200px] py-2">
+                      {activeSession?.qrCode ? (
+                        <div className="space-y-2">
+                          <img
+                            src={activeSession.qrCode}
+                            alt="WhatsApp QR Code"
+                            className="w-44 h-44 border p-1 rounded-lg bg-white shadow-sm mx-auto"
+                          />
+                          <p className="text-xs text-gray-600 font-medium">
+                            Scan from WhatsApp &rarr; Linked Devices &rarr; Link a Device
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 mt-1"
+                            onClick={() => (openWaTab === "sales" ? refetchSales() : refetchRepair())}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" /> Refresh QR
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-2 text-gray-500 text-xs py-4">
+                          <QrCode className="h-10 w-10 text-gray-400 mx-auto" />
+                          <p>
+                            {serverStatus?.running
+                              ? "Waiting for OpenWA session QR code..."
+                              : "Gateway server is offline. Click 'Start Gateway Server' above."}
+                          </p>
+                          {serverStatus?.running ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              onClick={() => (openWaTab === "sales" ? refetchSales() : refetchRepair())}
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" /> Refresh QR
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700"
+                              disabled={startServerMutation.isPending}
+                              onClick={() => startServerMutation.mutate()}
+                            >
+                              <Play className="h-3 w-3 mr-1" /> Start Gateway Server
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-center space-y-2 text-gray-500 text-xs">
-                      <QrCode className="h-10 w-10 text-gray-400 mx-auto" />
-                      <p>Connecting to OpenWA gateway at {gatewayUrl}...</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7"
-                        onClick={() => (openWaTab === "sales" ? refetchSales() : refetchRepair())}
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" /> Refresh QR
-                      </Button>
+                    /* Pairing Code Mode (No Camera Needed) */
+                    <div className="space-y-3 py-2 text-left">
+                      <div className="text-xs text-gray-600">
+                        Enter your 10-digit WhatsApp phone number to receive an 8-character code for linking without camera:
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g. 9044136105"
+                          value={pairingPhone}
+                          onChange={(e) => setPairingPhone(e.target.value)}
+                          className="text-xs h-8"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 shrink-0"
+                          disabled={!pairingPhone || requestPairingCodeMutation.isPending}
+                          onClick={() => requestPairingCodeMutation.mutate()}
+                        >
+                          {requestPairingCodeMutation.isPending ? "Generating..." : "Get Pairing Code"}
+                        </Button>
+                      </div>
+
+                      {pairingCodeResult?.code && (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded-lg p-3 text-center space-y-2">
+                          <span className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider block">
+                            Your 8-Character Pairing Code:
+                          </span>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="font-mono text-2xl font-black text-emerald-950 tracking-widest bg-white px-4 py-1 rounded border border-emerald-200 shadow-inner">
+                              {pairingCodeResult.code}
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-9 px-3 text-xs border-emerald-300 text-emerald-800 bg-white hover:bg-emerald-100"
+                              onClick={() => {
+                                navigator.clipboard.writeText(pairingCodeResult.code);
+                                setCopiedCode(true);
+                                setTimeout(() => setCopiedCode(false), 2000);
+                                toast({ title: "Copied!", description: "Pairing code copied to clipboard." });
+                              }}
+                            >
+                              {copiedCode ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          <div className="text-[11px] text-gray-600 text-left bg-white p-2.5 rounded border border-emerald-100 space-y-1">
+                            <p className="font-semibold text-emerald-900">अपने व्हाट्सएप में कोड कैसे दर्ज करें:</p>
+                            <p>1. फोन में WhatsApp &rarr; <strong>Settings</strong> (या Three Dots) &rarr; <strong>Linked Devices</strong> खोलें</p>
+                            <p>2. <strong>&quot;Link a Device&quot;</strong> पर टैप करें &rarr; नीचे <strong>&quot;Link with phone number instead&quot;</strong> चुनें</p>
+                            <p>3. यह 8-अंकों का कोड टाइप करें। आपका डिवाइस तुरंत लिंक हो जाएगा!</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

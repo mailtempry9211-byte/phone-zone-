@@ -464,7 +464,7 @@ export const useAadhaarOcr = () => {
     return workerRef.current;
   }, []);
 
-  const scan = useCallback(async (file: File | Blob) => {
+  const scan = useCallback(async (file: File | Blob, side?: "front" | "back") => {
     if (busyRef.current) return;
     busyRef.current = true;
     setState({ ...IDLE, status: "loading" });
@@ -484,6 +484,7 @@ export const useAadhaarOcr = () => {
         setState((s) => ({ ...s, status: "reading", progress: 0.1, error: "Scanning Aadhaar..." }));
         const form = new FormData();
         form.append("image", workFile);
+        if (side) form.append("side", side);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         const resp = await fetch("/api/ocr/aadhaar", {
@@ -501,11 +502,11 @@ export const useAadhaarOcr = () => {
             const ok = idNumber ? verhoeffValidate(idNumber) : false;
             const data: AadhaarData = {
               idNumber,
-              name: d.name,
-              dob: d.dob,
-              yob: d.yob,
-              gender: d.gender,
-              address: d.address,
+              name: side === "back" ? undefined : d.name,
+              dob: side === "back" ? undefined : d.dob,
+              yob: side === "back" ? undefined : d.yob,
+              gender: side === "back" ? undefined : d.gender,
+              address: side === "front" ? undefined : d.address,
               checksumOk: ok || !!d.checksumOk,
             };
             setState({
@@ -550,11 +551,11 @@ export const useAadhaarOcr = () => {
         const idNumber = assembleIdNumber(printed, qr);
         const data: AadhaarData = {
           idNumber,
-          name: qr.name,
-          dob: qr.dob,
-          yob: qr.yob,
-          gender: qr.gender,
-          address: qr.address,
+          name: side === "back" ? undefined : qr.name,
+          dob: side === "back" ? undefined : qr.dob,
+          yob: side === "back" ? undefined : qr.yob,
+          gender: side === "back" ? undefined : qr.gender,
+          address: side === "front" ? undefined : qr.address,
           mobile: undefined,
           checksumOk: /^\d{12}$/.test(idNumber) ? verhoeffValidate(idNumber) : false,
         };
@@ -618,7 +619,7 @@ export const useAadhaarOcr = () => {
           const { data: passData } = await worker.recognize(frameBlob, { tessedit_pageseg_mode: psm });
           const text = passData?.text || "";
           if (!raw) raw = text;
-          const pass = parseAadhaarText(text);
+          const pass = parseAadhaarText(text, side);
           if (pass) {
             parses.push(pass);
             passAngle.set(pass, deg);
@@ -637,7 +638,7 @@ export const useAadhaarOcr = () => {
 
       // Rescue pass: the untouched color photo often keeps a name line that the
       // contrast-stretched frame washed out. Run it once, in the winning rotation.
-      if (!parsed || !(parsed.name && parsed.address)) {
+      if (!parsed || (side === "front" ? !parsed.name : !parsed.address)) {
         setState((s) => ({ ...s, status: "reading", progress: 0.85, error: "Re-reading the original photo for missed details..." }));
         const winner = parses.reduce<AadhaarData | null>(
           (a, b) => (scoreAadhaar(b) > scoreAadhaar(a) ? b : a),
@@ -647,7 +648,7 @@ export const useAadhaarOcr = () => {
         try {
           const rescueBlob = deg === 0 ? workFile : await rotateImage(workFile, deg);
           const { data: rescueData } = await worker.recognize(rescueBlob, { tessedit_pageseg_mode: "4" });
-          const rescue = parseAadhaarText(rescueData?.text || "");
+          const rescue = parseAadhaarText(rescueData?.text || "", side);
           if (rescue) {
             parses.push(rescue);
             parsed = pickBestAadhaar(parses);

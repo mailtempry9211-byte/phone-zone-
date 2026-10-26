@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, Star, Landmark, FileText, Smartphone, KeyRound, Plus } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 
 const SettingsTab = () => {
@@ -25,6 +25,15 @@ const SettingsTab = () => {
       if (error) throw error;
       return data;
     }
+  });
+
+  const { data: serverStatus, refetch: refetchServerStatus } = useQuery({
+    queryKey: ['openwa-server-status'],
+    queryFn: async () => {
+      const res = await fetch('/api/wa/gateway/server-status');
+      return res.ok ? res.json() : { running: false, port: 2785 };
+    },
+    refetchInterval: 6000,
   });
 
   const [formData, setFormData] = useState({
@@ -922,6 +931,60 @@ const SettingsTab = () => {
               </label>
             ))}
           </div>
+
+          {formData.whatsapp_channel === "openwa" && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-900 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <Radio className="h-4 w-4 text-emerald-600" />
+                  OpenWA Server Status: {serverStatus?.running ? (
+                    <span className="text-emerald-700 font-bold flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Online (Port 2785)
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 font-bold flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-amber-500" /> Offline (Stopped)
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  {serverStatus?.running ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px] text-red-700 border-red-300 hover:bg-red-50"
+                      onClick={async () => {
+                        await fetch("/api/wa/gateway/stop-server", { method: "POST" });
+                        refetchServerStatus();
+                        toast.success("OpenWA Server stopped");
+                      }}
+                    >
+                      <Square className="h-2.5 w-2.5 mr-1 fill-red-600 text-red-600" /> Stop Server
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={async () => {
+                        const res = await fetch("/api/wa/gateway/start-server", { method: "POST" });
+                        const data = await res.json();
+                        refetchServerStatus();
+                        if (res.ok) toast.success(data.message || "OpenWA Server started!");
+                        else toast.error(data.error || "Failed to start OpenWA server");
+                      }}
+                    >
+                      <Play className="h-2.5 w-2.5 mr-1 fill-white text-white" /> Start Gateway Server
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-gray-600">
+                To link your WhatsApp via QR code or 8-digit Pairing Code, open the <strong>Marketing</strong> tab &rarr; <strong>OpenWA Gateway</strong> card.
+              </p>
+            </div>
+          )}
 
           {formData.whatsapp_channel === "click_to_chat" && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800">

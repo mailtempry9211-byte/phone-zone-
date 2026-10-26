@@ -37,7 +37,8 @@ export function buildOcrRouter(staffMiddleware) {
         throw badRequest("No image uploaded. Provide an image file or base64 string.");
       }
 
-      const result = await ocrAadhaarBuffer(buffer);
+      const side = req.body?.side || req.query?.side || undefined;
+      const result = await ocrAadhaarBuffer(buffer, side);
       if (!result || !result.data) {
         return res.json({
           success: false,

@@ -371,45 +371,34 @@ const findYob = (text: string): string | undefined => {
 export const fillPersonFields = <T extends {
   name?: string; phone?: string; address?: string; id_proof_type?: string; id_number?: string;
 }>(prev: T, d: AadhaarData): T => {
-  // A scan without a 12-digit number (worn back side: name+address only)
-  // must never wipe the number or name a front scan already filled.
-  const hasNumber = /^\d{12}$/.test(d.idNumber || "");
-  if (!hasNumber) {
-    return {
-      ...prev,
-      name: prev.name || d.name || "",
-      phone: prev.phone || d.mobile || "",
-      address: prev.address || d.address || "",
-      id_proof_type: prev.id_proof_type || "aadhaar",
-    };
-  }
-  const samePerson = !prev.id_number || prev.id_number === d.idNumber;
-  if (samePerson) {
-    return {
-      ...prev,
-      name: prev.name || d.name || "",
-      phone: prev.phone || d.mobile || "",
-      address: prev.address || d.address || "",
-      id_proof_type: "aadhaar",
-      id_number: d.idNumber,
-    };
-  }
+  // If this scan yielded a new address (e.g. back scan), use it; otherwise preserve existing address
+  const address = d.address?.trim() ? d.address.trim() : (prev.address || "");
+
+  // If this scan yielded a name (e.g. front scan), use it; otherwise NEVER wipe out existing name on back scan!
+  const name = d.name?.trim() ? d.name.trim() : (prev.name || "");
+
+  // If this scan yielded a phone, use it; otherwise preserve existing
+  const phone = d.mobile?.trim() ? d.mobile.trim() : (prev.phone || "");
+
+  // Use valid 12-digit number if found; otherwise retain existing
+  const hasValidNum = /^\d{12}$/.test(d.idNumber || "");
+  const id_number = hasValidNum ? d.idNumber : (prev.id_number || d.idNumber || "");
+
   return {
     ...prev,
-    name: d.name || "",
-    phone: d.mobile || "",
-    address: d.address || "",
+    name,
+    phone,
+    address,
     id_proof_type: "aadhaar",
-    id_number: d.idNumber,
+    id_number,
   };
 };
 
 /**
  * Parse raw OCR text of an Aadhaar card.
- * `checksumOk` is true only when the Verhoeff checksum passes (possibly after
- * a single-digit OCR repair) - callers should treat false as "verify by hand".
+ * Accepts optional sideHint ("front" | "back") to strictly isolate front vs back fields.
  */
-export const parseAadhaarText = (raw: string): AadhaarData | null => {
+export const parseAadhaarText = (raw: string, sideHint?: "front" | "back"): AadhaarData | null => {
   const text = (raw || "").replace(/\r/g, "");
   const found = findNumber(text);
 
@@ -427,24 +416,25 @@ export const parseAadhaarText = (raw: string): AadhaarData | null => {
   }
 
   const dob = findDob(text);
+  const gender = findGender(text);
+  const isFront = sideHint === "front" || (!sideHint && !!(dob || gender) && !/(?:[aA]?[dD][dg]ress|S[\/:]O|D[\/:]O|W[\/:]O|C[\/:]O|पता)/i.test(text));
+  const isBack = sideHint === "back";
+
   const parsed: AadhaarData = {
     idNumber,
-    name: findName(text),
-    dob,
-    yob: dob ? undefined : findYob(text),
-    gender: findGender(text),
-    address: findAddress(text),
+    name: isBack ? undefined : findName(text),
+    dob: isBack ? undefined : dob,
+    yob: isBack ? undefined : (dob ? undefined : findYob(text)),
+    gender: isBack ? undefined : gender,
+    address: isFront ? undefined : findAddress(text),
     mobile: findMobile(text),
     checksumOk,
   };
-  // A frame WITHOUT a readable number used to be dropped entirely. But on the
-  // worn-PVC back side the big number line may vanish while name+address read
-  // fine - that data is still worth keeping (the front scan supplies the
-  // number). Only accept the no-number parse when it found real identity data.
+  // Accept partial reads if either address or any valid identity field was captured
   if (!found) {
     if (parsed.address) return parsed;
     const hasIdentity = (parsed.name ? 1 : 0) + (parsed.dob || parsed.yob ? 1 : 0) + (parsed.gender ? 1 : 0);
-    return hasIdentity >= 2 ? parsed : null;
+    return hasIdentity >= 1 ? parsed : null;
   }
   return parsed;
 };

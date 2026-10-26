@@ -89,6 +89,24 @@ export function buildWaRouter(staffAuth, adminAuth) {
   }));
 
   // ---------------- OpenWA REST Gateway Dual Sessions ----------------
+  r.get("/gateway/server-status", staffAuth, wrap(async (_req, res) => {
+    res.json(await openWaService.getServerStatus());
+  }));
+
+  r.post("/gateway/start-server", staffAuth, wrap(async (_req, res) => {
+    res.json(await openWaService.startOpenWaServer());
+  }));
+
+  r.post("/gateway/stop-server", staffAuth, wrap(async (_req, res) => {
+    res.json(await openWaService.stopOpenWaServer());
+  }));
+
+  r.post("/gateway/pairing-code", staffAuth, wrap(async (req, res) => {
+    const { channel, phone } = req.body || {};
+    if (!phone) throw badRequest("phone is required.");
+    res.json(await openWaService.requestPairingCode({ channel: channel || "sales", phone }));
+  }));
+
   r.get("/gateway/config", staffAuth, wrap((_req, res) => {
     res.json(openWaService.getOpenWaConfig());
   }));

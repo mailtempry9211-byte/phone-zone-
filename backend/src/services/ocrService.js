@@ -295,10 +295,10 @@ export function cleanAadhaarAddress(text) {
   let startIdx = -1;
   let startOffset = 0;
 
-  const relRe = /(?:^|[^a-zA-Z0-9])([1I5]?[sSwWdDcC][\/|1I0oO2FfHh]?[oO0Ff]{1,2}|S10|S20|5\/0|SF|SCF|SO|DO|WO|CO)\b/i;
+  const relRe = /(?:^|[^a-zA-Z0-9])([1I5sSwWdDcC][\/|1I0oO2FfHh:.-]?[oO0Ff]{1,2}|S10|S20|5\/0|SF|SCF|SO|DO|WO|CO|S\s*[\/|:]\s*O|W\s*[\/|:]\s*O|D\s*[\/|:]\s*O|C\s*[\/|:]\s*O)\b/i;
 
-  // 1) Primary Anchor: If 'Address:' or 'ddress:' label exists, the real English address starts there!
-  const addrIdx = lines.findIndex((l) => /[aA]?[dD][dg]ress\s*[:.\-]?/i.test(l));
+  // 1) Primary Anchor: If 'Address:' label exists, the real English address starts there!
+  const addrIdx = lines.findIndex((l) => /(?:[aA]?[dD][dg]ress|Addr|Addres|Adres|Addre|पता\s*[\/:]?\s*Address)/i.test(l));
   if (addrIdx !== -1) {
     const sameLineMatch = lines[addrIdx].match(relRe);
     if (sameLineMatch) {
@@ -319,7 +319,7 @@ export function cleanAadhaarAddress(text) {
   if (startIdx === -1) {
     for (let i = 0; i < lines.length; i++) {
       const m = lines[i].match(relRe);
-      if (m && /[A-Za-z]{3,}/.test(lines[i])) {
+      if (m && /[A-Z][a-z]{2,}|[a-z]{3,}/.test(lines[i])) {
         startIdx = i;
         startOffset = m.index + (m[0].length - m[1].length);
         break;
@@ -327,16 +327,25 @@ export function cleanAadhaarAddress(text) {
     }
   }
 
-  // 3) Fallback: look for 6-digit pin code and scan back
+  // 3) Fallback: look for 6-digit pin code and scan back (pick last PIN if multiple, since English is below Hindi)
   if (startIdx === -1) {
-    const pinIdx = lines.findIndex((l) => /(?<!\d)\d{6}(?!\d)/.test(l) && !/VID|issued|help|1947|uidai/i.test(l));
+    let pinIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (/(?<!\d)\d{6}(?!\d)/.test(lines[i]) && !/VID|issued|help|1947|uidai/i.test(lines[i])) {
+        pinIdx = i;
+        break;
+      }
+    }
     if (pinIdx !== -1) {
       startIdx = Math.max(0, pinIdx - 3);
+      if (addrIdx !== -1 && startIdx < addrIdx) {
+        startIdx = addrIdx + 1;
+      }
       startOffset = 0;
     }
   }
 
-  if (startIdx === -1) return null;
+  if (startIdx === -1 || startIdx >= lines.length) return null;
 
   // Collect lines from startIdx strictly up to the 6-digit PIN code
   const collected = [];
@@ -520,7 +529,7 @@ export function extractImeiFromText(raw) {
 }
 
 /** Recognize Aadhaar from an Image Buffer */
-export async function ocrAadhaarBuffer(buffer) {
+export async function ocrAadhaarBuffer(buffer, side) {
   const worker = await getTesseractWorker();
 
   // Step 1: Detect optimal rotation (0, 90, 270, 180) using fast 700px thumbnail
@@ -572,10 +581,18 @@ export async function ocrAadhaarBuffer(buffer) {
   const fullRes = await worker.recognize(fullHiRes);
   bestText = fullRes.data?.text || bestText;
 
-  // Step 2: Multi-column address recognition on true rotated buffer
-  const addrList = [];
+  // Detect front vs back card side
+  const hasFrontMarkers = /(?:DOB|जन्म तिथि|DOB\/जन्म|female|महिला|male|पुरुष)/i.test(bestText);
+  const hasBackMarkers = /(?:[aA]?[dD][dg]ress|S[\/:]O|D[\/:]O|W[\/:]O|C[\/:]O|पता)/i.test(bestText);
+  const isFront = side === "front" || (!side && hasFrontMarkers && !hasBackMarkers);
+  const isBack = side === "back";
 
-  const candidateRegions = [
+  // Step 2: Multi-column address recognition on true rotated buffer (BACK side only)
+  const addrList = [];
+  let address = null;
+
+  if (!isFront) {
+    const candidateRegions = [
     // Region A: Left Column (Modern PVC/Card format: English is on the left, QR code is on the right)
     {
       left: 0,
@@ -645,7 +662,8 @@ export async function ocrAadhaarBuffer(buffer) {
   if (fullAddr) addrList.push({ addr: fullAddr, score: rateAddressQuality(fullAddr) - 20 });
 
   addrList.sort((a, b) => b.score - a.score);
-  const address = addrList[0]?.addr || null;
+  address = addrList[0]?.addr || null;
+  }
 
   // Step 3: Extract Aadhaar Number (dedicated bottom band crop + full text)
   let idNumber = "";
@@ -754,18 +772,25 @@ export async function ocrAadhaarBuffer(buffer) {
     }
   }
 
-  const hasData = idNumber || address || (name && (dob || yob || gender));
+  if (isBack) {
+    name = undefined;
+    dob = undefined;
+    yob = undefined;
+    gender = undefined;
+  }
+
+  const hasData = idNumber || address || (name && (dob || yob || gender)) || (isFront && name);
   if (!hasData) return null;
 
   return {
     raw: bestText,
     data: {
       idNumber: idNumber || "",
-      name,
-      dob,
-      yob,
-      gender,
-      address,
+      name: isBack ? undefined : name,
+      dob: isBack ? undefined : dob,
+      yob: isBack ? undefined : yob,
+      gender: isBack ? undefined : gender,
+      address: isFront ? null : address,
       checksumOk,
     },
   };

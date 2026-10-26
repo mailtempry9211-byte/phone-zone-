@@ -444,13 +444,12 @@ function renderLuxury(c: InvoiceContent): string {
     .lux-card .lux-card-head{display:flex;align-items:center;gap:10px;color:#c9a227}
     .lux-card .lux-card-head svg{width:16px;height:16px}
     .lux-card h4{margin:0;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;color:#f4e8d6}
-    .lux-card .lux-body{display:flex;flex-direction:column;gap:5px;margin-top:8px}
-    .lux-card .lux-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;border-bottom:1px solid #1c1d24;padding:4px 0}
+    .lux-card .lux-body{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+    .lux-card .lux-row{display:flex;align-items:baseline;gap:8px;font-size:12px;border-bottom:1px solid #1a1b22;padding:3px 0}
     .lux-card .lux-row:last-child{border-bottom:none}
-    .lux-card .lux-k{color:#9a958a;font-weight:600;min-width:75px;text-transform:uppercase;font-size:10px;letter-spacing:0.8px;flex-shrink:0}
-    .lux-card .lux-v{color:#f4e8d6;text-align:right;word-break:break-word}
+    .lux-card .lux-k{color:#9a958a;font-weight:600;min-width:85px;text-transform:uppercase;font-size:10.5px;letter-spacing:0.6px;flex-shrink:0}
+    .lux-card .lux-v{color:#f4e8d6;word-break:break-word;flex:1}
     .lux-items{border:1px solid #25262e;border-radius:10px;overflow:hidden;width:100%;border-collapse:collapse}
-    .lux-card .lux-body b{display:inline-block;min-width:80px;color:#9a958a;margin-right:6px}
     .lux-item{margin-top:16px}
     .lux-items{border:1px solid #25262e;border-radius:10px;overflow:hidden}
     .lux-items thead th{background:#17181d;color:#c9a227;font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;text-align:left;padding:10px 12px;border-bottom:1px solid #25262e}
@@ -542,7 +541,7 @@ function renderLuxury(c: InvoiceContent): string {
         ${c.business.udyam ? `<div class="lux-udyam">Udyam Reg. No: ${esc(c.business.udyam)}</div>` : ""}
       </div>
       <div class="lux-right">
-        <div class="lux-doc">Sales Invoice</div>
+        <div class="lux-doc">${c.kind === "purchase" ? "Purchase Invoice" : "Sales Invoice"}</div>
         <div class="lux-doc-title">${esc(c.title)}</div>
         <div class="lux-doc-line"><b>No. :</b> ${esc(c.invoiceNo)}</div>
         <div class="lux-doc-line"><b>Dated :</b> ${esc(c.billDate)}</div>
@@ -556,26 +555,27 @@ function renderLuxury(c: InvoiceContent): string {
         <div class="lux-card">
           <div class="lux-card-head">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-            <h4>Sold By</h4>
+            <h4>${esc(c.parties[0]?.heading || (c.kind === "purchase" ? "Purchased By" : "Sold By"))}</h4>
           </div>
           <div class="lux-body">
-            <b>Business :</b> ${esc(c.business.name)}
-            <b>Address :</b> ${esc(c.business.address)}
-            <b>Phone :</b> ${esc(c.business.phone1)}
-            <b>Email :</b> ${esc(c.business.email)}
+            <div class="lux-row"><span class="lux-k">Business :</span><span class="lux-v">${esc(c.business.name || "-")}</span></div>
+            <div class="lux-row" style="align-items:flex-start"><span class="lux-k">Address :</span><span class="lux-v">${esc(c.business.address || "-")}</span></div>
+            <div class="lux-row"><span class="lux-k">Phone :</span><span class="lux-v">${esc(c.business.phone1 || "-")}</span></div>
+            <div class="lux-row"><span class="lux-k">Email :</span><span class="lux-v">${esc(c.business.email || "-")}</span></div>
           </div>
         </div>
         <div class="lux-card">
           <div class="lux-card-head">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <h4>Customer Details</h4>
+            <h4>${esc(c.parties[1]?.heading || (c.kind === "purchase" ? "Seller Details" : "Customer Details"))}</h4>
           </div>
           <div class="lux-body">
-            <b>Name :</b> ${esc(c.parties[1].rows[0][1])}
-            <b>Phone :</b> ${esc(c.parties[1].rows[1][1])}
-            <b>Address :</b> ${esc(c.parties[1].rows[2][1])}
-            <b>ID Type :</b> ${esc(c.parties[1].rows[3][1])}
-            <b>ID Number :</b> ${esc(c.parties[1].rows[4][1])}
+            ${(c.parties[1]?.rows || []).map(([k, v]) => `
+              <div class="lux-row"${k.toLowerCase() === 'address' ? ' style="align-items:flex-start"' : ''}>
+                <span class="lux-k">${esc(k)} :</span>
+                <span class="lux-v">${esc(v || "N/A")}</span>
+              </div>
+            `).join("")}
           </div>
         </div>
       </div>
