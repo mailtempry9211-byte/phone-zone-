@@ -50,6 +50,7 @@ export interface InvoiceCustomization {
   brokerAmount: number;
   brokerName: string;
   includeSapathPatra?: boolean;
+  sapathLanguage?: "hindi" | "english" | "both";
   action?: "pdf" | "preview" | "whatsapp";
 }
 
@@ -184,6 +185,7 @@ export interface InvoiceBuildOptions {
   isBroker?: boolean;
   brokerName?: string;
   includeSapathPatra?: boolean;
+  sapathLanguage?: "hindi" | "english" | "both";
   action?: "pdf" | "preview" | "whatsapp";
   photoChoice: InvoicePhotoChoice;
   productPhotos?: string[];
@@ -1227,7 +1229,7 @@ export function buildInvoiceHtml(options: InvoiceBuildOptions): string {
       imei1: p.imei_number || "",
       imei2: p.imei2_number || "",
       condition: p.condition || "good",
-      language: (p.sapath_patra_language as any) || "both",
+      language: (options.sapathLanguage || (p.sapath_patra_language as any) || "both"),
     });
 
     const styleMatch = sapathHtml.match(/<style>([\s\S]*?)<\/style>/i);

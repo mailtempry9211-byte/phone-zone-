@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { numberToWords } from "@/utils/numberToWords";
 import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
+import { formatPurchaseInvoiceText, formatSalesInvoiceText } from "@/lib/whatsappInvoiceFormatter";
 import SapathPatraModal from "./SapathPatraModal";
 
 /** Sentinel for the Radix select - an empty string is not a legal item value. */
@@ -263,60 +264,19 @@ const InventoryTab = () => {
           toast.success("Broker invoice generated - accounts untouched");
         }
         break;
-      case 'whatsapp':
+      case 'whatsapp': {
         if (custom?.broker) {
           toast.info("Broker invoices are view-only - use PDF or Print to share them");
           break;
         }
-        // Check if this is a sales invoice (phone is sold) or purchase invoice
         const isSalesInvoice = phone.is_sold && phone.customers;
         
         if (isSalesInvoice) {
-          // Generate sales invoice without seller details
-          const message = `📱 *${adminSettings?.business_name || ''} - Sale Invoice*
-
-📋 *Invoice Details:*
-• Invoice No: SALE-${phone.imei_number || 'NONE'}
-• Invoice Date: ${new Date().toLocaleDateString()}
-• Sale Date: ${phone.sold_date ? new Date(phone.sold_date).toLocaleDateString() : new Date().toLocaleDateString()}
-
-📱 *Phone Details:*
-• Brand: ${phone.phone_name}
-• Model: ${phone.model}
-• Variant: ${phone.variant || '-'}
-• Colour: ${phone.colour || '-'}
-• IMEI: ${phone.imei_number || 'NONE'}
-• Condition: ${phone.condition.charAt(0).toUpperCase() + phone.condition.slice(1)}
-• Sale Price: ₹${phone.selling_price}
-
-👤 *Customer Information:*
-• Name: ${phone.customers?.name || 'N/A'}
-• Mobile: ${phone.customers?.phone || 'N/A'}
-• Address: ${phone.customers?.address || 'N/A'}
-• ID Type: ${phone.customers?.id_proof_type || 'N/A'}
-• ID Number: ${phone.customers?.id_number || 'N/A'}
-
-💰 *Amount in Words:* ${numberToWords(phone.selling_price)} Rupees Only
-
-🏦 *Bank Details:*
-
-
-
-
-
-📋 *Terms & Conditions:*
-1. All phones has been checked for stolen/blocked report from official government website www.ceir.gov.in
-2. If in any case phone is marked as Lost/Stolen/Blacklisted then seller is responsible for it
-3. Good once sold cannot be taken back only exchange (if mentioned on bill) in certain cases only
-4. Subject to local jurisdiction only
-
-📞 *Contact Information:*
-${adminSettings?.address || ''}
-Phone: ${adminSettings?.phone_primary || ''} | ${adminSettings?.phone_secondary || ''}
-Email: ${adminSettings?.email || ''}
-Instagram: ${adminSettings?.instagram || ''}
-
-Thank you for your business with ${adminSettings?.business_name || ''}!`;
+          const message = formatSalesInvoiceText(phone, adminSettings, {
+            broker: custom?.broker,
+            brokerAmount: custom?.brokerAmount,
+            brokerName: custom?.brokerName,
+          });
 
           dispatchWhatsApp({
             phone: phone.customers?.phone || '',
@@ -326,51 +286,10 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
             adminSettings,
           });
         } else {
-          // Generate purchase invoice with seller details
-          const accessories = [];
-          if (phone.bill_available) accessories.push('✓ Original Bill');
-          if (phone.box_available) accessories.push('✓ Original Box');
-          if (phone.charger_available) accessories.push('✓ Original Charger');
-          
-          const accessoriesText = accessories.length > 0 ? `\n\n📦 *Accessories:*\n${accessories.join('\n')}` : '';
-          
-          const message = `📱 *${adminSettings?.business_name || ''} - Purchase Invoice*
-
-📋 *Invoice Details:*
-• Invoice No: PUR-${phone.imei_number}
-• Invoice Date: ${new Date().toLocaleDateString()}
-• Purchase Date: ${new Date(phone.purchase_date).toLocaleDateString()}
-
-📱 *Phone Details:*
-• Brand: ${phone.phone_name}
-• Model: ${phone.model}
-• Variant: ${phone.variant || '-'}
-• Colour: ${phone.colour || '-'}
-• IMEI: ${phone.imei_number}
-• Condition: ${phone.condition.charAt(0).toUpperCase() + phone.condition.slice(1)}
-• Purchase Price: ₹${phone.purchase_price}
-• Payment Method: ${phone.payment_method.charAt(0).toUpperCase() + phone.payment_method.slice(1)}${accessoriesText}
-
-👤 *Seller Information:*
-• Name: ${phone.sellers?.name || 'N/A'}
-• Mobile: ${phone.sellers?.phone || 'N/A'}
-• Address: ${phone.sellers?.address || 'N/A'}
-• ID Type: ${phone.sellers?.id_proof_type || 'N/A'}
-• ID Number: ${phone.sellers?.id_number || 'N/A'}
-
-💰 *Amount in Words:* ${numberToWords(phone.purchase_price)} Rupees Only
-
-📋 *Terms & Conditions:*
-1. All phones has been checked for stolen/blocked report from official government website www.ceir.gov.in
-2. If in any case phone is marked as Lost/Stolen/Blacklisted then seller is responsible for it
-3. Subject to local jurisdiction (Sitapur) only
-
-📞 *Contact Information:*
-${adminSettings?.address || ''}
-Phone: ${adminSettings?.phone_primary || ''} | ${adminSettings?.phone_secondary || ''}
-Email: ${adminSettings?.email || ''}
-
-Thank you for your business with ${adminSettings?.business_name || ''}!`;
+          const message = formatPurchaseInvoiceText(phone, adminSettings, {
+            includeSapathPatra: custom?.includeSapathPatra,
+            sapathLanguage: custom?.sapathLanguage || 'both',
+          });
 
           dispatchWhatsApp({
             phone: phone.sellers?.phone || '',
@@ -381,6 +300,7 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
           });
         }
         break;
+      }
     }
   };
 

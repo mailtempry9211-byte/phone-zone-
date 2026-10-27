@@ -6,6 +6,12 @@ import { toast } from "sonner";
 import { CheckCircle2, Send, Printer, X, ShieldCheck, Smartphone, User, Loader2, Sparkles, MessageCircle } from "lucide-react";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { printHtml } from "@/lib/printHtml";
+import {
+  formatPurchaseInvoiceText,
+  formatSalesInvoiceText,
+  formatSapathPatraText,
+  type SapathTextLanguage,
+} from "@/lib/whatsappInvoiceFormatter";
 
 export interface PostTransactionParty {
   name: string;
@@ -47,6 +53,8 @@ export const PostTransactionShareDialog = ({
 }: PostTransactionShareDialogProps) => {
   const [isSending, setIsSending] = useState(false);
   const [gatewayStatus, setGatewayStatus] = useState<{ connected: boolean; status: string; phone?: string } | null>(null);
+  const [includeSapathPatra, setIncludeSapathPatra] = useState<boolean>(true);
+  const [sapathLanguage, setSapathLanguage] = useState<SapathTextLanguage>("both");
 
   const channel = adminSettings?.whatsapp_channel || "openwa";
 
@@ -81,37 +89,38 @@ export const PostTransactionShareDialog = ({
   const docTitle = isPurchase ? "Purchase Invoice & Sapath Patra" : "Sales Invoice";
 
   const buildSummaryMessage = () => {
-    const biz = adminSettings?.business_name || "PhoneZone";
     if (isPurchase) {
-      return `📱 *${biz} - Purchase Invoice & Sapath Patra*
+      const phoneObj = {
+        ...phone,
+        purchase_price: phone.amount,
+        sellers: {
+          name: party.name,
+          phone: party.phone,
+          address: party.address,
+          id_proof_type: party.idProofType,
+          id_number: party.idNumber,
+        },
+      };
 
-📋 *Invoice:* PUR-${phone.imei_number}
-📅 *Date:* ${new Date().toLocaleDateString("en-IN")}
-
-📱 *Device:* ${phone.phone_name} ${phone.model}
-• IMEI: ${phone.imei_number}
-• Price: ₹${phone.amount.toLocaleString("en-IN")}
-
-👤 *Seller:* ${party.name} (${party.phone})
-${party.address ? `• Address: ${party.address}\n` : ""}${party.idNumber ? `• ID (${party.idProofType || "Govt"}): ${party.idNumber}\n` : ""}
-🛡️ *Sapath Patra (शपथ पत्र):*
-Under Indian law, legal ownership and bona fide declaration for IMEI ${phone.imei_number} has been recorded.
-
-Thank you for dealing with ${biz}!`;
+      return formatPurchaseInvoiceText(phoneObj, adminSettings, {
+        includeSapathPatra,
+        sapathLanguage,
+      });
     }
 
-    return `📱 *${biz} - Sales Receipt*
+    const phoneObj = {
+      ...phone,
+      selling_price: phone.amount,
+      customers: {
+        name: party.name,
+        phone: party.phone,
+        address: party.address,
+        id_proof_type: party.idProofType,
+        id_number: party.idNumber,
+      },
+    };
 
-📋 *Invoice:* SALE-${phone.imei_number}
-📅 *Date:* ${new Date().toLocaleDateString("en-IN")}
-
-📱 *Device:* ${phone.phone_name} ${phone.model}
-• IMEI: ${phone.imei_number}
-• Amount: ₹${phone.amount.toLocaleString("en-IN")}
-
-👤 *Customer:* ${party.name} (${party.phone})
-
-Thank you for your purchase with ${biz}!`;
+    return formatSalesInvoiceText(phoneObj, adminSettings);
   };
 
   const handleSendWhatsApp = async () => {
@@ -211,9 +220,58 @@ Thank you for your purchase with ${biz}!`;
           </div>
 
           {isPurchase && (
-            <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-1.5 text-blue-700 text-[11px] font-medium">
-              <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
-              <span>Includes 8-point legal Sapath Patra (शपथ पत्र संलग्न)</span>
+            <div className="mt-2 pt-2 border-t border-gray-200 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={includeSapathPatra}
+                  onChange={(e) => setIncludeSapathPatra(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Include Sapath Patra in WhatsApp Text &amp; PDF</span>
+              </label>
+
+              {includeSapathPatra && (
+                <div className="flex items-center gap-1.5 pl-5 text-[11px]">
+                  <span className="text-gray-600">Language:</span>
+                  <div className="inline-flex rounded-md shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("both")}
+                      className={`px-2 py-0.5 text-[11px] rounded-l border ${
+                        sapathLanguage === "both"
+                          ? "bg-blue-600 text-white border-blue-600 font-bold"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      दोनों (Both)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("hindi")}
+                      className={`px-2 py-0.5 text-[11px] border-t border-b ${
+                        sapathLanguage === "hindi"
+                          ? "bg-blue-600 text-white border-blue-600 font-bold"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      हिंदी (Hindi)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("english")}
+                      className={`px-2 py-0.5 text-[11px] rounded-r border ${
+                        sapathLanguage === "english"
+                          ? "bg-blue-600 text-white border-blue-600 font-bold"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { numberToWords } from "@/utils/numberToWords";
 import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
+import { formatSalesInvoiceText } from "@/lib/whatsappInvoiceFormatter";
 
 const SoldTab = () => {
   const [selectedPhone, setSelectedPhone] = useState(null);
@@ -194,51 +195,11 @@ const SoldTab = () => {
         printHtml(invoiceHtml);
         break;
       case 'whatsapp': {
-        // Generate sales invoice WITHOUT seller details for customer
-        const message = `📱 *${adminSettings?.business_name || ''} - ${custom?.broker ? 'Broker' : 'Sale'} Invoice*
-
-📋 *Invoice Details:*
-• Invoice No: SALE-${phone.imei_number || 'NONE'}
-• Invoice Date: ${new Date().toLocaleDateString()}
-• Sale Date: ${phone.sold_date ? new Date(phone.sold_date).toLocaleDateString() : new Date().toLocaleDateString()}
-
-📱 *Phone Details:*
-• Brand: ${phone.phone_name}
-• Model: ${phone.model}
-• Variant: ${phone.variant || '-'}
-• Colour: ${phone.colour || '-'}
-• IMEI: ${phone.imei_number || 'NONE'}
-• Condition: ${phone.condition.charAt(0).toUpperCase() + phone.condition.slice(1)}
-• Price: ₹${custom?.broker && custom.brokerAmount > 0 ? custom.brokerAmount : phone.selling_price}
-
-👤 *Customer Information:*
-• Name: ${phone.customers?.name || 'N/A'}
-• Mobile: ${phone.customers?.phone || 'N/A'}
-• Address: ${phone.customers?.address || 'N/A'}
-• ID Type: ${phone.customers?.id_proof_type || 'N/A'}
-• ID Number: ${phone.customers?.id_number || 'N/A'}
-
-💰 *Amount in Words:* ${numberToWords(custom?.broker && custom.brokerAmount > 0 ? custom.brokerAmount : phone.selling_price)} Rupees Only
-
-🏦 *Bank Details:*
-${adminSettings?.bank_name || ''} Bank
-Name: ${adminSettings?.account_holder_name || ''}
-A/C No: ${adminSettings?.account_number || ''}
-IFSC: ${adminSettings?.ifsc_code || ''}
-
-📋 *Terms & Conditions:*
-1. All phones has been checked for stolen/locked status from the official government CEIR website (www.ceir.gov.in).
-2. If a phone is later found to be lost, stolen, or blacklisted, the seller is solely responsible.
-3. Once sold, devices cannot be returned — exchange only, and only if stated on the invoice.
-4. This sale is subject to local jurisdiction only.
-
-📞 *Contact Information:*
-${adminSettings?.address || ''}
-Phone: ${adminSettings?.phone_primary || ''} | ${adminSettings?.phone_secondary || ''}
-Email: ${adminSettings?.email || ''}
-Instagram: ${adminSettings?.instagram || ''}
-
-Thank you for purchasing with ${adminSettings?.business_name || ''}!`;
+        const message = formatSalesInvoiceText(phone, adminSettings, {
+          broker: custom?.broker,
+          brokerAmount: custom?.brokerAmount,
+          brokerName: custom?.brokerName,
+        });
 
         const customerPhone = phone.customers?.phone || '';
         dispatchWhatsApp({

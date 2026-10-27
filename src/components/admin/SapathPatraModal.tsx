@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, Share2, Globe, FileText, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
+import { formatSapathPatraText } from "@/lib/whatsappInvoiceFormatter";
 import {
   buildSapathPatraHtml,
   type SapathPatraData,
@@ -91,25 +92,31 @@ export const SapathPatraModal: React.FC<SapathPatraModalProps> = ({
       return;
     }
 
-    const message = `🙏 *${effectiveData.shopName || "PhoneZone"} - खरीद शपथ पत्र (Declaration & Undertaking)*
+    const phoneObj = phone || {
+      phone_name: effectiveData.brand,
+      model: effectiveData.model,
+      variant: effectiveData.variant,
+      colour: effectiveData.colour,
+      imei_number: effectiveData.imei1,
+      imei2_number: effectiveData.imei2,
+      purchase_price: effectiveData.amount,
+      purchase_date: effectiveData.date,
+      sellers: {
+        name: effectiveData.sellerName,
+        phone: effectiveData.sellerPhone,
+        address: effectiveData.sellerAddress,
+        id_proof_type: effectiveData.idProofType,
+        id_number: effectiveData.idNumber,
+      },
+    };
 
-📋 *संदर्भ सं:* ${effectiveData.refNo}
-📅 *दिनांक:* ${effectiveData.date}
-
-📱 *डिवाइस विवरण:*
-• मॉडल: ${effectiveData.brand} ${effectiveData.model} ${effectiveData.variant || ""}
-• IMEI: ${effectiveData.imei1}
-• क्रय राशि: ₹${Number(effectiveData.amount).toLocaleString("en-IN")}/-
-
-👤 *विक्रेता:*
-• नाम: ${effectiveData.sellerName}
-• मोबाइल: ${effectiveData.sellerPhone}
-
-✅ आपके द्वारा दिया गया कानूनी शपथ पत्र एवं खरीद रसीद सुरक्षित दर्ज कर ली गई है। धन्यवाद!`;
+    const message = formatSapathPatraText(phoneObj, adminSettings, language);
 
     dispatchWhatsApp({
       phone: cleanPhone,
       message,
+      invoiceHtml: htmlContent,
+      pdfFileName: `Sapath_Patra_${effectiveData.imei1}.pdf`,
       adminSettings,
     });
   };

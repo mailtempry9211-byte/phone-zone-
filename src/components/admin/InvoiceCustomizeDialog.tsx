@@ -118,6 +118,7 @@ export const InvoiceCustomizeDialog = ({
   const [brokerAmount, setBrokerAmount] = useState("");
   const [brokerName, setBrokerName] = useState("");
   const [includeSapathPatra, setIncludeSapathPatra] = useState(false);
+  const [sapathLanguage, setSapathLanguage] = useState<"hindi" | "english" | "both">("both");
 
   useEffect(() => {
     if (open) {
@@ -127,6 +128,7 @@ export const InvoiceCustomizeDialog = ({
       setBrokerAmount("");
       setBrokerName("");
       setIncludeSapathPatra(false);
+      setSapathLanguage("both");
     }
   }, [open, kind, productCount, purchaseCount, saleCount]);
 
@@ -141,9 +143,9 @@ export const InvoiceCustomizeDialog = ({
         toast.error("Broker invoices apply to sales only");
         return;
       }
-      onGenerate({ photos, style, broker: true, brokerAmount: amt, brokerName: brokerName.trim(), includeSapathPatra, action });
+      onGenerate({ photos, style, broker: true, brokerAmount: amt, brokerName: brokerName.trim(), includeSapathPatra, sapathLanguage, action });
     } else {
-      onGenerate({ photos, style, broker: false, brokerAmount: 0, brokerName: "", includeSapathPatra, action });
+      onGenerate({ photos, style, broker: false, brokerAmount: 0, brokerName: "", includeSapathPatra, sapathLanguage, action });
     }
     onOpenChange(false);
   };
@@ -213,7 +215,7 @@ export const InvoiceCustomizeDialog = ({
 
           {/* 3) Sapath Patra option (purchase only) */}
           {kind === "purchase" && (
-            <div className="border rounded-lg p-3 bg-blue-50/50">
+            <div className="border rounded-lg p-3 bg-blue-50/50 space-y-2.5">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -227,10 +229,53 @@ export const InvoiceCustomizeDialog = ({
                     Include Sapath Patra (शपथ पत्र साथ जोड़ें)
                   </span>
                   <span className="block text-xs text-blue-700 mt-0.5">
-                    इनवॉइस के साथ 8 धाराओं वाला कानूनी शपथ पत्र (Declaration &amp; Undertaking) संलग्न होकर प्रिंट / शेयर होगा।
+                    इनवॉइस एवं व्हाट्सएप मैसेज में 8 धाराओं वाला कानूनी शपथ पत्र संलग्न होगा।
                   </span>
                 </span>
               </label>
+
+              {includeSapathPatra && (
+                <div className="pt-2 border-t border-blue-200/60 pl-7">
+                  <span className="block text-xs font-medium text-blue-950 mb-1.5">
+                    शपथ पत्र भाषा (Sapath Patra Language):
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("both")}
+                      className={`px-2.5 py-1 text-xs rounded border transition ${
+                        sapathLanguage === "both"
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold shadow-sm"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      दोनों (Both Hindi + English)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("hindi")}
+                      className={`px-2.5 py-1 text-xs rounded border transition ${
+                        sapathLanguage === "hindi"
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold shadow-sm"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      हिंदी (Hindi)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSapathLanguage("english")}
+                      className={`px-2.5 py-1 text-xs rounded border transition ${
+                        sapathLanguage === "english"
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold shadow-sm"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
