@@ -74,6 +74,11 @@ export function buildTacRouter(staff) {
     res.json(tac.learnTac(req.body || {}));
   }));
 
+  r.post("/auto-learn", staff, wrap(async (req, res) => {
+    const result = tac.autoLearnTac(req.body || {});
+    res.json({ ok: true, learned: !!result, data: result });
+  }));
+
   // ---------------- Hicelltek keys (never leave the backend) -------------
   r.get("/keys", staff, wrap(async (_req, res) => {
     res.json(hct.listKeys());

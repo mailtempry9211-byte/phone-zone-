@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-27T07:01:57.387Z
+Date             : 2026-10-27T07:37:27.075Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,7 +20,7 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-27T07:01:15.680Z
+Date             : 2026-10-27T07:36:38.954Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
@@ -28,7 +28,7 @@ Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
 --- sha256 of security-critical files ---
 789dd29733ed8dde74e91c3a37a1b209c1481e2cf1de6c582473f1623adddc8e  backend/src/routes/index.js
 4f749cc6fc495d88ba7c2cd02588d4cc1e54b80752eba1e81ae1c27bed3d5b8f  backend/src/routes/compat.js
-280ba2b0f413a39de9a9537cb86a905d753f0b299d6299fd65acdb2e3dd4f801  backend/src/services/inventoryService.js
+32cdfcdfd5b9ebc12c6dee072a1097f0fac1e63128e4eb3f0cace6305516a487  backend/src/services/inventoryService.js
 834ede395b0f0ce4a4ba04d31f960d587de41d60133a7fd676f986cd14cb9c41  backend/src/services/storageService.js
 e1354d385ddc68931a072751e80f0412304b63ef74762eccce7fc08afa451c2f  backend/src/services/authService.js
 24eff0d0ad18d04f72bbecd145cd2730eeee3fe20d7c3aa6d068d836f6fc168c  backend/src/services/backupService.js
@@ -52,7 +52,7 @@ f7d92dfb363cecf28dbdb1fa6a2ea74c047608666fdb982882b94aa0ed4fad7c  database/migra
 b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migrations/018_ngrok_settings.sql
 54b34edf6a217fcc01a5b6359f4523a5dd244b0232bff98aed1089d438e816e8  database/migrations/019_repair_rework.sql
 64db29b0e21167911e8b7f824cc44c564edcf46b1bb137112c5bd284b0adb894  database/migrations/020_whatsapp_channel_and_sapath.sql
-3009d56916c4c779015a582668ae83bc148413f33fc963aea34291ce6115594b  database/migrations/021_dealers.sql
+4410c9e0f80ca7a7a4b8115b8b1e41bdd128e6e3d3bfb15f5f0c3185d9296a54  database/migrations/021_dealers.sql
 
 --- A01: node --check on backend + scripts ---
   A01 PASS  46 files checked, 0 failed
@@ -62,7 +62,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A03 PASS  7 pre-stamped, 20/20 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:48426/api
+  server ready on http://127.0.0.1:48297/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -103,7 +103,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 61d1fb82-5ad0-4975-b853-511a1e379993
+  A61 PASS  by-phone match returned repair customer e9a72485-a801-4c7e-8458-d6b7ea692d4a
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403

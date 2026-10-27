@@ -13,8 +13,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench, Search, AlertTriangle, History, Smartphone, User, ShieldAlert } from "lucide-react";
+import { Wrench, Search, AlertTriangle, History, Smartphone, User, ShieldAlert, Wifi, WifiOff, Globe, Loader2, CheckCircle2 } from "lucide-react";
 import RepairHistoryPanel from "./RepairHistoryPanel";
+import ImeiScanButton from "./ImeiScanButton";
+import AadhaarScanButton from "./AadhaarScanButton";
+import { useTacLookup } from "@/hooks/useTacLookup";
 
 interface AddRepairDialogProps {
   open: boolean;
@@ -77,6 +80,24 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
   const [imeiHistory, setImeiHistory] = useState<any[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
+  // TAC Lookup & Specs Auto-fill
+  const { status: tacStatus, info: tacInfo, error: tacError, fetchOnline: tacFetch } = useTacLookup(
+    imei,
+    ({ brand, phoneName, model }) => {
+      if (brand && !deviceBrand) setDeviceBrand(brand);
+      if (model && !deviceModel) setDeviceModel(model);
+      else if (phoneName && !deviceModel) setDeviceModel(phoneName);
+    }
+  );
+
+  useEffect(() => {
+    if (tacInfo?.found) {
+      if (tacInfo.brand && !deviceBrand) setDeviceBrand(tacInfo.brand);
+      if (tacInfo.model && !deviceModel) setDeviceModel(tacInfo.model);
+      else if (tacInfo.phoneName && !deviceModel) setDeviceModel(tacInfo.phoneName);
+    }
+  }, [tacInfo]);
+
   // Auto-search customer by phone
   useEffect(() => {
     const cleanPhone = customerPhone.replace(/\D/g, "");
@@ -106,22 +127,10 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
     }
   }, [customerPhone]);
 
-  // Check IMEI history & TAC lookup
+  // Check IMEI repair history
   useEffect(() => {
     const cleanImei = imei.trim();
     if (cleanImei.length >= 14) {
-      // TAC lookup for brand/model
-      fetch(`/api/tac/${cleanImei.slice(0, 8)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((info) => {
-          if (info) {
-            if (info.brand && !deviceBrand) setDeviceBrand(info.brand);
-            if (info.model && !deviceModel) setDeviceModel(info.model);
-          }
-        })
-        .catch(() => {});
-
-      // Cross-check IMEI repair history
       fetch(`/api/repair/by-imei/${cleanImei}`)
         .then((r) => (r.ok ? r.json() : []))
         .then((jobs) => {
@@ -211,6 +220,18 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
         description: `Job ${data.job_no} logged successfully.`,
       });
 
+      // Auto-learn TAC if new
+      fetch("/api/tac/auto-learn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imei: imei.trim(),
+          brand: deviceBrand.trim(),
+          model: deviceModel.trim(),
+          phoneName: `${deviceBrand} ${deviceModel}`.trim(),
+        }),
+      }).catch(() => {});
+
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
@@ -276,9 +297,27 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Section 1: Customer */}
           <div className="border rounded-lg p-3.5 bg-gray-50/60 space-y-3">
-            <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-800 border-b pb-1.5">
-              <User className="h-4 w-4 text-blue-600" />
-              Customer Details
+            <div className="flex items-center justify-between border-b pb-1.5 flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-800">
+                <User className="h-4 w-4 text-blue-600" />
+                Customer Details
+              </div>
+              <AadhaarScanButton
+                disabled={submitting}
+                onResult={(data) => {
+                  if (data.name) setCustomerName(data.name);
+                  if (data.address) setCustomerAddress(data.address);
+                  if (data.idNumber) {
+                    setIdNumber(data.idNumber);
+                    setIdProofType("aadhaar");
+                  }
+                  if (data.mobile && !customerPhone) setCustomerPhone(data.mobile);
+                  toast({
+                    title: "Aadhaar Scanned",
+                    description: `Loaded data for ${data.name || "customer"}`,
+                  });
+                }}
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -335,9 +374,20 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-1">
-                <Label htmlFor="dev-imei" className="text-xs font-semibold text-gray-900">
-                  IMEI (15 Digits) <span className="text-red-600 font-bold">*</span>
-                </Label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <Label htmlFor="dev-imei" className="text-xs font-semibold text-gray-900">
+                    IMEI (15 Digits) <span className="text-red-600 font-bold">*</span>
+                  </Label>
+                  <ImeiScanButton
+                    disabled={submitting}
+                    onResult={(r) => {
+                      setImei(r.imei);
+                      if (r.via === "barcode") {
+                        tacFetch(r.imei).catch(() => {});
+                      }
+                    }}
+                  />
+                </div>
                 <Input
                   id="dev-imei"
                   placeholder="Mandatory 15-digit IMEI"
@@ -347,6 +397,54 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                   required
                   className="font-mono text-sm border-blue-400 focus:border-blue-600"
                 />
+                {tacStatus !== "idle" && (
+                  <div
+                    className={`text-xs mt-1.5 flex items-center gap-1 flex-wrap ${
+                      tacStatus === "found"
+                        ? "text-emerald-700"
+                        : tacStatus === "error"
+                          ? "text-red-500"
+                          : "text-gray-500"
+                    }`}
+                    role="status"
+                  >
+                    {tacStatus === "checking" && (
+                      <><Loader2 className="h-3 w-3 animate-spin text-blue-500" /> Checking TAC database...</>
+                    )}
+                    {tacStatus === "found" && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Wifi className="h-3 w-3 text-emerald-600 shrink-0" />
+                        <span className="font-semibold">{tacInfo?.brand} {tacInfo?.phoneName || tacInfo?.model}</span>
+                        <Badge variant="outline" className="text-[10px] py-0 px-1 border-emerald-300 bg-emerald-50 text-emerald-800">
+                          ✓ Auto-filled
+                        </Badge>
+                      </div>
+                    )}
+                    {tacStatus === "fetching" && (
+                      <><Globe className="h-3 w-3 animate-spin text-blue-600" /> Fetching specs from Hicelltek API...</>
+                    )}
+                    {tacStatus === "miss" && (
+                      <div className="flex items-center gap-1 flex-wrap text-[11px]">
+                        <WifiOff className="h-3 w-3 text-amber-500 shrink-0" />
+                        <span>TAC not in local DB.</span>
+                        {(tacInfo?.fetchMode as string) === "ask" && tacInfo?.hasKeys ? (
+                          <button
+                            type="button"
+                            className="underline font-semibold text-blue-600 hover:text-blue-800"
+                            onClick={() => tacFetch(imei)}
+                          >
+                            Look up online?
+                          </button>
+                        ) : (tacInfo?.fetchMode as string) === "off" ? (
+                          <span className="text-gray-400">(online lookup off)</span>
+                        ) : tacInfo?.hasKeys === false ? (
+                          <span className="text-gray-400">(no API key)</span>
+                        ) : null}
+                      </div>
+                    )}
+                    {tacStatus === "error" && <>{tacError || "TAC lookup failed."}</>}
+                  </div>
+                )}
               </div>
               <div>
                 <Label htmlFor="dev-brand" className="text-xs">Brand</Label>

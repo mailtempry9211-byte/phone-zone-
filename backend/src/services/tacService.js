@@ -231,6 +231,35 @@ export function storeApiResult({ tac, brand, phoneName, model, specs }) {
   return lookupTac(code);
 }
 
+/**
+ * Universal auto-learn TAC helper across the entire system.
+ * If a TAC code is missing from the database, it automatically learns and saves it.
+ * Non-blocking and never throws.
+ */
+export function autoLearnTac({ imei, tac, brand, phoneName, model, specs } = {}) {
+  try {
+    const code = normalizeTac(tac || imei);
+    if (!code || !brand) return null;
+
+    const existing = lookupTac(code);
+    if (!existing || !existing.found) {
+      const finalBrand = normalizeBrand(brand);
+      const finalModel = model ? smartTitleCase(model) : "";
+      const finalName = phoneName ? smartTitleCase(phoneName) : `${finalBrand} ${finalModel}`.trim();
+      return learnTac({
+        tac: code,
+        brand: finalBrand,
+        phoneName: finalName || finalBrand,
+        model: finalModel || finalBrand,
+        specs: specs || `${finalBrand} ${finalModel}`,
+      });
+    }
+    return existing;
+  } catch (err) {
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------- import */
 
 const SHEET_ORDER = ["Common", "Not_Common", "ALL"]; // first occurrence of a TAC wins

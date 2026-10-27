@@ -4,6 +4,7 @@ import { audit } from "./auditService.js";
 import { assertImei, assertPhoneNumber, assertAmount } from "../lib/validation.js";
 import { activeFyLabel } from "./financialYearService.js";
 import { createInvoice, nextInvoiceNumber } from "./invoiceService.js";
+import { autoLearnTac } from "./tacService.js";
 
 export function listDealers({ search } = {}) {
   const db = getDb();
@@ -213,6 +214,16 @@ export function createBatchPurchase(data, userId) {
       `).run(invId, singleInvNo, phoneId, price);
 
       insertedPhones.push({ id: phoneId, imei, model: p.model, price });
+
+      // Auto-learn TAC for batch phone
+      try {
+        autoLearnTac({
+          imei,
+          brand: p.brand || p.phone_name,
+          phoneName: p.phone_name || `${p.brand} ${p.model}`.trim(),
+          model: p.model,
+        });
+      } catch {}
     }
 
     // Insert batch record

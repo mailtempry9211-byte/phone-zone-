@@ -43,3 +43,4 @@ ALTER TABLE wa_campaigns ADD COLUMN media_url TEXT;
 ALTER TABLE wa_campaigns ADD COLUMN media_type TEXT;
 ALTER TABLE wa_campaigns ADD COLUMN delay_min INTEGER DEFAULT 25;
 ALTER TABLE wa_campaigns ADD COLUMN delay_max INTEGER DEFAULT 60;
+

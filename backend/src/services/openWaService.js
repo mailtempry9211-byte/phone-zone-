@@ -447,3 +447,82 @@ export async function requestPairingCode({ channel = "sales", phone }) {
     status: res.status || "pairing_code_sent",
   };
 }
+
+/**
+ * Full Session Management API for Web UI
+ */
+export async function listAllSessions() {
+  const config = getOpenWaConfig();
+  try {
+    const res = await openWaFetch("/api/sessions");
+    const list = Array.isArray(res) ? res : (res?.data || []);
+    return {
+      sessions: list,
+      serverUrl: config.serverUrl,
+      apiKey: config.apiKey,
+      dashboardUrl: config.serverUrl,
+    };
+  } catch (err) {
+    return {
+      sessions: [],
+      serverUrl: config.serverUrl,
+      apiKey: config.apiKey,
+      dashboardUrl: config.serverUrl,
+      error: err.message,
+    };
+  }
+}
+
+export async function createSession(name) {
+  if (!name) throw new Error("Session name is required");
+  const cleanName = String(name).trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  return await openWaFetch("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ name: cleanName }),
+  });
+}
+
+export async function startSession(sessionId) {
+  if (!sessionId) throw new Error("Session ID is required");
+  return await openWaFetch(`/api/sessions/${sessionId}/start`, { method: "POST" });
+}
+
+export async function stopSession(sessionId) {
+  if (!sessionId) throw new Error("Session ID is required");
+  return await openWaFetch(`/api/sessions/${sessionId}/stop`, { method: "POST" });
+}
+
+export async function logoutSession(sessionId) {
+  if (!sessionId) throw new Error("Session ID is required");
+  return await openWaFetch(`/api/sessions/${sessionId}/logout`, { method: "POST" });
+}
+
+export async function deleteSession(sessionId) {
+  if (!sessionId) throw new Error("Session ID is required");
+  return await openWaFetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export async function getSessionQr(sessionId) {
+  if (!sessionId) throw new Error("Session ID is required");
+  return await openWaFetch(`/api/sessions/${sessionId}/qr`);
+}
+
+export async function requestPairingCodeForSession(sessionId, phone) {
+  if (!sessionId) throw new Error("Session ID is required");
+  if (!phone) throw new Error("Phone number is required");
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.length === 10) digits = "91" + digits;
+
+  const res = await openWaFetch(`/api/sessions/${sessionId}/pairing-code`, {
+    method: "POST",
+    body: JSON.stringify({ phoneNumber: digits }),
+  });
+
+  return {
+    ok: true,
+    sessionId,
+    phoneNumber: digits,
+    pairingCode: res.pairingCode || res.code || (typeof res === "string" ? res : "CODE_SENT"),
+    status: res.status || "pairing_code_sent",
+  };
+}

@@ -37,6 +37,11 @@ import {
   ListFilter,
   Eye,
   Sliders,
+  ExternalLink,
+  Trash2,
+  Plus,
+  LogOut,
+  Power,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -100,6 +105,14 @@ export default function MarketingTab() {
   const [pairingCodeResult, setPairingCodeResult] = useState<{ code: string; status: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  // Full Session Management States
+  const [newSessionModalOpen, setNewSessionModalOpen] = useState(false);
+  const [newSessionName, setNewSessionName] = useState("");
+  const [sessionActionLoading, setSessionActionLoading] = useState<string | null>(null);
+  const [linkingSession, setLinkingSession] = useState<{ id: string; name: string } | null>(null);
+  const [sessionQrData, setSessionQrData] = useState<string | null>(null);
+  const [sessionQrLoading, setSessionQrLoading] = useState(false);
 
   // Fetch all aggregated contacts
   const { data: contactsData, isLoading: loadingContacts } = useQuery({
@@ -276,6 +289,21 @@ export default function MarketingTab() {
     },
   });
 
+  const { data: allSessionsData, refetch: refetchAllSessions, isLoading: loadingAllSessions } = useQuery({
+    queryKey: ["openwa-all-sessions"],
+    queryFn: async () => {
+      const res = await fetch("/api/wa/gateway/sessions");
+      if (res.ok) {
+        const d = await res.json();
+        if (d.apiKey) setApiKey(d.apiKey);
+        if (d.serverUrl) setGatewayUrl(d.serverUrl);
+        return d;
+      }
+      return { sessions: [] };
+    },
+    refetchInterval: 5000,
+  });
+
   const { data: salesSession, refetch: refetchSales } = useQuery({
     queryKey: ["openwa-session-sales"],
     queryFn: async () => {
@@ -329,6 +357,134 @@ export default function MarketingTab() {
     },
     enabled: !!viewingCampaign?.id,
   });
+
+  // Session Management Handlers
+  const createSessionMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetch("/api/wa/gateway/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create session");
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Session Created", description: "WhatsApp session created successfully." });
+      setNewSessionModalOpen(false);
+      setNewSessionName("");
+      refetchAllSessions();
+      refetchServerStatus();
+    },
+    onError: (err: any) => {
+      toast({ title: "Creation Failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const startSpecificSession = async (sessionId: string) => {
+    try {
+      setSessionActionLoading(sessionId);
+      const res = await fetch(`/api/wa/gateway/sessions/${sessionId}/start`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to start session");
+      toast({ title: "Session Started", description: "WhatsApp session launched." });
+      refetchAllSessions();
+    } catch (err: any) {
+      toast({ title: "Start Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const stopSpecificSession = async (sessionId: string) => {
+    try {
+      setSessionActionLoading(sessionId);
+      const res = await fetch(`/api/wa/gateway/sessions/${sessionId}/stop`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to stop session");
+      toast({ title: "Session Stopped", description: "WhatsApp session stopped." });
+      refetchAllSessions();
+    } catch (err: any) {
+      toast({ title: "Stop Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const logoutSpecificSession = async (sessionId: string) => {
+    if (!window.confirm("Are you sure you want to log out WhatsApp for this session? You will need to scan QR code again.")) return;
+    try {
+      setSessionActionLoading(sessionId);
+      const res = await fetch(`/api/wa/gateway/sessions/${sessionId}/logout`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to logout session");
+      toast({ title: "Logged Out", description: "WhatsApp logged out successfully." });
+      refetchAllSessions();
+    } catch (err: any) {
+      toast({ title: "Logout Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const deleteSpecificSession = async (sessionId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete session "${name}"? This cannot be undone.`)) return;
+    try {
+      setSessionActionLoading(sessionId);
+      const res = await fetch(`/api/wa/gateway/sessions/${sessionId}`, { method: "DELETE" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to delete session");
+      toast({ title: "Session Deleted", description: `Session ${name} deleted.` });
+      refetchAllSessions();
+    } catch (err: any) {
+      toast({ title: "Delete Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const openLinkingModal = async (session: { id: string; name: string }) => {
+    setLinkingSession(session);
+    setPairingCodeResult(null);
+    setSessionQrData(null);
+    setSessionQrLoading(true);
+    try {
+      await fetch(`/api/wa/gateway/sessions/${session.id}/start`, { method: "POST" });
+      const res = await fetch(`/api/wa/gateway/sessions/${session.id}/qr`);
+      const data = await res.json();
+      if (data.qrCode || data.qr) {
+        setSessionQrData(data.qrCode || data.qr);
+      }
+    } catch {}
+    finally {
+      setSessionQrLoading(false);
+    }
+  };
+
+  const requestSpecificPairingCode = async () => {
+    if (!linkingSession) return;
+    if (!pairingPhone.trim()) {
+      toast({ title: "Phone Required", description: "Please enter 10-digit mobile number.", variant: "destructive" });
+      return;
+    }
+    try {
+      setSessionQrLoading(true);
+      const res = await fetch(`/api/wa/gateway/sessions/${linkingSession.id}/pairing-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: pairingPhone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate pairing code");
+      setPairingCodeResult({ code: data.pairingCode, status: data.status });
+      toast({ title: "Pairing Code Generated", description: `Enter code ${data.pairingCode} in WhatsApp Linked Devices.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSessionQrLoading(false);
+    }
+  };
 
   // Server management mutations
   const startServerMutation = useMutation({
@@ -605,26 +761,267 @@ export default function MarketingTab() {
             </div>
           )}
 
-          {/* Channel Selector: Sales vs Repairs */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-4">
-            <div className="flex gap-2">
+          {/* 1. OpenWA Web Dashboard Access & Credentials Banner */}
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white rounded-xl p-4 sm:p-5 shadow-sm border border-emerald-800">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ExternalLink className="h-5 w-5 text-emerald-400" />
+                  <h3 className="font-bold text-base text-white">OpenWA Web Control Center &amp; Dashboard</h3>
+                </div>
+                <p className="text-xs text-emerald-200 mt-1 max-w-xl">
+                  OpenWA ka official full dashboard direct open karein. Yahan se chats, incoming messages, live status, logs aur webhooks full view me manage karein.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href={allSessionsData?.dashboardUrl || gatewayUrl || "http://127.0.0.1:2785"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs rounded-lg transition-colors shadow-sm"
+                >
+                  <ExternalLink className="h-4 w-4 mr-1.5" /> Open OpenWA Web Dashboard ↗
+                </a>
+              </div>
+            </div>
+
+            {/* Dashboard Login API Key / Password Box */}
+            <div className="mt-4 pt-3 border-t border-emerald-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-950/70 p-3 rounded-lg">
+              <div className="space-y-0.5">
+                <div className="text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5">
+                  <Key className="h-3.5 w-3.5 text-amber-400" />
+                  Dashboard Login Password / API Key:
+                </div>
+                <div className="text-[10px] text-emerald-200/70">
+                  OpenWA Dashboard login page open hone par password me ye API key enter karein.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="text-xs font-mono bg-black/70 px-3 py-1.5 rounded text-emerald-300 border border-emerald-700/60 select-all max-w-[280px] sm:max-w-[340px] truncate">
+                  {allSessionsData?.apiKey || apiKey || "owa_k1_..."}
+                </code>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  className="h-8 text-xs bg-emerald-800/90 hover:bg-emerald-700 border-emerald-600 text-white"
+                  onClick={() => {
+                    const k = allSessionsData?.apiKey || apiKey;
+                    if (k) {
+                      navigator.clipboard.writeText(k);
+                      toast({ title: "Password Copied!", description: "Dashboard Login Password / API Key copied to clipboard." });
+                    }
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy Password
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Full Sessions Management Table & Controls */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+              <div className="flex items-center gap-2">
+                <Radio className="h-4 w-4 text-emerald-600" />
+                <h4 className="font-bold text-sm text-slate-800">
+                  Manage WhatsApp Sessions ({allSessionsData?.sessions?.length || 0})
+                </h4>
+                <Badge variant="outline" className="text-[10px] bg-slate-50">
+                  Unified Mode: {unifiedMode ? "Enabled" : "Dual Session"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-slate-300 text-slate-700 hover:bg-slate-50"
+                  onClick={() => refetchAllSessions()}
+                  disabled={loadingAllSessions}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingAllSessions ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                  onClick={() => setNewSessionModalOpen(true)}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add New Session
+                </Button>
+              </div>
+            </div>
+
+            {/* Sessions Table */}
+            <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="text-xs font-bold text-slate-700">Session Name</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-700">Status</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-700">Connected Phone</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-700">WhatsApp Name</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-700 text-right">Actions &amp; Controls</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allSessionsData?.sessions && allSessionsData.sessions.length > 0 ? (
+                    allSessionsData.sessions.map((sess: any) => {
+                      const isReady = sess.status === "ready" || sess.status === "authenticated";
+                      const isBusy = sessionActionLoading === sess.id;
+                      return (
+                        <TableRow key={sess.id} className="hover:bg-slate-50/70">
+                          <TableCell className="font-mono text-xs font-bold text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <Smartphone className="h-4 w-4 text-emerald-600" />
+                              <span>{sess.name}</span>
+                              {sess.name === "phonezone" && (
+                                <Badge className="text-[9px] py-0 px-1 bg-emerald-100 text-emerald-800 border-emerald-300" variant="outline">
+                                  Default
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isReady ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold text-[11px]" variant="outline">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 mr-1 animate-pulse" /> Ready / Connected
+                              </Badge>
+                            ) : sess.status === "initializing" || sess.status === "connecting" ? (
+                              <Badge className="bg-blue-100 text-blue-800 border-blue-300 font-semibold text-[11px]" variant="outline">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600 mr-1 animate-ping" /> Initializing...
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-gray-100 text-gray-700 border-gray-300 text-[11px]" variant="outline">
+                                {sess.status || "Disconnected"}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono text-slate-700">
+                            {sess.phone ? (
+                              <span className="font-semibold text-emerald-700">+{sess.phone}</span>
+                            ) : (
+                              <span className="text-gray-400 italic">Not linked</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-700">
+                            {sess.pushName ? (
+                              <span className="font-medium">{sess.pushName}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                                onClick={() => openLinkingModal(sess)}
+                                disabled={isBusy}
+                              >
+                                <QrCode className="h-3 w-3 mr-1 text-emerald-600" /> Link WhatsApp
+                              </Button>
+
+                              {isReady ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    onClick={() => stopSpecificSession(sess.id)}
+                                    disabled={isBusy}
+                                  >
+                                    <Square className="h-3 w-3 mr-1 text-amber-600" /> Stop
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs border-slate-300 text-slate-600 hover:bg-slate-100"
+                                    onClick={() => logoutSpecificSession(sess.id)}
+                                    disabled={isBusy}
+                                  >
+                                    <LogOut className="h-3 w-3 mr-1 text-slate-500" /> Logout
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                                  onClick={() => startSpecificSession(sess.id)}
+                                  disabled={isBusy}
+                                >
+                                  <Play className="h-3 w-3 mr-1 text-blue-600" /> Start
+                                </Button>
+                              )}
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => deleteSpecificSession(sess.id, sess.name)}
+                                disabled={isBusy || sess.name === "phonezone"}
+                                title={sess.name === "phonezone" ? "Default session cannot be deleted" : "Delete session"}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-500">
+                        No sessions created yet. Click "+ Add New Session" above to create one.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Quick Test Message Dispatch */}
+          <div className="border rounded-lg p-3 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="text-xs font-bold text-slate-800">Quick Test Message Dispatch</div>
+              <div className="text-[11px] text-gray-500">Apne kisi bhi mobile number par test message bhejkar verification karein.</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="10-digit mobile"
+                value={testingPhone}
+                onChange={(e) => setTestingPhone(e.target.value)}
+                maxLength={10}
+                className="h-8 text-xs w-36 bg-white"
+              />
               <Button
                 type="button"
                 size="sm"
-                variant={openWaTab === "sales" ? "default" : "outline"}
-                className={openWaTab === "sales" ? "bg-emerald-700 hover:bg-emerald-800" : ""}
-                onClick={() => setOpenWaTab("sales")}
+                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={async () => {
+                  if (!testingPhone.trim()) {
+                    toast({ title: "Phone Required", description: "Enter 10-digit mobile number.", variant: "destructive" });
+                    return;
+                  }
+                  try {
+                    const res = await fetch("/api/wa/gateway/send-text", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ phone: testingPhone.trim(), message: testMessage }),
+                    });
+                    const d = await res.json();
+                    if (!res.ok) throw new Error(d.error || "Failed to send test message");
+                    toast({ title: "Message Dispatched!", description: `Test message sent to ${testingPhone}` });
+                  } catch (err: any) {
+                    toast({ title: "Dispatch Error", description: err.message, variant: "destructive" });
+                  }
+                }}
               >
-                <Smartphone className="h-4 w-4 mr-1.5" /> Sales WhatsApp Session
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={openWaTab === "repairs" ? "default" : "outline"}
-                className={openWaTab === "repairs" ? "bg-indigo-700 hover:bg-indigo-800" : ""}
-                onClick={() => setOpenWaTab("repairs")}
-              >
-                <Wrench className="h-4 w-4 mr-1.5" /> Repair Dept WhatsApp Session
+                <Send className="h-3.5 w-3.5 mr-1" /> Send Test
               </Button>
             </div>
           </div>
@@ -1391,6 +1788,194 @@ export default function MarketingTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog: Add New Session */}
+      <Dialog open={newSessionModalOpen} onOpenChange={setNewSessionModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-slate-900">
+              <Plus className="h-4 w-4 text-emerald-600" /> Create WhatsApp Session
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="font-semibold text-slate-700 block mb-1">Session Name *</label>
+              <Input
+                placeholder="e.g. phonezone-sales, phonezone-repairs, promo"
+                value={newSessionName}
+                onChange={(e) => setNewSessionName(e.target.value)}
+                className="text-xs"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Letters, numbers, hyphens only. Unique identifier for this WhatsApp account.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNewSessionModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={!newSessionName.trim() || createSessionMutation.isPending}
+              onClick={() => createSessionMutation.mutate(newSessionName.trim())}
+            >
+              {createSessionMutation.isPending ? "Creating..." : "Create Session"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Link WhatsApp (QR Code / Pairing Code) */}
+      <Dialog open={!!linkingSession} onOpenChange={(open) => { if (!open) setLinkingSession(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-slate-900">
+              <QrCode className="h-5 w-5 text-emerald-600" /> Link WhatsApp: <span className="font-mono text-emerald-700">{linkingSession?.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Mode Switcher: QR vs Pairing Code */}
+            <div className="flex border rounded-lg p-1 bg-slate-100 gap-1">
+              <button
+                type="button"
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  linkMode === "qr" ? "bg-white text-emerald-800 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+                onClick={() => setLinkMode("qr")}
+              >
+                Scan QR Code
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  linkMode === "pairing_code" ? "bg-white text-emerald-800 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                }`}
+                onClick={() => setLinkMode("pairing_code")}
+              >
+                Link with Phone Number (Pairing Code)
+              </button>
+            </div>
+
+            {linkMode === "qr" ? (
+              <div className="flex flex-col items-center justify-center p-4 border rounded-xl bg-white space-y-3">
+                {sessionQrLoading ? (
+                  <div className="h-52 flex flex-col items-center justify-center text-gray-500 text-xs gap-2">
+                    <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+                    Generating live QR code...
+                  </div>
+                ) : sessionQrData ? (
+                  <>
+                    <div className="p-2 border rounded-lg bg-white shadow-sm">
+                      <img
+                        src={sessionQrData.startsWith("data:") ? sessionQrData : `data:image/png;base64,${sessionQrData}`}
+                        alt="WhatsApp QR Code"
+                        className="w-52 h-52 object-contain"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500 text-center max-w-xs">
+                      Open WhatsApp on phone &gt; Settings &gt; Linked Devices &gt; Link a Device &gt; Scan this QR.
+                    </p>
+                  </>
+                ) : (
+                  <div className="h-52 flex flex-col items-center justify-center text-center p-4 text-xs text-gray-500 space-y-2">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                    <p className="font-semibold text-slate-800">Session is already authenticated or connected!</p>
+                    <p className="text-[11px] text-gray-400">If you want to re-link, click Logout first from the session table.</p>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => linkingSession && openLinkingModal(linkingSession)}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" /> Refresh QR Code
+                </Button>
+              </div>
+            ) : (
+              <div className="p-4 border rounded-xl bg-white space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-800">WhatsApp Phone Number *</label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="10-digit mobile number"
+                      value={pairingPhone}
+                      onChange={(e) => setPairingPhone(e.target.value)}
+                      maxLength={10}
+                      className="text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 text-xs"
+                      disabled={sessionQrLoading || !pairingPhone.trim()}
+                      onClick={requestSpecificPairingCode}
+                    >
+                      {sessionQrLoading ? "Generating..." : "Get Pairing Code"}
+                    </Button>
+                  </div>
+                </div>
+
+                {pairingCodeResult && (
+                  <div className="bg-emerald-50 border border-emerald-300 rounded-lg p-3 text-center space-y-2">
+                    <div className="text-[11px] text-emerald-800 font-medium">
+                      Enter this 8-digit code in WhatsApp &gt; Linked Devices &gt; Link with phone number:
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <code className="text-2xl font-mono font-bold tracking-widest text-emerald-950 bg-white px-4 py-1.5 rounded border border-emerald-400 select-all">
+                        {pairingCodeResult.code}
+                      </code>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(pairingCodeResult.code);
+                          toast({ title: "Copied!", description: "Pairing code copied." });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-slate-50 p-2.5 rounded-lg text-[11px] text-slate-600 space-y-1">
+                  <div className="font-semibold text-slate-800">Kaise use karein:</div>
+                  <ol className="list-decimal list-inside space-y-0.5 text-[10px] text-slate-500">
+                    <li>WhatsApp open karein &gt; 3 Dots / Settings &gt; Linked Devices</li>
+                    <li>"Link a Device" par tap karein</li>
+                    <li>Neeche "Link with phone number instead" par tap karein</li>
+                    <li>Ye 8-digit code enter karein. Device instantly link ho jayega!</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setLinkingSession(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

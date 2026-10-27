@@ -6,6 +6,7 @@ import { newId, badRequest, notFound } from "../lib/errors.js";
 import { assertImei } from "../lib/validation.js";
 import { activeFyLabel } from "./financialYearService.js";
 import { createRepairCustomer, getRepairCustomer } from "./repairCustomerService.js";
+import { autoLearnTac } from "./tacService.js";
 
 const VALID_STATUSES = new Set([
   "received",
@@ -169,6 +170,16 @@ export function createRepairJob({
         item.is_board ? 1 : 0,
       );
     }
+
+    // Auto-learn TAC if not already known
+    try {
+      autoLearnTac({
+        imei: cleanImei,
+        brand: device_brand,
+        phoneName: `${device_brand} ${device_model}`.trim(),
+        model: device_model,
+      });
+    } catch {}
 
     return getRepairJob(jobId);
   });

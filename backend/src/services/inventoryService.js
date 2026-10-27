@@ -8,6 +8,7 @@ import { requireFields, assertImei, assertAmount, assertPhoneNumber, isBlank, to
 import { createInvoice } from "./invoiceService.js";
 import { audit } from "./auditService.js";
 import { activeFyLabel } from "./financialYearService.js";
+import { autoLearnTac } from "./tacService.js";
 
 /**
  * Accounting rows live inside a financial year. `fyWhere` keeps reads inside the
@@ -207,6 +208,17 @@ export function createPurchase(data, userId) {
       html: data.invoice_html || null,
     });
     audit(userId, "purchase.created", "phone", row.id, { invoice: invoice.invoice_number });
+
+    // Auto-learn TAC if not already known
+    try {
+      autoLearnTac({
+        imei,
+        brand: data.brand || data.phone_name,
+        phoneName: data.phone_name,
+        model: data.model,
+      });
+    } catch {}
+
     return { phone: getPhone(row.id), invoice };
   });
 }

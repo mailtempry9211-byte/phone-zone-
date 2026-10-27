@@ -124,6 +124,43 @@ export function buildWaRouter(staffAuth, adminAuth) {
     res.json({ ok: true, config: openWaService.getOpenWaConfig() });
   }));
 
+  // Full Session Management API
+  r.get("/gateway/sessions", staffAuth, wrap(async (_req, res) => {
+    res.json(await openWaService.listAllSessions());
+  }));
+
+  r.post("/gateway/sessions", staffAuth, wrap(async (req, res) => {
+    const { name } = req.body || {};
+    if (!name) throw badRequest("name is required.");
+    res.status(201).json(await openWaService.createSession(name));
+  }));
+
+  r.post("/gateway/sessions/:id/start", staffAuth, wrap(async (req, res) => {
+    res.json(await openWaService.startSession(req.params.id));
+  }));
+
+  r.post("/gateway/sessions/:id/stop", staffAuth, wrap(async (req, res) => {
+    res.json(await openWaService.stopSession(req.params.id));
+  }));
+
+  r.post("/gateway/sessions/:id/logout", staffAuth, wrap(async (req, res) => {
+    res.json(await openWaService.logoutSession(req.params.id));
+  }));
+
+  r.delete("/gateway/sessions/:id", staffAuth, wrap(async (req, res) => {
+    res.json(await openWaService.deleteSession(req.params.id));
+  }));
+
+  r.get("/gateway/sessions/:id/qr", staffAuth, wrap(async (req, res) => {
+    res.json(await openWaService.getSessionQr(req.params.id));
+  }));
+
+  r.post("/gateway/sessions/:id/pairing-code", staffAuth, wrap(async (req, res) => {
+    const { phone } = req.body || {};
+    if (!phone) throw badRequest("phone is required.");
+    res.json(await openWaService.requestPairingCodeForSession(req.params.id, phone));
+  }));
+
   r.get("/gateway/session/:channel", staffAuth, wrap(async (req, res) => {
     const channel = req.params.channel || "sales";
     res.json(await openWaService.getSessionStatus(channel));
