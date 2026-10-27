@@ -33,6 +33,7 @@ import RepairDetailDialog from "./RepairDetailDialog";
 import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
 import CreateReworkDialog from "./CreateReworkDialog";
 import RepairCustomerOverviewDialog from "./RepairCustomerOverviewDialog";
+import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { printRepairSticker } from "@/lib/deviceQr";
 import { toast } from "sonner";
 
@@ -732,10 +733,13 @@ export const RepairsTab: React.FC = () => {
                                     size="sm"
                                     className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50"
                                     title="WhatsApp Chat"
-                                    onClick={() => {
-                                      const clean = cust.phone.replace(/\D/g, "");
-                                      const full = clean.length === 10 ? `91${clean}` : clean;
-                                      window.open(`https://wa.me/${full}`, "_blank");
+                                    onClick={async () => {
+                                      await dispatchWhatsApp({
+                                        phone: cust.phone,
+                                        message: `Hello ${cust.name || "Customer"}, this is regarding your mobile repair service at PhoneZone.`,
+                                        waSessionChannel: "repairs",
+                                        mode: "text_only",
+                                      });
                                     }}
                                   >
                                     <MessageSquare className="h-3.5 w-3.5" />

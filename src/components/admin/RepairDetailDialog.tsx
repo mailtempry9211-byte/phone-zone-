@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { buildJobSheetHtml, buildRepairInvoiceHtml } from "@/lib/repairTemplates";
 import { printHtml } from "@/lib/printHtml";
+import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import RepairShareModal, { type RepairShareMode } from "./RepairShareModal";
 import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
 
@@ -235,23 +236,14 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
       toast({ title: "No customer phone found", variant: "destructive" });
       return;
     }
-    const target = phone.length === 10 ? `91${phone}` : phone;
     const msg = `Hello ${job.customer_name || "Customer"}, your device (${job.device_brand || ""} ${job.device_model || ""}) repair job ${job.job_no} status is currently: ${job.status.toUpperCase()}. Thank you!`;
 
-    try {
-      const res = await fetch("/api/wa/gateway/send-text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: target, message: msg, channel: "repairs" }),
-      });
-      if (res.ok) {
-        toast({ title: "WhatsApp Sent!", description: `Status update sent directly to ${target} via WhatsApp API.` });
-        return;
-      }
-    } catch {
-      // fallback to wa.me
-    }
-    window.open(`https://wa.me/${target}?text=${encodeURIComponent(msg)}`, "_blank");
+    await dispatchWhatsApp({
+      phone,
+      message: msg,
+      waSessionChannel: "repairs",
+      mode: "text_only",
+    });
   };
 
   return (

@@ -24,6 +24,7 @@ import {
   DollarSign
 } from "lucide-react";
 import { toast } from "sonner";
+import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 
 interface RepairCustomerOverviewDialogProps {
   open: boolean;
@@ -165,9 +166,14 @@ export const RepairCustomerOverviewDialog: React.FC<RepairCustomerOverviewDialog
                   variant="outline"
                   size="sm"
                   className="h-8 gap-1 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                  onClick={() => {
+                  onClick={async () => {
                     if (customer.phone) {
-                      window.open(`https://wa.me/91${customer.phone.replace(/\D/g, "")}`, "_blank");
+                      await dispatchWhatsApp({
+                        phone: customer.phone,
+                        message: `Hello ${customer.name || "Customer"}, this is regarding your mobile repair service at PhoneZone.`,
+                        waSessionChannel: "repairs",
+                        mode: "text_only",
+                      });
                     }
                   }}
                 >

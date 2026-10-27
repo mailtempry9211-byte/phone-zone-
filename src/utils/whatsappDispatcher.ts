@@ -12,6 +12,11 @@ export interface SendWhatsAppOptions {
   mode?: "both" | "text_only" | "pdf_only";
 }
 
+const isMobileDevice =
+  typeof navigator !== "undefined" &&
+  (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase()) ||
+    (Boolean(navigator.maxTouchPoints) && navigator.maxTouchPoints > 2 && /macintosh/i.test(navigator.userAgent.toLowerCase())));
+
 export function formatWhatsAppPhone(phone: string): string {
   const clean = (phone || "").replace(/\D/g, "");
   if (!clean) return "";
@@ -22,9 +27,9 @@ export function formatWhatsAppPhone(phone: string): string {
 
 /**
  * Unified WhatsApp dispatcher respecting admin settings:
- * - 'click_to_chat': standard wa.me direct URL (supports native file share on Android)
- * - 'openwa': backend OpenWA gateway API with click-to-chat fallback
- * - 'chrome_extension': local Chrome extension bridge with click-to-chat fallback
+ * - 'openwa': backend OpenWA gateway API (no dialog, direct delivery of text + PDF)
+ * - 'click_to_chat': standard wa.me direct URL
+ * - 'chrome_extension': local Chrome extension bridge
  */
 export async function dispatchWhatsApp({
   phone,
@@ -53,72 +58,18 @@ export async function dispatchWhatsApp({
   let effectiveChannel = adminSettings?.whatsapp_channel;
   if (!effectiveChannel) {
     try {
-      const sRes = await fetch("/api/settings");
+      const sRes = await fetch("/api/settings", { credentials: "include" });
       if (sRes.ok) {
         const s = await sRes.json();
         effectiveChannel = s.whatsapp_channel;
       }
     } catch {}
   }
-  const channel = effectiveChannel || "click_to_chat";
+  const channel = effectiveChannel || "openwa";
 
-  // Check if Web Share API with files is available (Android / mobile browser / APK)
-  if (channel === "click_to_chat") {
-    // If we have invoiceHtml but no pdfBlob, try rendering PDF from backend
-    let shareBlob = pdfBlob;
-    if (!shareBlob && invoiceHtml) {
-      try {
-        const rRes = await fetch("/api/invoices/render-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ html: invoiceHtml }),
-        });
-        if (rRes.ok) {
-          shareBlob = await rRes.blob();
-        }
-      } catch {}
-    }
-
-    if (shareBlob && typeof navigator !== "undefined" && navigator.canShare) {
-      try {
-        const file = new File([shareBlob], pdfFileName, { type: "application/pdf" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: pdfFileName,
-            text: message,
-          });
-          toast.success("Shared via device WhatsApp");
-          return { success: true, channel: "web_share" };
-        }
-      } catch (e: any) {
-        if (e.name !== "AbortError") {
-          console.warn("Web share failed, falling back to channel", e);
-        } else {
-          return { success: true, channel: "web_share_aborted" };
-        }
-      }
-    }
-
-    // On Desktop browser in Click-to-chat mode: trigger download of the PDF
-    if (shareBlob) {
-      try {
-        const blobUrl = URL.createObjectURL(shareBlob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = pdfFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-        toast.info("Invoice PDF downloaded. Opening WhatsApp chat to send message & attach PDF...");
-      } catch {}
-    }
-  }
-
+  // 1. Primary: Direct OpenWA Gateway API (sends text and real PDF without opening OS popups)
   if (channel === "openwa") {
     try {
-      let pdfBase64 = initialPdfBase64;
       if (!pdfBase64 && pdfBlob) {
         pdfBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -130,6 +81,7 @@ export async function dispatchWhatsApp({
 
       const res = await fetch("/api/wa/gateway/send-invoice-pdf", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: cleanPhone,
@@ -144,17 +96,19 @@ export async function dispatchWhatsApp({
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         if (data.type === "text_and_pdf") {
-          toast.success("Invoice text message and PDF document sent via WhatsApp!");
+          toast.success("Invoice text message and PDF document sent via WhatsApp Gateway!");
         } else if (data.type === "pdf") {
-          toast.success("Invoice PDF document sent via WhatsApp!");
+          toast.success("Invoice PDF document sent via WhatsApp Gateway!");
         } else {
-          toast.success("Invoice text sent via WhatsApp!");
+          toast.success("Invoice message sent via WhatsApp Gateway!");
         }
         return { success: true, channel: "openwa" };
       }
-      toast.warning("OpenWA gateway not responsive, opening Click-to-Chat fallback");
+      
+      const errReason = data.error || "OpenWA Gateway did not confirm delivery.";
+      toast.warning(`${errReason} Opening Click-to-Chat fallback.`);
     } catch (err: any) {
-      toast.warning("OpenWA gateway unreachable, opening Click-to-Chat fallback");
+      toast.warning("OpenWA Gateway unreachable. Opening Click-to-Chat fallback.");
     }
   } else if (channel === "chrome_extension") {
     try {
@@ -162,7 +116,58 @@ export async function dispatchWhatsApp({
     } catch {}
   }
 
-  // Default: Click to Chat wa.me
+  // 2. Click-to-Chat Fallback (Only mobile uses Web Share API; Windows/PC NEVER triggers OS Share dialog)
+  let shareBlob = pdfBlob;
+  if (!shareBlob && invoiceHtml && mode !== "text_only") {
+    try {
+      const rRes = await fetch("/api/invoices/render-pdf", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: invoiceHtml }),
+      });
+      if (rRes.ok) {
+        shareBlob = await rRes.blob();
+      }
+    } catch {}
+  }
+
+  // Web Share API with files is strictly for Mobile (Android / APK / iOS), NEVER desktop Windows
+  if (isMobileDevice && shareBlob && typeof navigator !== "undefined" && navigator.canShare) {
+    try {
+      const file = new File([shareBlob], pdfFileName, { type: "application/pdf" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: pdfFileName,
+          text: message,
+        });
+        toast.success("Shared via device WhatsApp");
+        return { success: true, channel: "web_share" };
+      }
+    } catch (e: any) {
+      if (e.name === "AbortError") {
+        return { success: true, channel: "web_share_aborted" };
+      }
+    }
+  }
+
+  // On Windows / PC desktop: download PDF directly (no Windows share dialog popup)
+  if (shareBlob && !isMobileDevice) {
+    try {
+      const blobUrl = URL.createObjectURL(shareBlob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = pdfFileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      toast.info("Invoice PDF downloaded.");
+    } catch {}
+  }
+
+  // Open WhatsApp chat URL
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   window.open(waUrl, "_blank");
   toast.success("Opening WhatsApp chat...");
