@@ -59,6 +59,7 @@ export function createRepairJob({
   shop_id = null,
   shop_code = "MAIN",
   user_id = null,
+  warranty_days = 30,
 }) {
   let cleanImei = null;
   if (imei && String(imei).trim()) {
@@ -127,7 +128,7 @@ export function createRepairJob({
       status: "received",
       payment_status: paymentStatus,
       board_replaced: hasBoard,
-      warranty_days: 30,
+      warranty_days: warranty_days !== undefined && warranty_days !== null ? Math.max(0, parseInt(warranty_days, 10) || 0) : 0,
       technician: technician ? String(technician).trim() : null,
       notes: notes ? String(notes).trim() : null,
       financial_year: fy,
@@ -343,7 +344,11 @@ export function updateRepairJob(id, data) {
   for (const key of allowed) {
     if (data[key] !== undefined) {
       fields.push(`${key} = ?`);
-      params.push(data[key]);
+      if (key === "warranty_days") {
+        params.push(Math.max(0, parseInt(data[key], 10) || 0));
+      } else {
+        params.push(data[key]);
+      }
     }
   }
 

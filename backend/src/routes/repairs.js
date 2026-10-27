@@ -120,7 +120,7 @@ export function buildRepairsRouter() {
     res.json(job);
   }));
 
-  r.put("/jobs/:id", wrap((req, res) => {
+  const handleJobUpdate = wrap((req, res) => {
     const job = getRepairJob(req.params.id);
     const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
@@ -130,7 +130,10 @@ export function buildRepairsRouter() {
     const updated = updateRepairJob(req.params.id, req.body || {});
     recordPreviousYearChange("repair_job", req.params.id, "update", req.body || {});
     res.json(withPrevYearMetadata(updated));
-  }));
+  });
+
+  r.put("/jobs/:id", handleJobUpdate);
+  r.patch("/jobs/:id", handleJobUpdate);
 
   r.post("/jobs/:id/status", wrap((req, res) => {
     const job = getRepairJob(req.params.id);

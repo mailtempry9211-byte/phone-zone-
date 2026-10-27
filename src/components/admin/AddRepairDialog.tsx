@@ -75,6 +75,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
   const [estimate, setEstimate] = useState("");
   const [advancePaid, setAdvancePaid] = useState("");
   const [technician, setTechnician] = useState("");
+  const [hasWarranty, setHasWarranty] = useState(true);
   const [warrantyDays, setWarrantyDays] = useState("30");
 
   // History & warning states
@@ -194,7 +195,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
         estimate: Number(estimate) || null,
         advance_paid: Number(advancePaid) || 0,
         technician: technician.trim() || "Main Workshop",
-        warranty_days: Number(warrantyDays) || 30,
+        warranty_days: hasWarranty ? Math.max(1, parseInt(warrantyDays, 10) || 30) : 0,
       };
 
       if (existingCustomerId) {
@@ -578,15 +579,54 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                 onChange={(e) => setTechnician(e.target.value)}
               />
             </div>
-            <div>
-              <Label htmlFor="warranty" className="text-xs">Warranty (Days)</Label>
-              <Input
-                id="warranty"
-                type="number"
-                placeholder="30"
-                value={warrantyDays}
-                onChange={(e) => setWarrantyDays(e.target.value)}
-              />
+            <div className="col-span-1 sm:col-span-3 border rounded-md p-2.5 bg-slate-50 flex flex-wrap items-center justify-between gap-3 mt-1">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-700">Service Warranty Period</span>
+                  <span className="text-[11px] text-gray-500">
+                    {hasWarranty ? "Warranty active on invoice & job sheet" : "Warranty turned OFF (hidden from all templates)"}
+                  </span>
+                </div>
+                <div className="inline-flex rounded-md shadow-sm" role="group">
+                  <button
+                    type="button"
+                    onClick={() => setHasWarranty(true)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-l-md border transition-colors ${
+                      hasWarranty
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                    }`}
+                  >
+                    ON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHasWarranty(false)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-r-md border-t border-b border-r transition-colors ${
+                      !hasWarranty
+                        ? "bg-rose-600 text-white border-rose-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                    }`}
+                  >
+                    OFF
+                  </button>
+                </div>
+              </div>
+
+              {hasWarranty && (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="warranty" className="text-xs whitespace-nowrap font-medium text-gray-700">Warranty Days:</Label>
+                  <Input
+                    id="warranty"
+                    type="number"
+                    min="1"
+                    className="w-24 h-8 text-xs bg-white font-medium"
+                    placeholder="e.g. 30, 40"
+                    value={warrantyDays}
+                    onChange={(e) => setWarrantyDays(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

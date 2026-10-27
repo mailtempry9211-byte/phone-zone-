@@ -467,3 +467,4 @@ export const UniversalScanner: React.FC = () => {
 };
 
 export default UniversalScanner;
+

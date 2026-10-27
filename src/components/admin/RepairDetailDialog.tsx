@@ -70,7 +70,34 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareMode, setShareMode] = useState<RepairShareMode>("ready");
 
+  // Warranty inline edit
+  const [isEditingWarranty, setIsEditingWarranty] = useState(false);
+  const [editWarrantyDays, setEditWarrantyDays] = useState("30");
+  const [savingWarranty, setSavingWarranty] = useState(false);
+
   if (!job) return null;
+
+  const handleUpdateWarranty = async (newDays: number) => {
+    setSavingWarranty(true);
+    try {
+      const res = await fetch(`/api/repair/jobs/${job.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ warranty_days: newDays }),
+      });
+      if (!res.ok) throw new Error("Failed to update warranty");
+      toast({
+        title: "Warranty Updated",
+        description: newDays > 0 ? `Service Warranty set to ${newDays} days.` : "Service Warranty turned OFF.",
+      });
+      setIsEditingWarranty(false);
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: "Update Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingWarranty(false);
+    }
+  };
 
   const handleCreateRework = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,6 +339,81 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
               <div><b>Problem:</b> {job.problem}</div>
               {job.passcode_note && <div><b>Passcode:</b> {job.passcode_note}</div>}
               <div><b>Accessories:</b> {job.accessories_received || "None"}</div>
+            </div>
+
+            {/* Service Warranty Controls */}
+            <div className="sm:col-span-2 pt-2 border-t mt-1 flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded border">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700 text-xs">Service Warranty:</span>
+                {Number(job.warranty_days) > 0 ? (
+                  <Badge className="bg-emerald-600 text-white font-medium hover:bg-emerald-700 text-xs">
+                    🛡️ {job.warranty_days} Days Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
+                    ❌ OFF (No Warranty)
+                  </Badge>
+                )}
+              </div>
+
+              {!isEditingWarranty ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                  onClick={() => {
+                    setEditWarrantyDays(String(Number(job.warranty_days) > 0 ? job.warranty_days : 30));
+                    setIsEditingWarranty(true);
+                  }}
+                >
+                  Edit / Toggle Warranty
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {Number(job.warranty_days) > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50"
+                      disabled={savingWarranty}
+                      onClick={() => handleUpdateWarranty(0)}
+                    >
+                      Turn OFF
+                    </Button>
+                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min="1"
+                      className="w-20 h-7 text-xs bg-white"
+                      placeholder="Days"
+                      value={editWarrantyDays}
+                      onChange={(e) => setEditWarrantyDays(e.target.value)}
+                    />
+                    <span className="text-xs text-gray-500">Days</span>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={savingWarranty}
+                      onClick={() => {
+                        const days = Math.max(1, parseInt(editWarrantyDays, 10) || 30);
+                        handleUpdateWarranty(days);
+                      }}
+                    >
+                      Save ({editWarrantyDays || 30}d)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setIsEditingWarranty(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
