@@ -499,8 +499,11 @@ export function cleanAadhaarAddress(text) {
   combined = combined.replace(/\bDIST[.:]?\s*(?:Seapur|Skapur|Saapur|Shapes|Sitapwr|Shags?)\b/gi, "DIST: Sitapur");
   combined = combined.replace(/\b(?:Somer|Umer|mer|Unar|Meta|Praglesh|Oar|Praiosh)\s*Pradesh\b/gi, "Uttar Pradesh");
   combined = combined.replace(/\b[A-Za-z]\s+Uttar\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/\bUttar\s*,\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/,\s*[A-Za-z]\s+number\b/gi, ", number");
   // Universal UP Postal circle rule: any state token before PIN starting with 2 is Uttar Pradesh
   combined = combined.replace(/(?:[A-Za-z]+)\s*Pradesh\s*[-–]?\s*(\b2\d{5}\b)/gi, "Uttar Pradesh - $1");
+  combined = combined.replace(/\bUttar\s*Pradesh\s*,\s*(\d{6})\b/gi, "Uttar Pradesh - $1");
 
   // Remove isolated noise fragments, non-word uppercase noise, and stray numbers before state
   combined = combined.replace(/,\s*(?:TERY|xe|SERRE|BREE|RERENEEE|LOST|Seep|SoSoECERESERRTEE|ERE|EEFelStSE|Shap\s*BA\s*RY)\b/gi, "");
@@ -532,14 +535,27 @@ function rateAddressQuality(addr) {
   if (/\b\d{6}\b/.test(addr)) score += 60;
   if (/^[SDWC]\/O:/i.test(addr)) score += 40;
 
+  // Heavily penalize Hindi OCR leakage / non-English transliteration garbage
+  const noiseMatch = addr.match(/\b(?:eRe|dwar|SES|FFE|Aaa|Arary|aTy|3c|eel|FETA|FHSIHS|MTHS|AHA|SETS|GEE|Hamat|dary|REE|weer)\b/gi);
+  if (noiseMatch) {
+    score -= noiseMatch.length * 60;
+  }
+
+  // Penalize isolated 1-2 letter noise fragments between commas
+  const shortFragments = addr.match(/,\s*[a-zA-Z]{1,2}\s*,/g);
+  if (shortFragments) {
+    score -= shortFragments.length * 30;
+  }
+
   const words = addr.split(/[\s,.-]+/).filter(Boolean);
   let cleanWords = 0;
 
   for (const w of words) {
-    if (w.length >= 3) cleanWords++;
+    if (w.length >= 3 && /^[A-Za-z0-9]+$/.test(w)) cleanWords++;
   }
 
-  score += cleanWords * 8;
+  // Cap cleanWords bonus so oversized noisy strings cannot outscore a concise, pristine address
+  score += Math.min(cleanWords * 5, 50);
   return score;
 }
 
@@ -745,33 +761,37 @@ export async function ocrAadhaarBuffer(buffer, side) {
 
   if (!isFront) {
     const candidateRegions = [
-      // Region 0: Full frame (vital when card is centered, angled, or full text)
+      // Region 1: Right Column (Standard Indian Aadhaar Letter card format: English address on right half, Hindi address on left half)
       {
+        name: "RightColumn",
+        left: Math.round(curMeta.width * 0.44),
+        top: Math.round(curMeta.height * 0.10),
+        width: Math.round(curMeta.width * 0.54),
+        height: Math.round(curMeta.height * 0.58),
+      },
+      // Region 2: Left Column (Modern PVC/Card format: English address on left half, QR code on right half)
+      {
+        name: "LeftColumn",
+        left: Math.round(curMeta.width * 0.02),
+        top: Math.round(curMeta.height * 0.10),
+        width: Math.round(curMeta.width * 0.52),
+        height: Math.round(curMeta.height * 0.58),
+      },
+      // Region 3: Upper-middle band (wider crop in case card is shifted or single-block)
+      {
+        name: "UpperBand",
+        left: Math.round(curMeta.width * 0.03),
+        top: Math.round(curMeta.height * 0.08),
+        width: Math.round(curMeta.width * 0.94),
+        height: Math.round(curMeta.height * 0.62),
+      },
+      // Region 4: Full frame (last resort fallback)
+      {
+        name: "FullFrame",
         left: 0,
         top: 0,
         width: curMeta.width,
         height: curMeta.height,
-      },
-      // Region A: Left Column (Modern PVC/Card format: English is on the left, QR code is on the right)
-      {
-        left: 0,
-        top: Math.round(curMeta.height * 0.12),
-        width: Math.round(curMeta.width * 0.65),
-        height: Math.round(curMeta.height * 0.78),
-      },
-      // Region B: Right Column (Letter format: English is on the right, Hindi is on the left)
-      {
-        left: Math.round(curMeta.width * 0.35),
-        top: Math.round(curMeta.height * 0.12),
-        width: Math.round(curMeta.width * 0.65),
-        height: Math.round(curMeta.height * 0.78),
-      },
-      // Region C: Center band
-      {
-        left: Math.round(curMeta.width * 0.02),
-        top: Math.round(curMeta.height * 0.15),
-        width: Math.round(curMeta.width * 0.96),
-        height: Math.round(curMeta.height * 0.72),
       },
     ];
 
@@ -805,16 +825,20 @@ export async function ocrAadhaarBuffer(buffer, side) {
         }
 
         if (nAddr) {
-          const q = rateAddressQuality(nAddr);
+          let q = rateAddressQuality(nAddr);
+          // Bonus if obtained from clean isolated column
+          if (reg.name === "RightColumn" || reg.name === "LeftColumn") {
+            q += 40;
+          }
           addrList.push({ addr: nAddr, score: q });
-          if (q >= 150) break; // High quality address found with PIN code and clean words
+          if (q >= 190) break; // High quality address found with PIN code and clean words
         }
       } catch (_e) {}
     }
 
     // Full Frame fallback
     const fullAddr = cleanAadhaarAddress(bestText);
-    if (fullAddr) addrList.push({ addr: fullAddr, score: rateAddressQuality(fullAddr) - 10 });
+    if (fullAddr) addrList.push({ addr: fullAddr, score: rateAddressQuality(fullAddr) - 20 });
 
     addrList.sort((a, b) => b.score - a.score);
     address = addrList[0]?.addr || null;

@@ -62,13 +62,27 @@ const AadhaarScanButton = ({ onResult, onPhoto, disabled }: AadhaarScanButtonPro
       setJustFilled(scannedSide);
       const shot = photoRef.current;
       if (onPhoto && shot) onPhoto(shot.file, shot.side);
-      toast.success(
-        viaQr
-          ? `Aadhaar ${scannedSide ?? ""} read from QR code - details filled in`.replace("  ", " ")
-          : data.checksumOk
-            ? `Aadhaar ${scannedSide ?? ""} read - details filled in`.replace("  ", " ")
-            : "Aadhaar read - please double-check the number",
-      );
+      if (scannedSide === "front") {
+        toast.success(
+          data.name
+            ? `Aadhaar Front: ${data.name} identified! Now click 'Scan Back' for address.`
+            : "Aadhaar Front read! Now click 'Scan Back' for address.",
+        );
+      } else if (scannedSide === "back") {
+        toast.success(
+          data.address
+            ? "Aadhaar Back: Address captured! If name is empty, click 'Scan Front'."
+            : "Aadhaar Back read! Please verify the address.",
+        );
+      } else {
+        toast.success(
+          viaQr
+            ? "Aadhaar read from QR code - details filled in"
+            : data.checksumOk
+              ? "Aadhaar read - details filled in"
+              : "Aadhaar read - please verify number",
+        );
+      }
     }
   }, [status, data, onResult, onPhoto, scannedSide]);
 

@@ -269,8 +269,12 @@ const finalizeAddress = (out: string[]): string | undefined => {
   addr = addr.replace(/\bDIST[.:]?\s*(?:Seapur|Skapur|Saapur|Shapes|Sitapwr|Shags?)\b/gi, "DIST: Sitapur");
   addr = addr.replace(/\b(?:Somer|Umer|mer|Unar|Meta|Praglesh|Oar|Praiosh)\s*Pradesh\b/gi, "Uttar Pradesh");
   addr = addr.replace(/\b[A-Za-z]\s+Uttar\s*Pradesh\b/gi, "Uttar Pradesh");
+  addr = addr.replace(/\bUttar\s*,\s*Pradesh\b/gi, "Uttar Pradesh");
+  addr = addr.replace(/,\s*[A-Za-z]\s+number\b/gi, ", number");
+  addr = addr.replace(/([a-zA-Z]+)\)(?=\s+[a-zA-Z])/g, "$1j");
   // Universal UP Postal circle rule: any state token before PIN starting with 2 is Uttar Pradesh
   addr = addr.replace(/(?:[A-Za-z]+)\s*Pradesh\s*[-–]?\s*(\b2\d{5}\b)/gi, "Uttar Pradesh - $1");
+  addr = addr.replace(/\bUttar\s*Pradesh\s*,\s*(\d{6})\b/gi, "Uttar Pradesh - $1");
 
   // Remove isolated noise fragments, non-word uppercase noise, and stray numbers before state
   addr = addr.replace(/,\s*(?:TERY|xe|SERRE|BREE|RERENEEE|LOST|Seep|SoSoECERESERRTEE|ERE|EEFelStSE|Shap\s*BA\s*RY)\b/gi, "");
