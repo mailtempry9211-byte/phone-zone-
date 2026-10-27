@@ -8,6 +8,8 @@ import {
   listRepairCustomers,
   getRepairCustomer,
   getRepairCustomerByPhone,
+  lookupAnyContactByPhone,
+  searchAllContacts,
   createRepairCustomer,
   updateRepairCustomer,
   deleteRepairCustomer,
@@ -47,8 +49,12 @@ export function buildRepairsRouter() {
     res.status(201).json(createRepairCustomer(req.body || {}));
   }));
 
+  r.get("/contacts/search", wrap((req, res) => {
+    res.json(searchAllContacts(req.query.q || "", req.query.limit));
+  }));
+
   r.get("/customers/by-phone/:phone", wrap((req, res) => {
-    const cust = getRepairCustomerByPhone(req.params.phone);
+    const cust = lookupAnyContactByPhone(req.params.phone);
     if (!cust) return res.status(404).json({ error: "No customer found with that phone." });
     res.json(cust);
   }));

@@ -20,9 +20,12 @@ import {
   DollarSign,
   CheckCircle2,
   Calendar,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import AddRepairDialog from "./AddRepairDialog";
 import RepairDetailDialog from "./RepairDetailDialog";
+import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
 import { printRepairSticker } from "@/lib/deviceQr";
 import { toast } from "sonner";
 
@@ -35,6 +38,9 @@ export const RepairsTab: React.FC = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [docModalJob, setDocModalJob] = useState<any | null>(null);
+  const [docModalType, setDocModalType] = useState<RepairDocType>("invoice");
+  const [docModalOpen, setDocModalOpen] = useState(false);
 
   // Customers state
   const [repairCustomers, setRepairCustomers] = useState<any[]>([]);
@@ -345,6 +351,20 @@ export const RepairsTab: React.FC = () => {
                           </td>
                           <td className="p-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                title="Repair Invoice & Multi-Style Print / WA"
+                                onClick={() => {
+                                  setDocModalJob(job);
+                                  setDocModalType("invoice");
+                                  setDocModalOpen(true);
+                                }}
+                              >
+                                <Receipt className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                                Invoice
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -669,6 +689,15 @@ export const RepairsTab: React.FC = () => {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onRefresh={fetchJobs}
+      />
+
+      {/* Repair Document & Invoice Center Dialog (from Table Actions) */}
+      <RepairInvoiceModal
+        open={docModalOpen}
+        onOpenChange={setDocModalOpen}
+        job={docModalJob}
+        defaultDocType={docModalType}
+        onSuccess={fetchJobs}
       />
     </div>
   );

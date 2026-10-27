@@ -18,6 +18,7 @@ import RepairHistoryPanel from "./RepairHistoryPanel";
 import ImeiScanButton from "./ImeiScanButton";
 import AadhaarScanButton from "./AadhaarScanButton";
 import RepairShareModal from "./RepairShareModal";
+import RepairContactPickerDialog, { type ContactItem } from "./RepairContactPickerDialog";
 import { useTacLookup } from "@/hooks/useTacLookup";
 
 interface AddRepairDialogProps {
@@ -82,6 +83,10 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
   const [imeiHistory, setImeiHistory] = useState<any[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
+  // Contact Picker & Auto-fill State
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [contactBadge, setContactBadge] = useState<string | null>(null);
+
   // Job Sheet WhatsApp Dispatch Dialog
   const [createdJobForShare, setCreatedJobForShare] = useState<any | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -104,7 +109,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
     }
   }, [tacInfo]);
 
-  // Auto-search customer by phone
+  // Auto-search customer by phone across all contacts (customers, sellers, repairs, dealers)
   useEffect(() => {
     const cleanPhone = customerPhone.replace(/\D/g, "");
     if (cleanPhone.length === 10) {
@@ -112,24 +117,30 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) {
-            setExistingCustomerId(data.id);
-            if (!customerName) setCustomerName(data.name || "");
-            if (!customerAddress && data.address) setCustomerAddress(data.address);
-            if (!idNumber && data.id_number) {
+            setExistingCustomerId(data.existing_repair_customer_id || (data.source === "repair_customer" ? data.id : null));
+            if (!customerName || customerName !== data.name) setCustomerName(data.name || "");
+            if (data.address) setCustomerAddress(data.address);
+            if (data.id_number) {
               setIdNumber(data.id_number);
               if (data.id_proof_type) setIdProofType(data.id_proof_type);
             }
+            const label = data.source_label || "Existing Contact";
+            setContactBadge(`Auto-filled from ${label}: ${data.name}`);
             toast({
-              title: "Existing Customer Found",
-              description: `Loaded details for ${data.name}`,
+              title: "Existing Contact Found",
+              description: `Loaded details from ${label} (${data.name})`,
             });
           } else {
             setExistingCustomerId(null);
+            setContactBadge(null);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setContactBadge(null);
+        });
     } else {
       setExistingCustomerId(null);
+      setContactBadge(null);
     }
   }, [customerPhone]);
 
@@ -309,39 +320,59 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                 <User className="h-4 w-4 text-blue-600" />
                 Customer Details
               </div>
-              <AadhaarScanButton
-                disabled={submitting}
-                onResult={(data) => {
-                  if (data.name) setCustomerName(data.name);
-                  if (data.address) setCustomerAddress(data.address);
-                  if (data.idNumber) {
-                    setIdNumber(data.idNumber);
-                    setIdProofType("aadhaar");
-                  }
-                  if (data.mobile && !customerPhone) setCustomerPhone(data.mobile);
-                  toast({
-                    title: "Aadhaar Scanned",
-                    description: `Loaded data for ${data.name || "customer"}`,
-                  });
-                }}
-              />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setContactPickerOpen(true)}
+                  className="h-8 text-xs text-blue-700 border-blue-300 hover:bg-blue-50"
+                  disabled={submitting}
+                >
+                  <Search className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                  Select from Contacts
+                </Button>
+                <AadhaarScanButton
+                  disabled={submitting}
+                  onResult={(data) => {
+                    if (data.name) setCustomerName(data.name);
+                    if (data.address) setCustomerAddress(data.address);
+                    if (data.idNumber) {
+                      setIdNumber(data.idNumber);
+                      setIdProofType("aadhaar");
+                    }
+                    if (data.mobile && !customerPhone) setCustomerPhone(data.mobile);
+                    toast({
+                      title: "Aadhaar Scanned",
+                      description: `Loaded data for ${data.name || "customer"}`,
+                    });
+                  }}
+                />
+              </div>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="cust-phone" className="text-xs">
+                <Label htmlFor="cust-phone" className="text-xs font-semibold text-gray-900">
                   Mobile Number <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="cust-phone"
-                  placeholder="10-digit mobile"
+                  placeholder="10-digit mobile number"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   maxLength={10}
                   required
                 />
+                {contactBadge && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span className="font-medium truncate">{contactBadge}</span>
+                  </div>
+                )}
               </div>
               <div>
-                <Label htmlFor="cust-name" className="text-xs">
+                <Label htmlFor="cust-name" className="text-xs font-semibold text-gray-900">
                   Customer Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
@@ -356,7 +387,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                 <Label htmlFor="cust-addr" className="text-xs">Address</Label>
                 <Input
                   id="cust-addr"
-                  placeholder="City / Area"
+                  placeholder="City / Area / Full Address"
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
                 />
@@ -375,100 +406,119 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
 
           {/* Section 2: Device */}
           <div className="border rounded-lg p-3.5 bg-gray-50/60 space-y-3">
-            <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-800 border-b pb-1.5">
-              <Smartphone className="h-4 w-4 text-blue-600" />
-              Device Information
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <Label htmlFor="dev-imei" className="text-xs font-semibold text-gray-900">
-                    IMEI (15 Digits) <span className="text-red-600 font-bold">*</span>
-                  </Label>
-                  <ImeiScanButton
-                    disabled={submitting}
-                    onResult={(r) => {
-                      setImei(r.imei);
-                      if (r.via === "barcode") {
-                        tacFetch(r.imei).catch(() => {});
-                      }
-                    }}
-                  />
-                </div>
-                <Input
-                  id="dev-imei"
-                  placeholder="Mandatory 15-digit IMEI"
-                  value={imei}
-                  onChange={(e) => setImei(e.target.value)}
-                  maxLength={16}
-                  required
-                  className="font-mono text-sm border-blue-400 focus:border-blue-600"
-                />
-                {tacStatus !== "idle" && (
-                  <div
-                    className={`text-xs mt-1.5 flex items-center gap-1 flex-wrap ${
-                      tacStatus === "found"
-                        ? "text-emerald-700"
-                        : tacStatus === "error"
-                          ? "text-red-500"
-                          : "text-gray-500"
-                    }`}
-                    role="status"
-                  >
-                    {tacStatus === "checking" && (
-                      <><Loader2 className="h-3 w-3 animate-spin text-blue-500" /> Checking TAC database...</>
-                    )}
-                    {tacStatus === "found" && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <Wifi className="h-3 w-3 text-emerald-600 shrink-0" />
-                        <span className="font-semibold">{tacInfo?.brand} {tacInfo?.phoneName || tacInfo?.model}</span>
-                        <Badge variant="outline" className="text-[10px] py-0 px-1 border-emerald-300 bg-emerald-50 text-emerald-800">
-                          ✓ Auto-filled
-                        </Badge>
-                      </div>
-                    )}
-                    {tacStatus === "fetching" && (
-                      <><Globe className="h-3 w-3 animate-spin text-blue-600" /> Fetching specs from Hicelltek API...</>
-                    )}
-                    {tacStatus === "miss" && (
-                      <div className="flex items-center gap-1 flex-wrap text-[11px]">
-                        <WifiOff className="h-3 w-3 text-amber-500 shrink-0" />
-                        <span>TAC not in local DB.</span>
-                        {(tacInfo?.fetchMode as string) === "ask" && tacInfo?.hasKeys ? (
-                          <button
-                            type="button"
-                            className="underline font-semibold text-blue-600 hover:text-blue-800"
-                            onClick={() => tacFetch(imei)}
-                          >
-                            Look up online?
-                          </button>
-                        ) : (tacInfo?.fetchMode as string) === "off" ? (
-                          <span className="text-gray-400">(online lookup off)</span>
-                        ) : tacInfo?.hasKeys === false ? (
-                          <span className="text-gray-400">(no API key)</span>
-                        ) : null}
-                      </div>
-                    )}
-                    {tacStatus === "error" && <>{tacError || "TAC lookup failed."}</>}
-                  </div>
-                )}
+            <div className="flex items-center justify-between font-semibold text-sm text-gray-800 border-b pb-1.5 flex-wrap gap-2">
+              <div className="flex items-center gap-1.5">
+                <Smartphone className="h-4 w-4 text-blue-600" />
+                Device Information
               </div>
+              <span className="text-xs text-gray-500 font-normal">IMEI is optional for dead devices</span>
+            </div>
+
+            {/* Dedicated Full-Width IMEI & Barcode/OCR Scanner Row */}
+            <div className="border rounded-md p-2.5 bg-white space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <Label htmlFor="dev-imei" className="text-xs font-semibold text-gray-900">
+                    IMEI Number <span className="text-gray-400 font-normal text-[11px]">(Optional for Repairs)</span>
+                  </Label>
+                  <div className="text-[11px] text-gray-500">
+                    Scan barcode, read sticker via OCR, or enter manually. Can be left empty if dead.
+                  </div>
+                </div>
+                <ImeiScanButton
+                  disabled={submitting}
+                  onResult={(r) => {
+                    setImei(r.imei);
+                    if (r.via === "barcode") {
+                      tacFetch(r.imei).catch(() => {});
+                    }
+                  }}
+                />
+              </div>
+
+              <Input
+                id="dev-imei"
+                placeholder="Optional 15-digit IMEI (leave blank if unavailable)"
+                value={imei}
+                onChange={(e) => setImei(e.target.value)}
+                maxLength={16}
+                className="font-mono text-sm border-gray-300 focus:border-blue-600"
+              />
+
+              {tacStatus !== "idle" && (
+                <div
+                  className={`text-xs mt-1.5 flex items-center gap-1 flex-wrap ${
+                    tacStatus === "found"
+                      ? "text-emerald-700"
+                      : tacStatus === "error"
+                        ? "text-red-500"
+                        : "text-gray-500"
+                  }`}
+                  role="status"
+                >
+                  {tacStatus === "checking" && (
+                    <><Loader2 className="h-3 w-3 animate-spin text-blue-500" /> Checking TAC database...</>
+                  )}
+                  {tacStatus === "found" && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Wifi className="h-3 w-3 text-emerald-600 shrink-0" />
+                      <span className="font-semibold">{tacInfo?.brand} {tacInfo?.phoneName || tacInfo?.model}</span>
+                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-emerald-300 bg-emerald-50 text-emerald-800">
+                        ✓ Auto-filled
+                      </Badge>
+                    </div>
+                  )}
+                  {tacStatus === "fetching" && (
+                    <><Globe className="h-3 w-3 animate-spin text-blue-600" /> Fetching specs from Hicelltek API...</>
+                  )}
+                  {tacStatus === "miss" && (
+                    <div className="flex items-center gap-1 flex-wrap text-[11px]">
+                      <WifiOff className="h-3 w-3 text-amber-500 shrink-0" />
+                      <span>TAC not in local DB.</span>
+                      {(tacInfo?.fetchMode as string) === "ask" && tacInfo?.hasKeys ? (
+                        <button
+                          type="button"
+                          className="underline font-semibold text-blue-600 hover:text-blue-800"
+                          onClick={() => tacFetch(imei)}
+                        >
+                          Look up online?
+                        </button>
+                      ) : (tacInfo?.fetchMode as string) === "off" ? (
+                        <span className="text-gray-400">(online lookup off)</span>
+                      ) : tacInfo?.hasKeys === false ? (
+                        <span className="text-gray-400">(no API key)</span>
+                      ) : null}
+                    </div>
+                  )}
+                  {tacStatus === "error" && <>{tacError || "TAC lookup failed."}</>}
+                </div>
+              )}
+            </div>
+
+            {/* Brand & Model Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <Label htmlFor="dev-brand" className="text-xs">Brand</Label>
+                <Label htmlFor="dev-brand" className="text-xs font-semibold text-gray-900">
+                  Device Brand <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="dev-brand"
-                  placeholder="e.g. Samsung, Apple"
+                  placeholder="e.g. Samsung, Apple, Xiaomi"
                   value={deviceBrand}
                   onChange={(e) => setDeviceBrand(e.target.value)}
+                  required
                 />
               </div>
               <div>
-                <Label htmlFor="dev-model" className="text-xs">Model</Label>
+                <Label htmlFor="dev-model" className="text-xs font-semibold text-gray-900">
+                  Device Model <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="dev-model"
-                  placeholder="e.g. Galaxy S21"
+                  placeholder="e.g. Galaxy S21, iPhone 12"
                   value={deviceModel}
                   onChange={(e) => setDeviceModel(e.target.value)}
+                  required
                 />
               </div>
             </div>
@@ -661,6 +711,25 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {/* Contact Picker Dialog (Customers, Sellers, Repairs, Dealers) */}
+        <RepairContactPickerDialog
+          open={contactPickerOpen}
+          onOpenChange={setContactPickerOpen}
+          onSelect={(c: ContactItem) => {
+            setCustomerName(c.name);
+            setCustomerPhone(c.phone);
+            if (c.address) setCustomerAddress(c.address);
+            if (c.id_proof_type) setIdProofType(c.id_proof_type);
+            if (c.id_number) setIdNumber(c.id_number);
+            setExistingCustomerId(c.source === "repair_customer" ? c.id : null);
+            setContactBadge(`Loaded from ${c.source_label}: ${c.name}`);
+            toast({
+              title: "Contact Selected",
+              description: `Loaded details from ${c.source_label} (${c.name})`,
+            });
+          }}
+        />
+
         {/* Job Sheet WhatsApp Prompt Dialog */}
         {createdJobForShare && (
           <RepairShareModal

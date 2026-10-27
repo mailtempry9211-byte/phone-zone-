@@ -41,6 +41,146 @@ export function getRepairCustomerByPhone(phone) {
   ).get(cleaned, `%${cleaned}`);
 }
 
+export function lookupAnyContactByPhone(phone) {
+  const cleaned = cleanPhone(phone);
+  if (!cleaned || cleaned.length < 10) return null;
+  const db = getDb();
+  const phonePattern = `%${cleaned.slice(-10)}`;
+
+  // 1. Repair customers (first preference)
+  const rep = db.prepare(
+    `SELECT id, name, phone, address, id_proof_type, id_number, photo_file_id, aadhaar_photo_file_id
+     FROM repair_customers
+     WHERE (phone = ? OR phone LIKE ?) AND deleted_at IS NULL LIMIT 1`
+  ).get(cleaned, phonePattern);
+  if (rep) {
+    return {
+      ...rep,
+      source: "repair_customer",
+      source_label: "Previous Repair Customer",
+      existing_repair_customer_id: rep.id,
+    };
+  }
+
+  // 2. Customers (sales buyers)
+  const cust = db.prepare(
+    `SELECT id, name, phone, address, id_proof_type, id_number
+     FROM customers
+     WHERE (phone = ? OR phone LIKE ?) AND deleted_at IS NULL LIMIT 1`
+  ).get(cleaned, phonePattern);
+  if (cust) {
+    return {
+      ...cust,
+      source: "customer",
+      source_label: "Store Customer (Sales Buyer)",
+      existing_repair_customer_id: null,
+    };
+  }
+
+  // 3. Sellers (phone suppliers)
+  const sel = db.prepare(
+    `SELECT id, name, phone, address, id_proof_type, id_number
+     FROM sellers
+     WHERE (phone = ? OR phone LIKE ?) AND deleted_at IS NULL LIMIT 1`
+  ).get(cleaned, phonePattern);
+  if (sel) {
+    return {
+      ...sel,
+      source: "seller",
+      source_label: "Registered Phone Seller",
+      existing_repair_customer_id: null,
+    };
+  }
+
+  // 4. Dealers (B2B suppliers)
+  try {
+    const deal = db.prepare(
+      `SELECT id, shop_name AS name, proprietor_name, phone, address
+       FROM dealers
+       WHERE (phone = ? OR phone LIKE ?) LIMIT 1`
+    ).get(cleaned, phonePattern);
+    if (deal) {
+      return {
+        id: deal.id,
+        name: deal.name || deal.proprietor_name,
+        phone: deal.phone,
+        address: deal.address,
+        id_proof_type: null,
+        id_number: null,
+        source: "dealer",
+        source_label: "Registered B2B Dealer",
+        existing_repair_customer_id: null,
+      };
+    }
+  } catch {}
+
+  return null;
+}
+
+export function searchAllContacts(query = "", limit = 20) {
+  const db = getDb();
+  const capped = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const q = `%${String(query || "").trim()}%`;
+  const results = [];
+
+  // Repair customers
+  try {
+    const reps = db.prepare(
+      `SELECT id, name, phone, address, id_proof_type, id_number, 'repair_customer' AS source, 'Repair Customer' AS source_label
+       FROM repair_customers
+       WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?)
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(q, q, capped);
+    results.push(...reps);
+  } catch {}
+
+  // Customers
+  try {
+    const custs = db.prepare(
+      `SELECT id, name, phone, address, id_proof_type, id_number, 'customer' AS source, 'Store Customer' AS source_label
+       FROM customers
+       WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?)
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(q, q, capped);
+    results.push(...custs);
+  } catch {}
+
+  // Sellers
+  try {
+    const sels = db.prepare(
+      `SELECT id, name, phone, address, id_proof_type, id_number, 'seller' AS source, 'Phone Seller' AS source_label
+       FROM sellers
+       WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?)
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(q, q, capped);
+    results.push(...sels);
+  } catch {}
+
+  // Dealers
+  try {
+    const deals = db.prepare(
+      `SELECT id, COALESCE(shop_name, proprietor_name) AS name, phone, address, NULL AS id_proof_type, NULL AS id_number, 'dealer' AS source, 'B2B Dealer' AS source_label
+       FROM dealers
+       WHERE (shop_name LIKE ? OR proprietor_name LIKE ? OR phone LIKE ?)
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(q, q, q, capped);
+    results.push(...deals);
+  } catch {}
+
+  // Deduplicate by clean 10-digit phone
+  const seen = new Set();
+  const unique = [];
+  for (const item of results) {
+    const p = (item.phone || "").replace(/\D/g, "").slice(-10);
+    if (p && !seen.has(p)) {
+      seen.add(p);
+      unique.push(item);
+    }
+  }
+
+  return unique.slice(0, capped);
+}
+
 export function createRepairCustomer({
   name,
   phone,

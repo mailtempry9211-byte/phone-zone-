@@ -23,10 +23,13 @@ import {
   Calendar,
   RotateCcw,
   Send,
+  Receipt,
+  Sparkles,
 } from "lucide-react";
 import { buildJobSheetHtml, buildRepairInvoiceHtml } from "@/lib/repairTemplates";
 import { printHtml } from "@/lib/printHtml";
 import RepairShareModal, { type RepairShareMode } from "./RepairShareModal";
+import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
 
 interface RepairDetailDialogProps {
   job: any;
@@ -66,9 +69,12 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
   const [reworkReason, setReworkReason] = useState("");
   const [isSubmittingRework, setIsSubmittingRework] = useState(false);
 
-  // WhatsApp Lifecycle Share Dialog
+  // WhatsApp Lifecycle Share Dialog & Multi-Design Document Center
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareMode, setShareMode] = useState<RepairShareMode>("ready");
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docModalType, setDocModalType] = useState<RepairDocType>("invoice");
+  const [pendingStatusPrompt, setPendingStatusPrompt] = useState<"ready" | "delivered" | null>(null);
 
   // Warranty inline edit
   const [isEditingWarranty, setIsEditingWarranty] = useState(false);
@@ -142,13 +148,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
       setStatusNote("");
       onRefresh();
 
-      // Trigger automatic prompt for WhatsApp message on ready or delivered
+      // Trigger automatic prompt & dialog for WhatsApp message on ready or delivered
       if (newStatus === "ready") {
-        setShareMode("ready");
-        setShareModalOpen(true);
+        setPendingStatusPrompt("ready");
+        setDocModalType("ready");
+        setDocModalOpen(true);
       } else if (newStatus === "delivered") {
-        setShareMode("delivered");
-        setShareModalOpen(true);
+        setPendingStatusPrompt("delivered");
+        setDocModalType("delivered");
+        setDocModalOpen(true);
       }
     } catch (err: any) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
@@ -264,44 +272,36 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Button size="sm" variant="outline" onClick={handlePrintJobSheet}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                onClick={() => {
+                  setDocModalType("jobsheet");
+                  setDocModalOpen(true);
+                }}
+              >
                 <FileText className="w-4 h-4 mr-1 text-blue-600" />
                 Job Sheet
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                onClick={() => {
-                  setShareMode("jobsheet");
-                  setShareModalOpen(true);
-                }}
-              >
-                <Send className="w-3.5 h-3.5 mr-1" />
-                WA Job Sheet
-              </Button>
-              <Button size="sm" variant="outline" onClick={handlePrintInvoice}>
-                <Printer className="w-4 h-4 mr-1 text-emerald-600" />
-                Invoice
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                 onClick={() => {
-                  setShareMode("invoice");
-                  setShareModalOpen(true);
+                  setDocModalType("invoice");
+                  setDocModalOpen(true);
                 }}
               >
-                <Send className="w-3.5 h-3.5 mr-1" />
-                WA Invoice
+                <Receipt className="w-4 h-4 mr-1 text-emerald-600" />
+                Invoice
               </Button>
               <Button
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  setShareMode("custom");
-                  setShareModalOpen(true);
+                  setDocModalType(job.status === "delivered" ? "delivered" : job.status === "ready" ? "ready" : "invoice");
+                  setDocModalOpen(true);
                 }}
               >
                 <MessageSquare className="w-4 h-4 mr-1" />
@@ -422,6 +422,50 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
             <div className="font-semibold text-xs text-gray-600 uppercase tracking-wide">
               Update Repair Status
             </div>
+
+            {/* Status Update Immediate Action Banner */}
+            {pendingStatusPrompt && (
+              <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-emerald-900 text-xs">
+                      {pendingStatusPrompt === "ready"
+                        ? "📱 Device marked READY! Send pickup notification to customer?"
+                        : "🎉 Device marked DELIVERED! Send Thank-You & 5-Star Review link?"}
+                    </div>
+                    <div className="text-[11px] text-emerald-700">
+                      {pendingStatusPrompt === "ready"
+                        ? "Send invoice PDF, total balance due, and store address directly to customer WhatsApp."
+                        : "Ask for 5-star customer review, feedback, and provide service warranty confirmation."}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs font-semibold shadow-sm"
+                    onClick={() => {
+                      setDocModalType(pendingStatusPrompt);
+                      setDocModalOpen(true);
+                      setPendingStatusPrompt(null);
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5 mr-1" />
+                    Open WhatsApp Sender
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-gray-500 hover:text-gray-700"
+                    onClick={() => setPendingStatusPrompt(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {STATUS_OPTIONS.map((opt) => (
                 <Button
@@ -621,6 +665,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
           />
         </div>
       </DialogContent>
+
+      {/* Repair Document & Invoice Center Dialog (Job Sheet / Invoice / Ready / Delivered) */}
+      <RepairInvoiceModal
+        open={docModalOpen}
+        onOpenChange={setDocModalOpen}
+        job={job}
+        defaultDocType={docModalType}
+        onSuccess={() => onRefresh()}
+      />
     </Dialog>
   );
 };
