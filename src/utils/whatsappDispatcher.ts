@@ -2,13 +2,14 @@ import { toast } from "sonner";
 
 export interface SendWhatsAppOptions {
   phone: string;
-  message: string;
+  message?: string;
   pdfBlob?: Blob;
   pdfBase64?: string;
   invoiceHtml?: string;
   pdfFileName?: string;
   adminSettings?: any;
   waSessionChannel?: "sales" | "repairs";
+  mode?: "both" | "text_only" | "pdf_only";
 }
 
 export function formatWhatsAppPhone(phone: string): string {
@@ -27,19 +28,26 @@ export function formatWhatsAppPhone(phone: string): string {
  */
 export async function dispatchWhatsApp({
   phone,
-  message,
-  pdfBlob,
+  message: rawMessage = "",
+  pdfBlob: initialPdfBlob,
   pdfBase64: initialPdfBase64,
-  invoiceHtml,
+  invoiceHtml: initialInvoiceHtml,
   pdfFileName = "document.pdf",
   adminSettings,
   waSessionChannel = "sales",
+  mode = "both",
 }: SendWhatsAppOptions): Promise<{ success: boolean; channel: string }> {
   const cleanPhone = formatWhatsAppPhone(phone);
   if (!cleanPhone) {
     toast.error("Valid phone number is required for WhatsApp dispatch");
     return { success: false, channel: "unknown" };
   }
+
+  // Filter payload based on dispatch mode (both, text_only, pdf_only)
+  let message = mode === "pdf_only" ? "" : rawMessage;
+  let invoiceHtml = mode === "text_only" ? undefined : initialInvoiceHtml;
+  let pdfBlob = mode === "text_only" ? undefined : initialPdfBlob;
+  let pdfBase64 = mode === "text_only" ? undefined : initialPdfBase64;
 
   // Fetch latest settings if channel is not defined on adminSettings
   let effectiveChannel = adminSettings?.whatsapp_channel;

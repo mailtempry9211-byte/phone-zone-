@@ -23,6 +23,7 @@ import {
   getRepairAccounting,
   updateRepairJob,
   updateRepairJobStatus,
+  recordRepairPayment,
   addRepairJobItems,
   deleteRepairJob,
   getRepairJobsByImei,
@@ -151,9 +152,29 @@ export function buildRepairsRouter() {
     const updated = updateRepairJobStatus(req.params.id, {
       status: req.body.status,
       note: req.body.note,
+      payment_status: req.body.payment_status,
+      amount_paid: req.body.amount_paid,
+      final_price: req.body.final_price,
       userId: req.user?.id,
     });
     recordPreviousYearChange("repair_job", req.params.id, "status_change", { status: req.body.status });
+    res.json(withPrevYearMetadata(updated));
+  }));
+
+  r.post("/jobs/:id/payment", wrap((req, res) => {
+    const job = getRepairJob(req.params.id);
+    const isAdmin = req.user?.roles?.includes("admin");
+    const userShopId = req.user?.shopId || "shop_1";
+    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+      return res.status(403).json({ error: "Access denied to other shop's repair job." });
+    }
+    const updated = recordRepairPayment(req.params.id, {
+      amount: Number(req.body.amount) || 0,
+      payment_method: req.body.payment_method || "cash",
+      note: req.body.note,
+      userId: req.user?.id,
+    });
+    recordPreviousYearChange("repair_job", req.params.id, "payment", req.body || {});
     res.json(withPrevYearMetadata(updated));
   }));
 

@@ -329,13 +329,19 @@ const findAddressUnlabeled = (lines: string[]): string | undefined => {
 };
 
 const findAddress = (text: string): string | undefined => {
-  const m = /[aA]?[dD][dg]ress\s*[:.\-]?/i.exec(text);
+  const m = /(?:[aA]?[dD][dg]ress|Addr|Addres|Adres|Addre|पता\s*[\/:]?\s*Address|Address\s*[\/:]?\s*पता)\s*[:.\-]?/i.exec(text);
   if (m) {
-    // drop the rest of the "Address:" line itself (OCR often appends junk like
-    // "Address: 5") and read lines from the next one onwards.
-    const nl = text.indexOf("\n", m.index);
-    if (nl >= 0) {
-      const labeled = finalizeAddress(collectAddressLines(text.slice(nl + 1).split("\n"), 0));
+    const afterMatch = text.slice(m.index + m[0].length);
+    const nl = afterMatch.indexOf("\n");
+    const sameLineText = (nl >= 0 ? afterMatch.slice(0, nl) : afterMatch).trim();
+
+    // If there is meaningful address text on the same line after "Address:"
+    if (sameLineText.length >= 3 && /[A-Za-z0-9]/.test(sameLineText)) {
+      const lines = [sameLineText, ...(nl >= 0 ? afterMatch.slice(nl + 1).split("\n") : [])];
+      const labeled = finalizeAddress(collectAddressLines(lines, 0));
+      if (labeled) return labeled;
+    } else if (nl >= 0) {
+      const labeled = finalizeAddress(collectAddressLines(afterMatch.slice(nl + 1).split("\n"), 0));
       if (labeled) return labeled;
     }
   }

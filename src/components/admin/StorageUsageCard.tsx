@@ -4,8 +4,31 @@ import { Button } from "@/components/ui/button";
 import { HardDrive, RefreshCw } from "lucide-react";
 import { useStorageUsage } from "@/hooks/useStorageUsage";
 
-const StorageUsageCard = () => {
+interface StorageUsageCardProps {
+  compact?: boolean;
+}
+
+const StorageUsageCard = ({ compact = false }: StorageUsageCardProps) => {
   const { formattedSize, fileCount, isLoading, error, refresh } = useStorageUsage();
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/70 border border-slate-200 rounded-lg text-xs transition-colors shrink-0">
+        <HardDrive className="h-3.5 w-3.5 text-slate-600" />
+        <span className="font-semibold text-slate-800">{formattedSize}</span>
+        <span className="text-[10px] text-slate-500 hidden md:inline">({fileCount} files)</span>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={isLoading}
+          className="text-slate-400 hover:text-slate-700 ml-0.5 p-0.5"
+          title="Refresh storage"
+        >
+          <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <Card>

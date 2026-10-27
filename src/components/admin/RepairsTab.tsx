@@ -22,10 +22,16 @@ import {
   Calendar,
   Receipt,
   FileText,
+  Eye,
+  Phone,
+  MessageSquare,
+  Smartphone,
 } from "lucide-react";
 import AddRepairDialog from "./AddRepairDialog";
 import RepairDetailDialog from "./RepairDetailDialog";
 import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
+import CreateReworkDialog from "./CreateReworkDialog";
+import RepairCustomerOverviewDialog from "./RepairCustomerOverviewDialog";
 import { printRepairSticker } from "@/lib/deviceQr";
 import { toast } from "sonner";
 
@@ -50,6 +56,38 @@ export const RepairsTab: React.FC = () => {
   // Accounting state
   const [accountingData, setAccountingData] = useState<any | null>(null);
   const [loadingAccounting, setLoadingAccounting] = useState(false);
+
+  // Rework dialog state
+  const [reworkDialogOpen, setReworkDialogOpen] = useState(false);
+  const [reworkPreselectedJob, setReworkPreselectedJob] = useState<any | null>(null);
+
+  // Customer Overview state
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [customerOverviewOpen, setCustomerOverviewOpen] = useState(false);
+  const [customerHistory, setCustomerHistory] = useState<any[]>([]);
+  const [loadingCustomerHistory, setLoadingCustomerHistory] = useState(false);
+
+  const handleOpenCustomerOverview = async (cust: any) => {
+    setSelectedCustomer(cust);
+    setCustomerOverviewOpen(true);
+    setLoadingCustomerHistory(true);
+    try {
+      const res = await fetch(`/api/repair/customers/${cust.id}/history`);
+      if (res.ok) {
+        const hist = await res.json();
+        setCustomerHistory(Array.isArray(hist) ? hist : []);
+      }
+    } catch {
+      toast.error("Failed to load customer repair history");
+    } finally {
+      setLoadingCustomerHistory(false);
+    }
+  };
+
+  const handleCreateReworkForJob = (job: any) => {
+    setReworkPreselectedJob(job);
+    setReworkDialogOpen(true);
+  };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -351,6 +389,18 @@ export const RepairsTab: React.FC = () => {
                           </td>
                           <td className="p-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1">
+                              {job.status === "delivered" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7 px-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+                                  title="Return for Rework / Repeat Warranty Claim"
+                                  onClick={() => handleCreateReworkForJob(job)}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                                  Rework
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -409,14 +459,27 @@ export const RepairsTab: React.FC = () => {
       {activeSubTab === "rework" && (
         <div className="space-y-4">
           <Card className="border-amber-200 bg-amber-50/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base text-amber-900 flex items-center gap-2">
-                <RotateCcw className="h-5 w-5 text-amber-700" />
-                Rework &amp; Repeat Warranty Claims
-              </CardTitle>
-              <p className="text-xs text-amber-800">
-                Devices repaired earlier that customers brought back with repeat issues. Track warranty rework without altering original delivery records.
-              </p>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="text-base text-amber-900 flex items-center gap-2">
+                  <RotateCcw className="h-5 w-5 text-amber-700" />
+                  Rework &amp; Repeat Warranty Claims
+                </CardTitle>
+                <p className="text-xs text-amber-800 mt-1">
+                  Track devices brought back by customers for warranty rework or repeat complaints without altering original delivery records.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="bg-amber-700 hover:bg-amber-800 text-white font-medium shadow-sm"
+                onClick={() => {
+                  setReworkPreselectedJob(null);
+                  setReworkDialogOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Rework / Claim Warranty
+              </Button>
             </CardHeader>
           </Card>
 
@@ -426,9 +489,21 @@ export const RepairsTab: React.FC = () => {
                 <div className="p-12 text-center text-sm text-gray-500">
                   <RotateCcw className="h-10 w-10 text-gray-300 mx-auto mb-2" />
                   <div className="font-semibold text-gray-700">No rework or warranty claims active</div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    To send a delivered phone for rework, open the delivered job and click <strong>Return for Rework</strong>.
+                  <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+                    Search any past delivered device or customer to open a warranty rework ticket with unique tracking code.
                   </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 border-amber-300 text-amber-800 hover:bg-amber-50"
+                    onClick={() => {
+                      setReworkPreselectedJob(null);
+                      setReworkDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    + Add Rework / Claim Warranty
+                  </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -525,7 +600,7 @@ export const RepairsTab: React.FC = () => {
                   <Users className="h-10 w-10 text-gray-300 mx-auto mb-2" />
                   <div className="font-semibold text-gray-700">No repair customers found</div>
                   <p className="text-xs text-gray-400 mt-1">
-                    Customers who bring devices for repair appear here automatically.
+                    Customers who bring devices for repair appear here automatically with full ledger and device histories.
                   </p>
                 </div>
               ) : (
@@ -533,25 +608,115 @@ export const RepairsTab: React.FC = () => {
                   <table className="w-full text-sm text-left border-collapse">
                     <thead className="bg-gray-50 border-b text-xs text-gray-600 uppercase">
                       <tr>
-                        <th className="p-3">Customer Name</th>
-                        <th className="p-3">Mobile Phone</th>
-                        <th className="p-3">Alternate Phone</th>
+                        <th className="p-3">Customer</th>
+                        <th className="p-3">Contact</th>
                         <th className="p-3">Address</th>
-                        <th className="p-3">Registered On</th>
+                        <th className="p-3 text-center">Repairs</th>
+                        <th className="p-3 text-right">Total Spent</th>
+                        <th className="p-3 text-center">Ledger / Balance</th>
+                        <th className="p-3 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {repairCustomers.map((cust) => (
-                        <tr key={cust.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="p-3 font-semibold text-gray-900">{cust.name}</td>
-                          <td className="p-3 font-mono text-gray-700">{cust.phone}</td>
-                          <td className="p-3 font-mono text-gray-500">{cust.alternate_phone || "-"}</td>
-                          <td className="p-3 text-xs text-gray-600 max-w-xs truncate">{cust.address || "-"}</td>
-                          <td className="p-3 text-xs text-gray-500">
-                            {new Date(cust.created_at).toLocaleDateString("en-IN")}
-                          </td>
-                        </tr>
-                      ))}
+                      {repairCustomers.map((cust) => {
+                        const totalSpent = Number(cust.total_spent || 0);
+                        const balanceDue = Number(cust.total_balance_due || 0);
+                        const totalRepairs = Number(cust.total_repairs || 0);
+                        const activeCount = Number(cust.active_repairs || 0);
+
+                        return (
+                          <tr
+                            key={cust.id}
+                            className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                            onClick={() => handleOpenCustomerOverview(cust)}
+                          >
+                            <td className="p-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                  {(cust.name || "C").charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                                    {cust.name}
+                                  </div>
+                                  <div className="text-[11px] text-gray-400">
+                                    Joined {cust.created_at ? new Date(cust.created_at).toLocaleDateString("en-IN") : "-"}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                              <div className="font-mono text-xs text-gray-800 font-medium">
+                                <a href={`tel:${cust.phone}`} className="hover:text-blue-600 hover:underline">
+                                  {cust.phone}
+                                </a>
+                              </div>
+                              {cust.alternate_phone && (
+                                <div className="text-[11px] text-gray-400 font-mono">
+                                  Alt: {cust.alternate_phone}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-3 text-xs text-gray-600 max-w-xs truncate">
+                              {cust.address || "-"}
+                            </td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1">
+                                <Badge variant="outline" className="text-xs bg-slate-50 font-medium">
+                                  {totalRepairs} {totalRepairs === 1 ? "Job" : "Jobs"}
+                                </Badge>
+                                {activeCount > 0 && (
+                                  <Badge className="text-[10px] bg-amber-500 hover:bg-amber-600 text-white font-medium py-0 px-1">
+                                    {activeCount} In Workshop
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                              ₹{totalSpent.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              {balanceDue > 0 ? (
+                                <Badge className="bg-red-50 text-red-700 border-red-300 font-semibold px-2 py-0.5">
+                                  Due: ₹{balanceDue.toLocaleString()}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 font-medium px-2 py-0.5">
+                                  Nil (₹0)
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="p-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7 px-2.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+                                  onClick={() => handleOpenCustomerOverview(cust)}
+                                >
+                                  <Eye className="h-3.5 w-3.5 mr-1 text-blue-600" />
+                                  Overview &amp; Ledger
+                                </Button>
+                                {cust.phone && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50"
+                                    title="WhatsApp Chat"
+                                    onClick={() => {
+                                      const clean = cust.phone.replace(/\D/g, "");
+                                      const full = clean.length === 10 ? `91${clean}` : clean;
+                                      window.open(`https://wa.me/${full}`, "_blank");
+                                    }}
+                                  >
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -698,6 +863,46 @@ export const RepairsTab: React.FC = () => {
         job={docModalJob}
         defaultDocType={docModalType}
         onSuccess={fetchJobs}
+      />
+
+      {/* Rework & Warranty Claim Dialog */}
+      <CreateReworkDialog
+        open={reworkDialogOpen}
+        onOpenChange={(open) => {
+          setReworkDialogOpen(open);
+          if (!open) setReworkPreselectedJob(null);
+        }}
+        preselectedJob={reworkPreselectedJob}
+        onSuccess={() => {
+          fetchJobs();
+          fetchRepairCustomers();
+        }}
+      />
+
+      {/* Customer Repair Overview & Ledger Dialog */}
+      <RepairCustomerOverviewDialog
+        open={customerOverviewOpen}
+        onOpenChange={setCustomerOverviewOpen}
+        customer={selectedCustomer}
+        history={customerHistory}
+        isLoading={loadingCustomerHistory}
+        onOpenJobDetail={(jobId) => handleOpenDetail(jobId)}
+        onOpenJobDoc={(job, type) => {
+          setDocModalJob(job);
+          setDocModalType(type === "jobsheet" ? "jobsheet" : "invoice");
+          setDocModalOpen(true);
+        }}
+        onRequestRework={(job) => {
+          setCustomerOverviewOpen(false);
+          handleCreateReworkForJob(job);
+        }}
+        onRefresh={() => {
+          if (selectedCustomer) {
+            handleOpenCustomerOverview(selectedCustomer);
+          }
+          fetchJobs();
+          fetchRepairCustomers();
+        }}
       />
     </div>
   );

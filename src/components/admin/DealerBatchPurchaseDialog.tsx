@@ -412,7 +412,7 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
     printHtml(html);
   };
 
-  const handleShareBatchWhatsApp = () => {
+  const handleShareBatchWhatsApp = (mode: "both" | "text_only" | "pdf_only" = "both") => {
     if (!createdBatch) return;
     const dealer = createdBatch.dealer || activeDealer;
     if (!dealer?.phone) {
@@ -442,6 +442,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
       invoiceHtml: html,
       pdfFileName: `Batch_Invoice_${createdBatch.invoiceNumber}.pdf`,
       adminSettings,
+      mode,
     });
   };
 
@@ -503,15 +504,22 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
               </CardContent>
             </Card>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <Button onClick={handlePrintBatchInvoice} className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5">
-                <Printer className="h-4 w-4" /> Print / Save PDF Invoice
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <Button onClick={handlePrintBatchInvoice} className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs h-9">
+                <Printer className="h-4 w-4" /> Print / Save PDF
               </Button>
-              <Button onClick={handleShareBatchWhatsApp} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
-                <Share2 className="h-4 w-4" /> Share on Dealer WhatsApp
+              <Button onClick={() => handleShareBatchWhatsApp("text_only")} variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 gap-1.5 text-xs h-9">
+                <Share2 className="h-4 w-4" /> Send Text Only
+              </Button>
+              <Button onClick={() => handleShareBatchWhatsApp("pdf_only")} variant="outline" className="text-sky-700 border-sky-300 hover:bg-sky-50 gap-1.5 text-xs h-9">
+                <FileText className="h-4 w-4" /> Send PDF Only
+              </Button>
+              <Button onClick={() => handleShareBatchWhatsApp("both")} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-9 font-semibold shadow-sm">
+                <Share2 className="h-4 w-4" /> Send Both (PDF + Text)
               </Button>
               <Button
                 variant="outline"
+                className="text-xs h-9"
                 onClick={() => {
                   setCreatedBatch(null);
                   onOpenChange(false);

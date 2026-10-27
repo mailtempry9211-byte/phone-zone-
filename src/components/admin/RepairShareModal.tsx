@@ -131,7 +131,7 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
 
   const { title, desc, icon, badge } = getTitleAndIcon();
 
-  const handleSend = async () => {
+  const handleSend = async (sendMode: "both" | "text_only" | "pdf_only" = "both") => {
     if (!phone) {
       toast.error("Customer mobile number is missing!");
       return;
@@ -142,12 +142,14 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
       let invoiceHtml: string | undefined = undefined;
       let pdfFileName: string = `Repair_${job.job_no}.pdf`;
 
-      if (mode === "jobsheet") {
-        invoiceHtml = buildJobSheetHtml({ job, settings });
-        pdfFileName = `JobSheet_${job.job_no}.pdf`;
-      } else if (mode === "invoice") {
-        invoiceHtml = buildRepairInvoiceHtml({ job, settings });
-        pdfFileName = `Repair_Invoice_${job.job_no}.pdf`;
+      if (sendMode !== "text_only") {
+        if (mode === "jobsheet") {
+          invoiceHtml = buildJobSheetHtml({ job, settings });
+          pdfFileName = `JobSheet_${job.job_no}.pdf`;
+        } else if (mode === "invoice") {
+          invoiceHtml = buildRepairInvoiceHtml({ job, settings });
+          pdfFileName = `Repair_Invoice_${job.job_no}.pdf`;
+        }
       }
 
       await dispatchWhatsApp({
@@ -157,6 +159,7 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
         pdfFileName,
         adminSettings: settings,
         waSessionChannel: "repairs",
+        mode: sendMode,
       });
 
       if (onSuccess) onSuccess();
@@ -226,33 +229,78 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="flex flex-wrap items-center justify-between gap-2 sm:gap-2">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => onOpenChange(false)}
             disabled={isSending}
+            className="text-xs"
           >
-            Skip / Cancel
+            Cancel
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={handleSend}
-            disabled={isSending}
-          >
-            {isSending ? (
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {mode === "jobsheet" || mode === "invoice" ? (
               <>
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Sending...
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSend("text_only")}
+                  disabled={isSending}
+                  className="text-xs h-8 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  title="Send formatted text message only"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                  Text Only
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSend("pdf_only")}
+                  disabled={isSending}
+                  className="text-xs h-8 text-sky-700 border-sky-300 hover:bg-sky-50"
+                  title="Send PDF document only"
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1" />
+                  PDF Only
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-sm"
+                  onClick={() => handleSend("both")}
+                  disabled={isSending}
+                  title="Send both PDF and text message"
+                >
+                  {isSending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Send Both (PDF + Text)
+                </Button>
               </>
             ) : (
-              <>
-                <Send className="h-3.5 w-3.5 mr-1.5" /> Send to Customer WhatsApp
-              </>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 font-semibold"
+                onClick={() => handleSend("text_only")}
+                disabled={isSending}
+              >
+                {isSending ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Send to WhatsApp
+              </Button>
             )}
-          </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

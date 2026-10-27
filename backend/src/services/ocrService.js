@@ -267,6 +267,104 @@ export function preprocessAndEnhance(rawBuffer, cropBox = null, targetScale = 2.
   }
 }
 
+/**
+ * Try decoding Aadhaar Secure QR or Legacy XML QR directly from the image buffer.
+ * Provides 100% exact, error-free name, DOB, and full address on modern Aadhaar cards.
+ */
+async function tryDecodeAadhaarQr(buffer) {
+  try {
+    const { default: jsQR } = await import("jsqr");
+    const { inflate } = await import("pako");
+
+    const meta = await sharp(buffer).metadata();
+    const scales = [1, 1.5, 2];
+
+    for (const scale of scales) {
+      const w = Math.round(Math.min(2200, (meta.width || 1200) * scale));
+      const { data, info } = await sharp(buffer)
+        .resize({ width: w })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      const qr = jsQR(new Uint8ClampedArray(data), info.width, info.height);
+      if (qr && qr.data) {
+        // 1) Legacy XML QR
+        if (/<\?xml|<Aadhaar|PrintLetterBarcodeData/i.test(qr.data)) {
+          const attr = (k) => qr.data.match(new RegExp(`${k}="([^"]*)"`))?.[1];
+          const uid = (attr("uid") || "").replace(/\D/g, "");
+          const addr = [
+            attr("careof"), attr("house"), attr("street"), attr("landmark"),
+            attr("loc"), attr("vtc"), attr("po"), attr("dist"), attr("subdist"),
+            attr("state"), attr("pc"),
+          ].map((s) => (s || "").trim()).filter((s) => s && s !== "-").join(", ");
+
+          return {
+            idNumber: uid.length === 12 ? uid : "",
+            name: attr("name") || undefined,
+            dob: attr("dob") || undefined,
+            gender: attr("gender")?.toLowerCase().startsWith("m") ? "male" : (attr("gender")?.toLowerCase().startsWith("f") ? "female" : undefined),
+            address: addr || undefined,
+            viaQr: true,
+          };
+        }
+
+        // 2) Secure QR (decimal BigInt -> big-endian bytes -> pako inflate)
+        if (/^\d{300,}/.test(qr.data)) {
+          try {
+            const bigIntVal = BigInt(qr.data);
+            let hex = bigIntVal.toString(16);
+            if (hex.length % 2 !== 0) hex = "0" + hex;
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+              bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            }
+            const decompressed = inflate(bytes);
+            const delim = [-1];
+            for (let i = 0; i < decompressed.length; i++) {
+              if (decompressed[i] === 255) delim.push(i);
+            }
+            const textAt = (s, e) => new TextDecoder("iso-8859-1").decode(decompressed.slice(s, e));
+            const names = ["email_mobile_status", "referenceid", "name", "dob", "gender", "careof", "district", "landmark", "house", "location", "pincode", "postoffice", "state", "street", "subdistrict", "vtc"];
+            const isVersioned = /^V\d/.test(textAt(delim[0] + 1, delim[1] || delim[0] + 1));
+            const fields = isVersioned ? ["version", ...names, "last_4_digits_mobile_no"] : names;
+
+            const f = {};
+            for (let i = 0; i < fields.length; i++) {
+              if (delim[i + 1] !== undefined) {
+                f[fields[i]] = textAt(delim[i] + 1, delim[i + 1]);
+              }
+            }
+
+            const ref = f.referenceid || "";
+            const last4 = ref.slice(0, 4);
+            const addrParts = ["careof", "house", "street", "landmark", "location", "vtc", "postoffice", "district", "subdistrict", "state", "pincode"]
+              .map((k) => (f[k] || "").trim().replace(/\s*-\s*$/, ""))
+              .filter(Boolean);
+
+            const uniqueParts = [];
+            for (const p of addrParts) {
+              if (!uniqueParts.length || uniqueParts[uniqueParts.length - 1].toLowerCase() !== p.toLowerCase()) {
+                uniqueParts.push(p);
+              }
+            }
+
+            return {
+              idNumber: last4,
+              name: (f.name || "").trim() || undefined,
+              dob: f.dob || undefined,
+              gender: f.gender?.toLowerCase().startsWith("m") ? "male" : (f.gender?.toLowerCase().startsWith("f") ? "female" : undefined),
+              address: uniqueParts.join(", ") || undefined,
+              viaQr: true,
+            };
+          } catch (_err) {}
+        }
+      }
+    }
+  } catch (_e) {}
+  return null;
+}
+
 /** Clean Aadhaar Name with common OCR correction */
 export function cleanAadhaarName(raw) {
   if (!raw) return "";
@@ -297,13 +395,20 @@ export function cleanAadhaarAddress(text) {
 
   const relRe = /(?:^|[^a-zA-Z0-9])([1I5sSwWdDcC][\/|1I0oO2FfHh:.-]?[oO0Ff]{1,2}|S10|S20|5\/0|SF|SCF|SO|DO|WO|CO|S\s*[\/|:]\s*O|W\s*[\/|:]\s*O|D\s*[\/|:]\s*O|C\s*[\/|:]\s*O)\b/i;
 
-  // 1) Primary Anchor: If 'Address:' label exists, the real English address starts there!
-  const addrIdx = lines.findIndex((l) => /(?:[aA]?[dD][dg]ress|Addr|Addres|Adres|Addre|पता\s*[\/:]?\s*Address)/i.test(l));
+  // 1) Primary Anchor: If 'Address:' or 'पता:' label exists, the real English address starts there!
+  const addrIdx = lines.findIndex((l) => /(?:[aA]?[dD][dg]ress|Addr|Addres|Adres|Addre|पता\s*[\/:]?\s*Address|Address\s*[\/:]?\s*पता)/i.test(l));
   if (addrIdx !== -1) {
-    const sameLineMatch = lines[addrIdx].match(relRe);
-    if (sameLineMatch) {
+    const line = lines[addrIdx];
+    const sameLineRel = line.match(relRe);
+    const labelMatch = line.match(/(?:[aA]?[dD][dg]ress|Addr|Addres|Adres|Addre|पता\s*[\/:]?\s*Address|Address\s*[\/:]?\s*पता)\s*[:.\-]?\s*(.*)/i);
+    const afterLabel = labelMatch ? labelMatch[1].trim() : "";
+
+    if (sameLineRel) {
       startIdx = addrIdx;
-      startOffset = sameLineMatch.index + (sameLineMatch[0].length - sameLineMatch[1].length);
+      startOffset = sameLineRel.index + (sameLineRel[0].length - sameLineRel[1].length);
+    } else if (afterLabel && afterLabel.length >= 3 && /[A-Za-z0-9]/.test(afterLabel)) {
+      startIdx = addrIdx;
+      startOffset = line.indexOf(afterLabel);
     } else if (addrIdx + 1 < lines.length) {
       startIdx = addrIdx + 1;
       const nextLineMatch = lines[startIdx].match(relRe);
@@ -422,23 +527,19 @@ export function cleanAadhaarAddress(text) {
 }
 
 function rateAddressQuality(addr) {
-  if (!addr || addr.length < 10) return -999;
+  if (!addr || addr.length < 8) return -999;
   let score = 100;
-  if (/\b\d{6}\b/.test(addr)) score += 50;
-  if (/^[SDWC]\/O:/i.test(addr)) score += 50;
+  if (/\b\d{6}\b/.test(addr)) score += 60;
+  if (/^[SDWC]\/O:/i.test(addr)) score += 40;
 
   const words = addr.split(/[\s,.-]+/).filter(Boolean);
-  let shortTokens = 0;
   let cleanWords = 0;
 
   for (const w of words) {
-    if (/^(?:S|D|W|C|O|PO|HN|NO)$/i.test(w)) continue;
-    if (w.length <= 2) shortTokens++;
-    else cleanWords++;
+    if (w.length >= 3) cleanWords++;
   }
 
-  score -= shortTokens * 35; // heavy penalty for OCR noise
-  score += cleanWords * 10;
+  score += cleanWords * 8;
   return score;
 }
 
@@ -530,6 +631,57 @@ export function extractImeiFromText(raw) {
 
 /** Recognize Aadhaar from an Image Buffer */
 export async function ocrAadhaarBuffer(buffer, side) {
+  // Step 0: Try Aadhaar Secure QR / Legacy XML QR first!
+  // Modern PVC and e-Aadhaar cards carry an exact digital QR code with zero OCR error.
+  const qrHit = await tryDecodeAadhaarQr(buffer);
+  if (qrHit) {
+    if (side === "back" && qrHit.address) {
+      return {
+        raw: "Aadhaar Secure QR Code Decoded (100% exact address)",
+        data: {
+          idNumber: qrHit.idNumber || "",
+          name: undefined,
+          dob: undefined,
+          yob: undefined,
+          gender: undefined,
+          address: qrHit.address,
+          checksumOk: qrHit.idNumber?.length === 12,
+          viaQr: true,
+        },
+      };
+    }
+    if (side === "front" && (qrHit.name || qrHit.dob)) {
+      return {
+        raw: "Aadhaar Secure QR Code Decoded",
+        data: {
+          idNumber: qrHit.idNumber || "",
+          name: qrHit.name,
+          dob: qrHit.dob,
+          yob: qrHit.dob ? qrHit.dob.slice(-4) : undefined,
+          gender: qrHit.gender,
+          address: null,
+          checksumOk: qrHit.idNumber?.length === 12,
+          viaQr: true,
+        },
+      };
+    }
+    if (!side && qrHit.address) {
+      return {
+        raw: "Aadhaar Secure QR Code Decoded",
+        data: {
+          idNumber: qrHit.idNumber || "",
+          name: qrHit.name,
+          dob: qrHit.dob,
+          yob: qrHit.dob ? qrHit.dob.slice(-4) : undefined,
+          gender: qrHit.gender,
+          address: qrHit.address,
+          checksumOk: qrHit.idNumber?.length === 12,
+          viaQr: true,
+        },
+      };
+    }
+  }
+
   const worker = await getTesseractWorker();
 
   // Step 1: Detect optimal rotation (0, 90, 270, 180) using fast 700px thumbnail
@@ -593,76 +745,79 @@ export async function ocrAadhaarBuffer(buffer, side) {
 
   if (!isFront) {
     const candidateRegions = [
-    // Region A: Left Column (Modern PVC/Card format: English is on the left, QR code is on the right)
-    {
-      left: 0,
-      top: Math.round(curMeta.height * 0.20),
-      width: Math.round(curMeta.width * 0.60),
-      height: Math.round(curMeta.height * 0.65),
-    },
-    // Region B: Right Column (Letter format: English is on the right, Hindi is on the left)
-    {
-      left: Math.round(curMeta.width * 0.38),
-      top: Math.round(curMeta.height * 0.15),
-      width: Math.round(curMeta.width * 0.60),
-      height: Math.round(curMeta.height * 0.72),
-    },
-    // Region C: Center band
-    {
-      left: Math.round(curMeta.width * 0.02),
-      top: Math.round(curMeta.height * 0.20),
-      width: Math.round(curMeta.width * 0.96),
-      height: Math.round(curMeta.height * 0.65),
-    },
-  ];
+      // Region 0: Full frame (vital when card is centered, angled, or full text)
+      {
+        left: 0,
+        top: 0,
+        width: curMeta.width,
+        height: curMeta.height,
+      },
+      // Region A: Left Column (Modern PVC/Card format: English is on the left, QR code is on the right)
+      {
+        left: 0,
+        top: Math.round(curMeta.height * 0.12),
+        width: Math.round(curMeta.width * 0.65),
+        height: Math.round(curMeta.height * 0.78),
+      },
+      // Region B: Right Column (Letter format: English is on the right, Hindi is on the left)
+      {
+        left: Math.round(curMeta.width * 0.35),
+        top: Math.round(curMeta.height * 0.12),
+        width: Math.round(curMeta.width * 0.65),
+        height: Math.round(curMeta.height * 0.78),
+      },
+      // Region C: Center band
+      {
+        left: Math.round(curMeta.width * 0.02),
+        top: Math.round(curMeta.height * 0.15),
+        width: Math.round(curMeta.width * 0.96),
+        height: Math.round(curMeta.height * 0.72),
+      },
+    ];
 
-  for (const reg of candidateRegions) {
-    const left = Math.max(0, Math.min(curMeta.width - 20, reg.left));
-    const top = Math.max(0, Math.min(curMeta.height - 20, reg.top));
-    const width = Math.min(curMeta.width - left, Math.max(20, reg.width));
-    const height = Math.min(curMeta.height - top, Math.max(20, reg.height));
-    if (width < 60 || height < 60) continue;
-    const safeCrop = { left, top, width, height };
+    for (const reg of candidateRegions) {
+      const left = Math.max(0, Math.min(curMeta.width - 20, reg.left));
+      const top = Math.max(0, Math.min(curMeta.height - 20, reg.top));
+      const width = Math.min(curMeta.width - left, Math.max(20, reg.width));
+      const height = Math.min(curMeta.height - top, Math.max(20, reg.height));
+      if (width < 60 || height < 60) continue;
+      const safeCrop = { left, top, width, height };
 
-    // 1. High contrast threshold 130 first (cuts through lamination glare & plastic shine)
-    try {
-      const thBuf = await sharp(rotBuf)
-        .extract(safeCrop)
-        .resize({ width: 1200 })
-        .grayscale().threshold(130).png().toBuffer();
-      await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
-      const thRes = await worker.recognize(thBuf);
-      const thAddr = cleanAadhaarAddress(thRes.data?.text || "");
-      if (thAddr) {
-        const q = rateAddressQuality(thAddr);
-        addrList.push({ addr: thAddr, score: q });
-        if (q >= 120) break; // Found high-quality address, stop searching
-      }
-    } catch (_e) {}
+      try {
+        const normBuf = await sharp(rotBuf)
+          .extract(safeCrop)
+          .resize({ width: 1400 })
+          .grayscale().normalize().sharpen().png().toBuffer();
 
-    // 2. Grayscale normalized
-    try {
-      const normBuf = await sharp(rotBuf)
-        .extract(safeCrop)
-        .resize({ width: 1200 })
-        .grayscale().normalize().sharpen().png().toBuffer();
-      await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
-      const nRes = await worker.recognize(normBuf);
-      const nAddr = cleanAadhaarAddress(nRes.data?.text || "");
-      if (nAddr) {
-        const q = rateAddressQuality(nAddr);
-        addrList.push({ addr: nAddr, score: q });
-        if (q >= 120) break;
-      }
-    } catch (_e) {}
-  }
+        // 1. Uniform block mode (PSM 6)
+        await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
+        let nRes = await worker.recognize(normBuf);
+        let nAddr = cleanAadhaarAddress(nRes.data?.text || "");
 
-  // Full Frame fallback
-  const fullAddr = cleanAadhaarAddress(bestText);
-  if (fullAddr) addrList.push({ addr: fullAddr, score: rateAddressQuality(fullAddr) - 20 });
+        // 2. Multi-column auto page segmentation (PSM 3) if PSM 6 missed or got partial
+        if (!nAddr || !/\b\d{6}\b/.test(nAddr)) {
+          await worker.setParameters({ tessedit_pageseg_mode: "3", tessedit_char_whitelist: "" });
+          const psm3Res = await worker.recognize(normBuf);
+          const psm3Addr = cleanAadhaarAddress(psm3Res.data?.text || "");
+          if (psm3Addr && rateAddressQuality(psm3Addr) > rateAddressQuality(nAddr)) {
+            nAddr = psm3Addr;
+          }
+        }
 
-  addrList.sort((a, b) => b.score - a.score);
-  address = addrList[0]?.addr || null;
+        if (nAddr) {
+          const q = rateAddressQuality(nAddr);
+          addrList.push({ addr: nAddr, score: q });
+          if (q >= 150) break; // High quality address found with PIN code and clean words
+        }
+      } catch (_e) {}
+    }
+
+    // Full Frame fallback
+    const fullAddr = cleanAadhaarAddress(bestText);
+    if (fullAddr) addrList.push({ addr: fullAddr, score: rateAddressQuality(fullAddr) - 10 });
+
+    addrList.sort((a, b) => b.score - a.score);
+    address = addrList[0]?.addr || null;
   }
 
   // Step 3: Extract Aadhaar Number (dedicated bottom band crop + full text)

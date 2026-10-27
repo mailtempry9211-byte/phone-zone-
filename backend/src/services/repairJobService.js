@@ -244,7 +244,7 @@ export function getRepairJob(id) {
   return job;
 }
 
-export function updateRepairJobStatus(id, { status, note, userId }) {
+export function updateRepairJobStatus(id, { status, note, userId, payment_status, amount_paid, final_price }) {
   if (!VALID_STATUSES.has(status)) {
     throw badRequest(`Invalid status '${status}'. Must be one of: ${Array.from(VALID_STATUSES).join(", ")}`);
   }
@@ -263,6 +263,25 @@ export function updateRepairJobStatus(id, { status, note, userId }) {
       sets.push("delivered_at = datetime('now')");
     }
 
+    if (final_price !== undefined) {
+      sets.push("final_price = ?");
+      params.push(Number(final_price) || 0);
+    }
+
+    if (status === "delivered" && (payment_status === "paid" || payment_status === "full")) {
+      const total = Number(final_price ?? job.final_price ?? (job.parts_cost + job.labour_cost) ?? job.estimate ?? 0);
+      sets.push("advance_paid = ?");
+      params.push(total);
+      sets.push("payment_status = 'paid'");
+    } else if (payment_status) {
+      sets.push("payment_status = ?");
+      params.push(payment_status);
+      if (amount_paid !== undefined) {
+        sets.push("advance_paid = ?");
+        params.push(Number(amount_paid) || 0);
+      }
+    }
+
     params.push(id);
     db.prepare(`UPDATE repair_jobs SET ${sets.join(", ")} WHERE id = ?`).run(...params);
 
@@ -270,6 +289,37 @@ export function updateRepairJobStatus(id, { status, note, userId }) {
       `INSERT INTO repair_status_log (id, job_id, status, note, user_id)
        VALUES (?, ?, ?, ?, ?)`
     ).run(newId(), id, status, note ? String(note).trim() : null, userId || null);
+
+    return getRepairJob(id);
+  });
+}
+
+export function recordRepairPayment(id, { amount, payment_method = "cash", note = "", userId = null } = {}) {
+  const job = getRepairJob(id);
+  const db = getDb();
+  const payAmount = Number(amount);
+  if (isNaN(payAmount) || payAmount <= 0) {
+    throw badRequest("Payment amount must be greater than 0.");
+  }
+
+  return transaction(() => {
+    const prevPaid = Number(job.advance_paid || 0);
+    const newPaid = prevPaid + payAmount;
+    const total = Number(job.final_price || job.parts_cost + job.labour_cost || job.estimate || 0);
+
+    let newStatus = "unpaid";
+    if (newPaid >= total && total > 0) newStatus = "paid";
+    else if (newPaid > 0) newStatus = "partial";
+
+    db.prepare(
+      `UPDATE repair_jobs SET advance_paid = ?, payment_status = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(newPaid, newStatus, id);
+
+    const logNote = `Payment of ₹${payAmount.toLocaleString("en-IN")} received (${payment_method.toUpperCase()}).${note ? ` Note: ${note}.` : ""} Total paid: ₹${newPaid.toLocaleString("en-IN")}/${total.toLocaleString("en-IN")}. Status: ${newStatus.toUpperCase()}`;
+
+    db.prepare(
+      `INSERT INTO repair_status_log (id, job_id, status, note, user_id) VALUES (?, ?, ?, ?, ?)`
+    ).run(newId(), id, job.status, logNote, userId || null);
 
     return getRepairJob(id);
   });

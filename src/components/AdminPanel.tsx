@@ -140,16 +140,16 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
                 <p className="text-sm text-blue-600 break-all">Signed in as: {user.email}</p>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <FinancialYearSwitcher />
               <UniversalScanner />
-              <StorageUsageCard />
+              <StorageUsageCard compact />
               <PasswordChangeDialog />
-              <Button variant="outline" onClick={onBack}>
+              <Button variant="outline" size="sm" onClick={onBack} className="h-9">
                 Back to Store
               </Button>
-              <Button variant="outline" onClick={handleLogout} disabled={!user}>
-                <LogOut className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={handleLogout} disabled={!user} className="h-9">
+                <LogOut className="h-4 w-4 mr-1.5" />
                 Log out
               </Button>
             </div>

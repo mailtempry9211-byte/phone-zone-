@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/lib/data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,7 +21,7 @@ import MarketingTab from "./MarketingTab";
 import UsersTab from "./UsersTab";
 import NgrokTab from "./NgrokTab";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { Globe, ShoppingBag, Wrench, Settings2, LayoutGrid, CheckCircle2 } from "lucide-react";
+import { Globe, ShoppingBag, Wrench, Settings2, LayoutGrid, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 
 export type DepartmentMode = "sales" | "repairs" | "management" | "all";
 
@@ -55,6 +55,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialDepartment = "sa
       return null;
     }
   });
+
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: "left" | "right") => {
+    if (tabsScrollRef.current) {
+      const scrollAmount = direction === "left" ? -260 : 260;
+      tabsScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
 
   // Switch default tab when department changes
   const handleDepartmentChange = (dept: DepartmentMode) => {
@@ -221,47 +230,72 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialDepartment = "sa
 
       {/* Main Tabs Container */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-        <div className="overflow-x-auto no-scrollbar pb-1">
-          <TabsList className="inline-flex w-max min-w-full sm:w-full gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
-            {/* Sales Department Tabs */}
-            {(department === "sales" || department === "all") && (
-              <>
-                <TabsTrigger value="inventory" className="shrink-0 text-xs px-3 py-1.5">Inventory</TabsTrigger>
-                <TabsTrigger value="sold" className="shrink-0 text-xs px-3 py-1.5">Sold</TabsTrigger>
-                <TabsTrigger value="returns" className="shrink-0 text-xs px-3 py-1.5">Returns</TabsTrigger>
-                <TabsTrigger value="customers" className="shrink-0 text-xs px-3 py-1.5">Customers</TabsTrigger>
-                <TabsTrigger value="sellers" className="shrink-0 text-xs px-3 py-1.5">Sellers</TabsTrigger>
-                <TabsTrigger value="dealers" className="shrink-0 text-xs px-3 py-1.5 font-semibold text-sky-700 data-[state=active]:bg-sky-600 data-[state=active]:text-white">Dealers (B2B)</TabsTrigger>
-                <TabsTrigger value="accounting" className="shrink-0 text-xs px-3 py-1.5">Sales Accounting</TabsTrigger>
-              </>
-            )}
+        <div className="relative flex items-center group">
+          {/* Scroll Left Button */}
+          <button
+            type="button"
+            onClick={() => scrollTabs("left")}
+            className="hidden sm:flex absolute -left-2 z-20 h-7 w-7 items-center justify-center rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all opacity-80 group-hover:opacity-100"
+            title="Scroll tabs left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
 
-            {/* Repair Department Tabs */}
-            {(department === "repairs" || department === "all") && (
-              <TabsTrigger
-                value="repairs"
-                className="shrink-0 text-xs px-3.5 py-1.5 font-semibold text-indigo-700 data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
-              >
-                <Wrench className="h-3.5 w-3.5 mr-1" />
-                Repair Department
-              </TabsTrigger>
-            )}
+          <div
+            ref={tabsScrollRef}
+            className="w-full overflow-x-auto pb-1.5 scroll-smooth scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent touch-pan-x"
+          >
+            <TabsList className="inline-flex w-max min-w-full gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+              {/* Sales Department Tabs */}
+              {(department === "sales" || department === "all") && (
+                <>
+                  <TabsTrigger value="inventory" className="shrink-0 text-xs px-3 py-1.5">Inventory</TabsTrigger>
+                  <TabsTrigger value="sold" className="shrink-0 text-xs px-3 py-1.5">Sold</TabsTrigger>
+                  <TabsTrigger value="returns" className="shrink-0 text-xs px-3 py-1.5">Returns</TabsTrigger>
+                  <TabsTrigger value="customers" className="shrink-0 text-xs px-3 py-1.5">Customers</TabsTrigger>
+                  <TabsTrigger value="sellers" className="shrink-0 text-xs px-3 py-1.5">Sellers</TabsTrigger>
+                  <TabsTrigger value="dealers" className="shrink-0 text-xs px-3 py-1.5 font-semibold text-sky-700 data-[state=active]:bg-sky-600 data-[state=active]:text-white">Dealers (B2B)</TabsTrigger>
+                  <TabsTrigger value="accounting" className="shrink-0 text-xs px-3 py-1.5">Sales Accounting</TabsTrigger>
+                </>
+              )}
 
-            {/* Management & Admin Tabs */}
-            {(department === "management" || department === "all") && (
-              <>
-                <TabsTrigger value="ngrok" className="shrink-0 text-xs px-3 py-1.5 gap-1 font-semibold text-blue-700">
-                  <Globe className="h-3.5 w-3.5 text-blue-600" /> Online (Ngrok)
+              {/* Repair Department Tabs */}
+              {(department === "repairs" || department === "all") && (
+                <TabsTrigger
+                  value="repairs"
+                  className="shrink-0 text-xs px-3.5 py-1.5 font-semibold text-indigo-700 data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                >
+                  <Wrench className="h-3.5 w-3.5 mr-1" />
+                  Repair Department
                 </TabsTrigger>
-                <TabsTrigger value="marketing" className="shrink-0 text-xs px-3 py-1.5">WhatsApp / Marketing</TabsTrigger>
-                <TabsTrigger value="users" className="shrink-0 text-xs px-3 py-1.5">Staff &amp; Roles</TabsTrigger>
-                <TabsTrigger value="messages" className="shrink-0 text-xs px-3 py-1.5">Messages</TabsTrigger>
-                <TabsTrigger value="storage" className="shrink-0 text-xs px-3 py-1.5">Storage</TabsTrigger>
-                <TabsTrigger value="database" className="shrink-0 text-xs px-3 py-1.5">Database &amp; Backup</TabsTrigger>
-                <TabsTrigger value="settings" className="shrink-0 text-xs px-3 py-1.5">Settings</TabsTrigger>
-              </>
-            )}
-          </TabsList>
+              )}
+
+              {/* Management & Admin Tabs */}
+              {(department === "management" || department === "all") && (
+                <>
+                  <TabsTrigger value="ngrok" className="shrink-0 text-xs px-3 py-1.5 gap-1 font-semibold text-blue-700">
+                    <Globe className="h-3.5 w-3.5 text-blue-600" /> Online (Ngrok)
+                  </TabsTrigger>
+                  <TabsTrigger value="marketing" className="shrink-0 text-xs px-3 py-1.5">WhatsApp / Marketing</TabsTrigger>
+                  <TabsTrigger value="users" className="shrink-0 text-xs px-3 py-1.5">Staff &amp; Roles</TabsTrigger>
+                  <TabsTrigger value="messages" className="shrink-0 text-xs px-3 py-1.5">Messages</TabsTrigger>
+                  <TabsTrigger value="storage" className="shrink-0 text-xs px-3 py-1.5">Storage</TabsTrigger>
+                  <TabsTrigger value="database" className="shrink-0 text-xs px-3 py-1.5">Database &amp; Backup</TabsTrigger>
+                  <TabsTrigger value="settings" className="shrink-0 text-xs px-3 py-1.5">Settings</TabsTrigger>
+                </>
+              )}
+            </TabsList>
+          </div>
+
+          {/* Scroll Right Button */}
+          <button
+            type="button"
+            onClick={() => scrollTabs("right")}
+            className="hidden sm:flex absolute -right-2 z-20 h-7 w-7 items-center justify-center rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all opacity-80 group-hover:opacity-100"
+            title="Scroll tabs right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Tab Contents */}

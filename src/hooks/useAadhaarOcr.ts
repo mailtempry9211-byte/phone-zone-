@@ -498,28 +498,34 @@ export const useAadhaarOcr = () => {
           const res = await resp.json();
           if (res.success && res.data) {
             const d = res.data;
-            const idNumber = d.idNumber || "";
-            const ok = idNumber ? verhoeffValidate(idNumber) : false;
-            const data: AadhaarData = {
-              idNumber,
-              name: side === "back" ? undefined : d.name,
-              dob: side === "back" ? undefined : d.dob,
-              yob: side === "back" ? undefined : d.yob,
-              gender: side === "back" ? undefined : d.gender,
-              address: side === "front" ? undefined : d.address,
-              checksumOk: ok || !!d.checksumOk,
-            };
-            setState({
-              status: "done",
-              progress: 1,
-              data,
-              raw: res.raw || "",
-              error: idNumber
-                ? ok || d.checksumOk ? "" : "Number found but please verify it."
-                : "Card details read - scan front side if number was not captured.",
-              viaQr: false,
-            });
-            return;
+            // If user specifically requested back side (address) but backend failed to find an address,
+            // don't abort with empty address! Fall through to client-side QR ladder & OCR.
+            if (side === "back" && (!d.address || d.address.length < 5)) {
+              // fall through to client-side QR ladder & Tesseract
+            } else {
+              const idNumber = d.idNumber || "";
+              const ok = idNumber ? verhoeffValidate(idNumber) : false;
+              const data: AadhaarData = {
+                idNumber,
+                name: side === "back" ? undefined : d.name,
+                dob: side === "back" ? undefined : d.dob,
+                yob: side === "back" ? undefined : d.yob,
+                gender: side === "back" ? undefined : d.gender,
+                address: side === "front" ? undefined : d.address,
+                checksumOk: ok || !!d.checksumOk,
+              };
+              setState({
+                status: "done",
+                progress: 1,
+                data,
+                raw: res.raw || "",
+                error: idNumber
+                  ? ok || d.checksumOk ? "" : "Number found but please verify it."
+                  : "Card details read - scan front side if number was not captured.",
+                viaQr: !!d.viaQr,
+              });
+              return;
+            }
           }
         }
       } catch (_e) {

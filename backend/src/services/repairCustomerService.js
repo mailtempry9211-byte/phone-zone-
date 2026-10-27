@@ -12,18 +12,33 @@ function cleanPhone(raw) {
 export function listRepairCustomers({ search = "", limit = 50 } = {}) {
   const db = getDb();
   const capped = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const selectCols = `
+    c.*,
+    COUNT(j.id) AS total_repairs,
+    COALESCE(SUM(CASE WHEN j.status = 'delivered' THEN COALESCE(j.final_price, j.estimate, 0) ELSE COALESCE(j.estimate, 0) END), 0) AS total_spent,
+    COALESCE(SUM(j.advance_paid), 0) AS total_paid,
+    COALESCE(SUM(CASE WHEN (COALESCE(j.final_price, j.estimate, 0) - COALESCE(j.advance_paid, 0)) > 0 THEN (COALESCE(j.final_price, j.estimate, 0) - COALESCE(j.advance_paid, 0)) ELSE 0 END), 0) AS total_balance_due,
+    COUNT(CASE WHEN j.status IN ('received', 'diagnosing', 'waiting_parts', 'in_progress', 'ready') THEN 1 END) AS active_repairs
+  `;
+
   if (search && search.trim()) {
     const q = `%${search.trim()}%`;
     return db.prepare(
-      `SELECT * FROM repair_customers
-       WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?)
-       ORDER BY created_at DESC LIMIT ?`
+      `SELECT ${selectCols}
+       FROM repair_customers c
+       LEFT JOIN repair_jobs j ON j.repair_customer_id = c.id AND j.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL AND (c.name LIKE ? OR c.phone LIKE ?)
+       GROUP BY c.id
+       ORDER BY c.created_at DESC LIMIT ?`
     ).all(q, q, capped);
   }
   return db.prepare(
-    `SELECT * FROM repair_customers
-     WHERE deleted_at IS NULL
-     ORDER BY created_at DESC LIMIT ?`
+    `SELECT ${selectCols}
+     FROM repair_customers c
+     LEFT JOIN repair_jobs j ON j.repair_customer_id = c.id AND j.deleted_at IS NULL
+     WHERE c.deleted_at IS NULL
+     GROUP BY c.id
+     ORDER BY c.created_at DESC LIMIT ?`
   ).all(capped);
 }
 
@@ -289,9 +304,21 @@ export function getRepairCustomerHistory(customerId) {
      FROM repair_jobs j
      WHERE j.repair_customer_id = ? AND j.deleted_at IS NULL
      ORDER BY j.created_at DESC`
-  ).all(customerId).map((row) => ({
-    ...row,
-    items: row.items ? JSON.parse(row.items) : [],
-  }));
+  ).all(customerId).map((row) => {
+    const items = row.items ? JSON.parse(row.items) : [];
+    const total_price = Number(row.final_price || row.parts_cost + row.labour_cost || row.estimate || 0);
+    const paid_amount = Number(row.advance_paid || 0);
+    const balance_due = Math.max(0, total_price - paid_amount);
+    const is_fully_paid = (paid_amount >= total_price && total_price > 0) || row.payment_status === "paid";
+
+    return {
+      ...row,
+      items,
+      total_price,
+      paid_amount,
+      balance_due,
+      is_fully_paid,
+    };
+  });
 }
 

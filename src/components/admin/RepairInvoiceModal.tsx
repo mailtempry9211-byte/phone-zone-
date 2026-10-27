@@ -112,7 +112,7 @@ export const RepairInvoiceModal: React.FC<RepairInvoiceModalProps> = ({
     printHtml(html);
   };
 
-  const handleSendWhatsAppPdf = async () => {
+  const handleDispatch = async (mode: "both" | "text_only" | "pdf_only") => {
     if (!phone) {
       toast.error("Customer mobile number not found");
       return;
@@ -132,41 +132,20 @@ export const RepairInvoiceModal: React.FC<RepairInvoiceModalProps> = ({
         pdfFileName,
         adminSettings: settings,
         waSessionChannel: "repairs",
+        mode,
       });
 
-      toast.success(
-        deliveryChannel === "openwa"
-          ? "PDF document and message dispatched via OpenWA!"
-          : "WhatsApp Click-to-Chat opened for PDF sharing."
-      );
+      const label =
+        mode === "text_only"
+          ? "Text message"
+          : mode === "pdf_only"
+          ? "PDF document"
+          : "PDF + Text";
+      toast.success(`${label} dispatched successfully via WhatsApp!`);
       if (onSuccess) onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || "Failed to dispatch PDF");
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const handleSendWhatsAppText = async () => {
-    if (!phone) {
-      toast.error("Customer mobile number not found");
-      return;
-    }
-    setIsSending(true);
-    try {
-      await dispatchWhatsApp({
-        phone,
-        message: customText,
-        adminSettings: settings,
-        waSessionChannel: "repairs",
-      });
-
-      toast.success("WhatsApp text message dispatched!");
-      if (onSuccess) onSuccess();
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to dispatch text");
+      toast.error(err.message || "Failed to dispatch WhatsApp");
     } finally {
       setIsSending(false);
     }
@@ -395,17 +374,29 @@ export const RepairInvoiceModal: React.FC<RepairInvoiceModalProps> = ({
                 <Button
                   type="button"
                   size="sm"
-                  onClick={handleSendWhatsAppPdf}
+                  onClick={() => handleDispatch("pdf_only")}
                   disabled={isSending}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
-                  title="WhatsApp par PDF document bhejein"
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs h-8"
+                  title="WhatsApp par sirf PDF document bhejein"
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1" />
+                  Send PDF Only
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleDispatch("both")}
+                  disabled={isSending}
+                  className="bg-green-700 hover:bg-green-800 text-white font-bold text-xs h-8 shadow-sm"
+                  title="WhatsApp par PDF aur text summary dono bhejein"
                 >
                   {isSending ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                   ) : (
-                    <Send className="h-4 w-4 mr-1.5" />
+                    <Send className="h-3.5 w-3.5 mr-1" />
                   )}
-                  Send PDF via WA
+                  Send Both (PDF + Text)
                 </Button>
               </>
             )}
@@ -413,13 +404,13 @@ export const RepairInvoiceModal: React.FC<RepairInvoiceModalProps> = ({
             <Button
               type="button"
               size="sm"
-              onClick={handleSendWhatsAppText}
+              onClick={() => handleDispatch("text_only")}
               disabled={isSending}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium"
-              title="WhatsApp par Text message bhejein"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8"
+              title="WhatsApp par sirf Text message bhejein"
             >
-              <MessageSquare className="h-4 w-4 mr-1.5" />
-              Send Text WA
+              <MessageSquare className="h-3.5 w-3.5 mr-1" />
+              Send Text Only
             </Button>
           </div>
         </div>
