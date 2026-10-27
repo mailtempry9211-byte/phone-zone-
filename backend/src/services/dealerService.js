@@ -75,6 +75,29 @@ export function createDealer(data, userId) {
     data.notes?.trim() || null
   );
 
+  // Sync companion sellers table for Sapath Patra & purchase reports
+  try {
+    db.prepare(`
+      INSERT INTO sellers (
+        id, name, phone, address, id_proof_type, id_number, seller_photo_url, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'pan', ?, ?, datetime('now'), datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        phone = excluded.phone,
+        address = excluded.address,
+        id_number = excluded.id_number,
+        seller_photo_url = excluded.seller_photo_url,
+        updated_at = datetime('now')
+    `).run(
+      id,
+      `${data.shop_name} (${data.proprietor_name})`.trim(),
+      data.phone.trim(),
+      data.address?.trim() || data.city?.trim() || "Sitapur",
+      data.pan_number?.trim() || data.gst_number?.trim() || "B2BDEALER",
+      data.photo_url || null
+    );
+  } catch {}
+
   audit(userId, "dealer.created", "dealer", id, { shop_name: data.shop_name });
   return getDealer(id);
 }
@@ -105,6 +128,29 @@ export function updateDealer(id, data, userId) {
     updates.push("updated_at = datetime('now')");
     params.push(id);
     db.prepare(`UPDATE dealers SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+
+    // Sync companion sellers table
+    try {
+      const sName = `${data.shop_name || existing.shop_name} (${data.proprietor_name || existing.proprietor_name})`.trim();
+      const sPhone = (data.phone || existing.phone).trim();
+      const sAddr = (data.address ?? existing.address)?.trim() || "Sitapur";
+      const sIdNum = (data.pan_number ?? existing.pan_number)?.trim() || (data.gst_number ?? existing.gst_number)?.trim() || "B2BDEALER";
+      const sPhoto = data.photo_url !== undefined ? (data.photo_url || null) : (existing.photo_url || null);
+
+      db.prepare(`
+        INSERT INTO sellers (
+          id, name, phone, address, id_proof_type, id_number, seller_photo_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'pan', ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          phone = excluded.phone,
+          address = excluded.address,
+          id_number = excluded.id_number,
+          seller_photo_url = excluded.seller_photo_url,
+          updated_at = datetime('now')
+      `).run(id, sName, sPhone, sAddr, sIdNum, sPhoto);
+    } catch {}
+
     audit(userId, "dealer.updated", "dealer", id, { fields: Object.keys(data) });
   }
 
@@ -210,13 +256,13 @@ export function createBatchPurchase(data, userId) {
           id, phone_name, model, imei_number, condition,
           purchase_price, selling_price, purchase_date, bill_available,
           box_available, charger_available, variant, colour,
-          seller_id, dealer_id, is_dealer, batch_purchase_id, seller_signature_url,
+          seller_id, dealer_id, is_dealer, batch_purchase_id, seller_signature_url, seller_photo_url,
           payment_method, financial_year, shop_id, features, product_photos
         ) VALUES (
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, ?, 1, ?, ?,
+          ?, ?, 1, ?, ?, ?,
           ?, ?, 'shop_1', ?, ?
         )
       `).run(
@@ -237,6 +283,7 @@ export function createBatchPurchase(data, userId) {
         dealer.id,
         batchId,
         dealer.signature_url || null,
+        dealer.photo_url || null,
         normalizedPaymentMethod,
         fy,
         JSON.stringify(feats),
@@ -299,4 +346,45 @@ export function createBatchPurchase(data, userId) {
       phones: insertedPhones,
     };
   });
+}
+
+export function getBatchPurchase(idOrInvoice) {
+  const db = getDb();
+  const batch = db.prepare(`
+    SELECT * FROM dealer_batches WHERE id = ? OR invoice_number = ?
+  `).get(idOrInvoice, idOrInvoice);
+  if (!batch) throw notFound("Dealer batch purchase not found.");
+
+  const dealer = db.prepare("SELECT * FROM dealers WHERE id = ?").get(batch.dealer_id);
+  const phones = db.prepare(`
+    SELECT * FROM phones WHERE batch_purchase_id = ? AND deleted_at IS NULL
+    ORDER BY created_at ASC
+  `).all(batch.id);
+
+  return {
+    batchId: batch.id,
+    invoiceNumber: batch.invoice_number,
+    purchaseDate: batch.purchase_date,
+    totalPhones: batch.total_phones,
+    totalAmount: batch.total_amount,
+    paymentMethod: batch.payment_method,
+    paymentStatus: batch.payment_status,
+    notes: batch.notes,
+    dealer,
+    phones: phones.map((p) => {
+      let parsedFeatures = [];
+      try {
+        parsedFeatures = typeof p.features === "string" ? JSON.parse(p.features || "[]") : (p.features || []);
+      } catch {}
+      let parsedPhotos = [];
+      try {
+        parsedPhotos = typeof p.product_photos === "string" ? JSON.parse(p.product_photos || "[]") : (p.product_photos || []);
+      } catch {}
+      return {
+        ...p,
+        features: parsedFeatures,
+        product_photos: parsedPhotos,
+      };
+    }),
+  };
 }

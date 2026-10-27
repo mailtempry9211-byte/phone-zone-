@@ -53,12 +53,12 @@ const hydrate = (row) =>
 
 /** PUBLIC endpoint data - no purchase price, IMEI, seller or profit. */
 export function listPublicInventory({ limit = 100 } = {}, { shopId } = {}) {
-  const fy = fyWhere("financial_year", true);
+  const fy = fyWhere("financial_year", false);
   const sw = shopWhere(shopId);
   return getDb()
     .prepare(
       `SELECT ${PUBLIC_COLUMNS} FROM phones
-       WHERE is_sold = 0 AND deleted_at IS NULL AND (return_status IS NULL OR return_status != 'purchase_returned')${fy.sql}${sw.sql}
+       WHERE id IS NOT NULL AND is_sold = 0 AND deleted_at IS NULL AND (return_status IS NULL OR return_status != 'purchase_returned')${fy.sql}${sw.sql}
        ORDER BY created_at DESC LIMIT ?`,
     )
     .all(...fy.params, ...sw.params, limit)

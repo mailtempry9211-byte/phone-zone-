@@ -21,6 +21,7 @@ import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { formatPurchaseInvoiceText, formatSalesInvoiceText } from "@/lib/whatsappInvoiceFormatter";
 import SapathPatraModal from "./SapathPatraModal";
+import DealerBatchInvoiceDialog from "./DealerBatchInvoiceDialog";
 
 /** Sentinel for the Radix select - an empty string is not a legal item value. */
 const ALL_SHOPS = "all";
@@ -32,6 +33,8 @@ const InventoryTab = () => {
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [processSaleDialogOpen, setProcessSaleDialogOpen] = useState(false);
   const [sapathPhone, setSapathPhone] = useState<any | null>(null);
+  const [batchInvoiceId, setBatchInvoiceId] = useState<string | null>(null);
+  const [showBatchInvoiceDialog, setShowBatchInvoiceDialog] = useState(false);
   const [currentPhotos, setCurrentPhotos] = useState<string[]>([]);
   const [currentPhotoTitle, setCurrentPhotoTitle] = useState("");
   const [invoiceDialogPhone, setInvoiceDialogPhone] = useState<any>(null);
@@ -552,6 +555,21 @@ const InventoryTab = () => {
                     <Receipt className="h-4 w-4 mr-1" />
                     Invoice
                   </Button>
+                  {phone.batch_purchase_id && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setBatchInvoiceId(phone.batch_purchase_id);
+                        setShowBatchInvoiceDialog(true);
+                      }}
+                      title="View combined wholesale B2B batch purchase bill (सभी फ़ोन्स का संयुक्त बिल)"
+                      className="text-sky-700 hover:text-sky-800 hover:bg-sky-50 border-sky-300 font-semibold"
+                    >
+                      <Building2 className="h-4 w-4 mr-1 text-sky-600" />
+                      B2B Bill
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -668,6 +686,12 @@ const InventoryTab = () => {
         phone={sapathPhone}
         open={!!sapathPhone}
         onOpenChange={(o) => { if (!o) setSapathPhone(null); }}
+      />
+
+      <DealerBatchInvoiceDialog
+        open={showBatchInvoiceDialog}
+        onOpenChange={setShowBatchInvoiceDialog}
+        batchId={batchInvoiceId}
       />
 
       <PhotoViewer

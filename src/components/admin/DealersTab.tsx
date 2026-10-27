@@ -22,10 +22,17 @@ import {
   ShieldCheck,
   CheckCircle2,
   Store,
+  Camera,
+  X,
+  Receipt,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/utils/imageCompression";
 import SignaturePadModal from "./SignaturePadModal";
 import DealerBatchPurchaseDialog from "./DealerBatchPurchaseDialog";
+import DealerBatchInvoiceDialog from "./DealerBatchInvoiceDialog";
 
 export const DealersTab: React.FC = () => {
   const queryClient = useQueryClient();
@@ -38,6 +45,11 @@ export const DealersTab: React.FC = () => {
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showBatchPurchaseDialog, setShowBatchPurchaseDialog] = useState(false);
   const [batchPurchaseDealerId, setBatchPurchaseDealerId] = useState<string | null>(null);
+  const [showBatchInvoiceModal, setShowBatchInvoiceModal] = useState(false);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [historySubTab, setHistorySubTab] = useState<"batches" | "phones">("batches");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     shop_name: "",
@@ -130,6 +142,27 @@ export const DealersTab: React.FC = () => {
   const handleStartBatchPurchase = (dealerId?: string) => {
     setBatchPurchaseDealerId(dealerId || null);
     setShowBatchPurchaseDialog(true);
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    try {
+      const compressed = await compressImage(file, 300);
+      const fileExt = compressed.name.split(".").pop() || "jpg";
+      const filePath = `dealer-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error: uploadErr } = await supabase.storage.from("phonezone-uploads").upload(filePath, compressed);
+      if (uploadErr) throw uploadErr;
+      const { data } = supabase.storage.from("phonezone-uploads").getPublicUrl(filePath);
+      setFormData((prev) => ({ ...prev, photo_url: data.publicUrl }));
+      toast.success("Dealer photo uploaded successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload dealer photo");
+    } finally {
+      setIsUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
   };
 
   const saveMutation = useMutation({
@@ -292,9 +325,17 @@ export const DealersTab: React.FC = () => {
                     {idx + 1}
                   </TableCell>
                   <TableCell>
-                    <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
-                      <Store className="h-4 w-4 text-sky-600 shrink-0" />
-                      {dealer.shop_name}
+                    <div className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                      {dealer.photo_url ? (
+                        <img
+                          src={dealer.photo_url}
+                          alt="Dealer"
+                          className="w-7 h-7 rounded-full object-cover border border-sky-300 shrink-0"
+                        />
+                      ) : (
+                        <Store className="h-4 w-4 text-sky-600 shrink-0" />
+                      )}
+                      <span>{dealer.shop_name}</span>
                     </div>
                     <div className="text-[11px] text-gray-500 line-clamp-1">{dealer.address || "Sitapur"}</div>
                   </TableCell>
@@ -475,6 +516,70 @@ export const DealersTab: React.FC = () => {
               />
             </div>
 
+            {/* Dealer Profile Photo Section (Optional) */}
+            <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs font-semibold text-gray-800">Dealer Profile Photo (डीलर की फोटो)</Label>
+                    <Badge variant="outline" className="text-[10px] text-gray-500 bg-gray-100">Optional / वैकल्पिक</Badge>
+                  </div>
+                  <p className="text-[11px] text-gray-500">
+                    Upload or capture dealer photo. If attached, it will automatically show on statutory Sapath Patra &amp; legal bills.
+                  </p>
+                </div>
+                <div>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isUploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="h-8 text-xs gap-1 border-sky-300 text-sky-700 hover:bg-sky-50"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    {isUploadingPhoto ? "Uploading..." : formData.photo_url ? "Change Photo" : "Upload / Camera"}
+                  </Button>
+                </div>
+              </div>
+
+              {formData.photo_url ? (
+                <div className="p-2 bg-white rounded border border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={formData.photo_url}
+                      alt="Dealer"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-sky-400 shadow-sm"
+                    />
+                    <div>
+                      <div className="text-xs font-semibold text-gray-800">Photo Attached</div>
+                      <div className="text-[10px] text-emerald-600 font-medium">Will appear on Sapath Patra &amp; B2B bills</div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setFormData((prev) => ({ ...prev, photo_url: "" }))}
+                    className="h-7 text-xs text-red-600 hover:bg-red-50 gap-1"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-[11px] text-gray-400 italic">No photo attached (strictly optional).</div>
+              )}
+            </div>
+
             {/* Permanent Signature Section */}
             <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
               <div className="flex items-center justify-between">
@@ -550,60 +655,172 @@ export const DealersTab: React.FC = () => {
 
       {/* Dealer Purchase History Dialog */}
       <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <History className="h-5 w-5 text-sky-600" />
-              Purchase History: {selectedDealer?.shop_name} ({selectedDealer?.proprietor_name})
+            <DialogTitle className="text-base font-bold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-sky-600" />
+                Purchase History: {selectedDealer?.shop_name} ({selectedDealer?.proprietor_name})
+              </div>
+              {selectedDealer?.photo_url && (
+                <img
+                  src={selectedDealer.photo_url}
+                  alt="Dealer"
+                  className="w-8 h-8 rounded-full object-cover border border-sky-300 mr-6"
+                />
+              )}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="text-xs text-gray-500">
-              Total Phones Supplied: <strong>{dealerDetails?.phones?.length || 0}</strong> • Batches:{" "}
-              <strong>{dealerDetails?.batches?.length || 0}</strong>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+              <div className="text-xs text-gray-500">
+                Total Phones Supplied: <strong>{dealerDetails?.phones?.length || 0}</strong> • Wholesale Batches:{" "}
+                <strong>{dealerDetails?.batches?.length || 0}</strong>
+              </div>
+
+              {/* Subtabs for Batches vs All Devices */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-md text-xs">
+                <Button
+                  size="sm"
+                  variant={historySubTab === "batches" ? "default" : "ghost"}
+                  onClick={() => setHistorySubTab("batches")}
+                  className={`h-7 text-xs px-2.5 ${historySubTab === "batches" ? "bg-sky-600 text-white shadow-sm" : "text-gray-600"}`}
+                >
+                  <Receipt className="h-3.5 w-3.5 mr-1" />
+                  Wholesale Batches ({dealerDetails?.batches?.length || 0})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={historySubTab === "phones" ? "default" : "ghost"}
+                  onClick={() => setHistorySubTab("phones")}
+                  className={`h-7 text-xs px-2.5 ${historySubTab === "phones" ? "bg-sky-600 text-white shadow-sm" : "text-gray-600"}`}
+                >
+                  <Smartphone className="h-3.5 w-3.5 mr-1" />
+                  All Devices ({dealerDetails?.phones?.length || 0})
+                </Button>
+              </div>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader className="bg-slate-50">
-                  <TableRow>
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Model &amp; Variant</TableHead>
-                    <TableHead className="text-xs">IMEI</TableHead>
-                    <TableHead className="text-xs">Condition</TableHead>
-                    <TableHead className="text-right text-xs">Cost</TableHead>
-                    <TableHead className="text-center text-xs">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dealerDetails?.phones && dealerDetails.phones.length > 0 ? (
-                    dealerDetails.phones.map((p: any) => (
-                      <TableRow key={p.id} className="text-xs">
-                        <TableCell>{p.purchase_date}</TableCell>
-                        <TableCell className="font-semibold">{p.phone_name} {p.model} {p.variant || ""}</TableCell>
-                        <TableCell className="font-mono text-[11px]">{p.imei_number}</TableCell>
-                        <TableCell className="capitalize">{p.condition}</TableCell>
-                        <TableCell className="text-right font-bold">₹{Number(p.purchase_price).toLocaleString("en-IN")}</TableCell>
-                        <TableCell className="text-center">
-                          {p.is_sold ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Sold</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-blue-700 bg-blue-50 text-[10px]">In Stock</Badge>
-                          )}
+            {historySubTab === "batches" ? (
+              /* Batches Table with Batch Invoice Generation */
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-slate-50">
+                    <TableRow>
+                      <TableHead className="text-xs">Purchase Date</TableHead>
+                      <TableHead className="text-xs">Invoice Number</TableHead>
+                      <TableHead className="text-center text-xs">Phones In Batch</TableHead>
+                      <TableHead className="text-xs">Payment Mode</TableHead>
+                      <TableHead className="text-right text-xs">Total Amount</TableHead>
+                      <TableHead className="text-center text-xs">B2B Batch Invoice</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dealerDetails?.batches && dealerDetails.batches.length > 0 ? (
+                      dealerDetails.batches.map((batch: any) => (
+                        <TableRow key={batch.id} className="text-xs hover:bg-slate-50/80">
+                          <TableCell className="font-medium">{batch.purchase_date}</TableCell>
+                          <TableCell className="font-mono font-bold text-sky-800">{batch.invoice_number}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-sky-50 text-sky-700 font-semibold text-[11px]">
+                              {batch.total_phones} Units
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="capitalize">{batch.payment_method || "Cash"}</TableCell>
+                          <TableCell className="text-right font-bold text-gray-900">
+                            ₹{Number(batch.total_amount).toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setActiveBatchId(batch.id);
+                                setShowBatchInvoiceModal(true);
+                              }}
+                              className="h-7 text-xs gap-1 border-sky-300 text-sky-700 hover:bg-sky-50 font-semibold"
+                              title="View &amp; Print combined B2B Batch Invoice"
+                            >
+                              <FileText className="h-3.5 w-3.5 text-sky-600" />
+                              View Batch Bill
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-6 text-gray-400 text-xs">
+                          No wholesale batch transactions recorded yet.
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              /* Individual Phones Table */
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-slate-50">
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-gray-400 text-xs">
-                        No purchase transactions recorded with this dealer yet.
-                      </TableCell>
+                      <TableHead className="text-xs">Date</TableHead>
+                      <TableHead className="text-xs">Model &amp; Variant</TableHead>
+                      <TableHead className="text-xs">IMEI</TableHead>
+                      <TableHead className="text-xs">Condition</TableHead>
+                      <TableHead className="text-right text-xs">Cost</TableHead>
+                      <TableHead className="text-center text-xs">Status</TableHead>
+                      <TableHead className="text-center text-xs">Batch Invoice</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {dealerDetails?.phones && dealerDetails.phones.length > 0 ? (
+                      dealerDetails.phones.map((p: any) => (
+                        <TableRow key={p.id} className="text-xs">
+                          <TableCell>{p.purchase_date}</TableCell>
+                          <TableCell className="font-semibold">{p.phone_name} {p.model} {p.variant || ""}</TableCell>
+                          <TableCell className="font-mono text-[11px]">{p.imei_number}</TableCell>
+                          <TableCell className="capitalize">{p.condition}</TableCell>
+                          <TableCell className="text-right font-bold">₹{Number(p.purchase_price).toLocaleString("en-IN")}</TableCell>
+                          <TableCell className="text-center">
+                            {p.is_sold ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Sold</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-blue-700 bg-blue-50 text-[10px]">In Stock</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {p.batch_purchase_id ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setActiveBatchId(p.batch_purchase_id);
+                                  setShowBatchInvoiceModal(true);
+                                }}
+                                className="h-6 text-[11px] px-2 text-sky-700 hover:bg-sky-50"
+                                title="Open B2B Batch Invoice"
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                Batch Bill
+                              </Button>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-6 text-gray-400 text-xs">
+                          No purchase transactions recorded with this dealer yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -613,6 +830,13 @@ export const DealersTab: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reusable B2B Batch Purchase Invoice Dialog */}
+      <DealerBatchInvoiceDialog
+        open={showBatchInvoiceModal}
+        onOpenChange={setShowBatchInvoiceModal}
+        batchId={activeBatchId}
+      />
     </div>
   );
 };

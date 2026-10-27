@@ -411,6 +411,7 @@ export function buildRouter() {
 
   // ---------------- dealers (B2B Phone Suppliers) ----------------
   r.get("/dealers", staff, wrap((req, res) => res.json(dealers.listDealers({ search: req.query.search }))));
+  r.get("/dealers/batches/:batchId", staff, wrap((req, res) => res.json(dealers.getBatchPurchase(req.params.batchId))));
   r.get("/dealers/:id", staff, wrap((req, res) => res.json(dealers.getDealer(req.params.id))));
   r.post("/dealers", staff, wrap((req, res) => res.status(201).json(dealers.createDealer(req.body, req.user.id))));
   r.put("/dealers/:id", staff, wrap((req, res) => res.json(dealers.updateDealer(req.params.id, req.body, req.user.id))));
