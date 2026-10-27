@@ -9,6 +9,7 @@ import InventoryTab from "./InventoryTab";
 import SoldTab from "./SoldTab";
 import CustomersTab from "./CustomersTab";
 import SellersTab from "./SellersTab";
+import DealersTab from "./DealersTab";
 import MessagesTab from "./MessagesTab";
 import AccountingTab from "./AccountingTab";
 import DatabaseTab from "./DatabaseTab";
@@ -230,6 +231,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialDepartment = "sa
                 <TabsTrigger value="returns" className="shrink-0 text-xs px-3 py-1.5">Returns</TabsTrigger>
                 <TabsTrigger value="customers" className="shrink-0 text-xs px-3 py-1.5">Customers</TabsTrigger>
                 <TabsTrigger value="sellers" className="shrink-0 text-xs px-3 py-1.5">Sellers</TabsTrigger>
+                <TabsTrigger value="dealers" className="shrink-0 text-xs px-3 py-1.5 font-semibold text-sky-700 data-[state=active]:bg-sky-600 data-[state=active]:text-white">Dealers (B2B)</TabsTrigger>
                 <TabsTrigger value="accounting" className="shrink-0 text-xs px-3 py-1.5">Sales Accounting</TabsTrigger>
               </>
             )}
@@ -285,6 +287,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialDepartment = "sa
         
         <TabsContent value="sellers">
           <ErrorBoundary label="Sellers"><SellersTab /></ErrorBoundary>
+        </TabsContent>
+
+        <TabsContent value="dealers">
+          <ErrorBoundary label="Dealers"><DealersTab /></ErrorBoundary>
         </TabsContent>
         
         <TabsContent value="accounting">

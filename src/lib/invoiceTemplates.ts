@@ -422,26 +422,35 @@ function renderPhotos(c: InvoiceContent, css: string): string {
 
 /** The fourth design: a dark, restrained letterhead for premium listings. */
 function renderLuxury(c: InvoiceContent): string {
+  const formatInsta = (val: string) => (val ? `@${val.replace(/^@+/, "")}` : "");
+
   const css = `
-    * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     html, body {
       margin: 0;
       padding: 0;
       background-color: #0c0d10 !important;
+      background: #0c0d10 !important;
       color: #e8e4da !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      min-height: 100vh;
+      width: 100%;
     }
     .sheet {
       font-family: "Segoe UI", Arial, Helvetica, sans-serif;
       color: #e8e4da !important;
       background-color: #0c0d10 !important;
+      background: #0c0d10 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      max-width: 190mm;
+      color-adjust: exact !important;
+      max-width: 210mm;
       margin: 0 auto;
       padding: 14px 16px 22px;
       min-height: 100vh;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.9);
     }
     .lux-top{display:flex;align-items:center;gap:16px;padding:16px 0 12px;border-bottom:1px solid #2a2b33}
     .lux-top .icon-box{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:#17181d;border:1px solid #2e303a;width:46px;height:46px}
@@ -525,28 +534,40 @@ function renderLuxury(c: InvoiceContent): string {
       .lux-terms .terms-card{grid-template-columns:1fr}
     }
     @page {
-      margin: 0;
+      margin: 0mm;
       size: A4 portrait;
     }
     @media print{
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
       html, body {
         background-color: #0c0d10 !important;
+        background: #0c0d10 !important;
         color: #e8e4da !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        color-adjust: exact !important;
         width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
         min-height: 100% !important;
       }
       .sheet {
         background-color: #0c0d10 !important;
+        background: #0c0d10 !important;
         color: #e8e4da !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        color-adjust: exact !important;
         max-width: 100% !important;
         width: 100% !important;
-        padding: 8mm 10mm !important;
+        padding: 6mm 10mm !important;
         box-sizing: border-box !important;
         min-height: 100vh !important;
+        box-shadow: none !important;
       }
       .lux-card, .lux-words, .lux-total, .lux-bank, .lux-terms .terms-card > div, .lux-signs .sign, .lux-items thead th, .lux-items td, .icon-box {
         -webkit-print-color-adjust: exact !important;
@@ -580,7 +601,7 @@ function renderLuxury(c: InvoiceContent): string {
         </div>
         <div>
           <svg style="width:13px;height:13px;margin-right:6px;vertical-align:middle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>
-          ${c.business.instagram ? `@${esc(c.business.instagram)}` : ""}
+          ${c.business.instagram ? formatInsta(esc(c.business.instagram)) : ""}
         </div>
         ${c.business.udyam ? `<div class="lux-udyam">Udyam Reg. No: ${esc(c.business.udyam)}</div>` : ""}
       </div>
@@ -703,7 +724,7 @@ function renderLuxury(c: InvoiceContent): string {
           <div><svg style="width:13px;height:13px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>${esc(c.business.address)}</div>
           <div><svg style="width:13px;height:13px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>${c.business.phone1 ? `Ph: ${esc(c.business.phone1)}` : ""}</div>
           <div><svg style="width:13px;height:13px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2Z"/><polyline points="22,6 12,13 2,6"/></svg>${esc(c.business.email)}</div>
-          <div><svg style="width:13px;height:13px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>${c.business.instagram ? `@${esc(c.business.instagram)}` : ""}</div>
+          <div><svg style="width:13px;height:13px;margin-right:6px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>${c.business.instagram ? formatInsta(esc(c.business.instagram)) : ""}</div>
         </div>        <div class="lux-pageno">Page 1 of 2</div>
       </div>
     </div>
@@ -1278,7 +1299,7 @@ export function buildInvoiceHtml(options: InvoiceBuildOptions): string {
     const bodyMatch = sapathHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     if (bodyMatch) {
       const extraCss = styleMatch ? `<style>${styleMatch[1]}</style>` : "";
-      const extraBody = `<div style="page-break-before: always;" class="sapath-page-break"></div>${bodyMatch[1]}`;
+      const extraBody = `<div style="page-break-before: always !important; break-before: page !important; height: 0; margin: 0; padding: 0; border: none;" class="sapath-page-break"></div>${bodyMatch[1]}`;
       return baseHtml.replace("</body>", `${extraCss}${extraBody}</body>`);
     }
   }

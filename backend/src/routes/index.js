@@ -13,6 +13,7 @@ import * as invoices from "../services/invoiceService.js";
 import * as backups from "../services/backupService.js";
 import * as storage from "../services/storageService.js";
 import * as settings from "../services/settingsService.js";
+import * as dealers from "../services/dealerService.js";
 import * as financialYears from "../services/financialYearService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import { getDb } from "../db/index.js";
@@ -407,6 +408,14 @@ export function buildRouter() {
     res.json({ id: cust.id, id_proof_type: cust.id_proof_type, id_number: cust.id_number });
   }));
   r.get("/sellers/:id/history", staff, wrap((req, res) => res.json(people.sellerHistory(req.params.id))));
+
+  // ---------------- dealers (B2B Phone Suppliers) ----------------
+  r.get("/dealers", staff, wrap((req, res) => res.json(dealers.listDealers({ search: req.query.search }))));
+  r.get("/dealers/:id", staff, wrap((req, res) => res.json(dealers.getDealer(req.params.id))));
+  r.post("/dealers", staff, wrap((req, res) => res.status(201).json(dealers.createDealer(req.body, req.user.id))));
+  r.put("/dealers/:id", staff, wrap((req, res) => res.json(dealers.updateDealer(req.params.id, req.body, req.user.id))));
+  r.delete("/dealers/:id", staff, wrap((req, res) => res.json(dealers.deleteDealer(req.params.id, req.user.id))));
+  r.post("/dealers/batch-purchase", staff, wrap((req, res) => res.status(201).json(dealers.createBatchPurchase(req.body, req.user.id))));
 
   // ---------------- settings (Admin > Settings, editable anytime) ----------------
   r.get("/settings", staff, wrap((_req, res) => res.json(settings.getSettings())));

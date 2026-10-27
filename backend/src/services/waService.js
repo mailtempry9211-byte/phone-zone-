@@ -152,46 +152,88 @@ export function optOut(phone) {
   });
 }
 
-export function createCampaign({ name, template_id, dry_run = false, audience = "all" }) {
+export function createCampaign({
+  name,
+  template_id,
+  dry_run = false,
+  audience = "all",
+  recipients = null,
+  media_url = null,
+  media_type = null,
+  delay_min = 25,
+  delay_max = 60,
+}) {
   if (!name || !template_id) throw badRequest("Campaign name and template are required.");
   const db = getDb();
 
   const template = db.prepare("SELECT * FROM wa_templates WHERE id = ?").get(template_id);
   if (!template) throw notFound("Template not found.");
 
-  // CRITICAL: ONLY select customers with whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL
-  const optedInCustomers = db
-    .prepare(
-      "SELECT id, name, phone FROM customers WHERE whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL AND deleted_at IS NULL"
-    )
-    .all();
+  let targets = [];
 
-  const optedInRepairCustomers = db
-    .prepare(
-      "SELECT id, name, phone FROM repair_customers WHERE whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL AND deleted_at IS NULL"
-    )
-    .all();
-
-  // Deduplicate by phone
-  const phoneMap = new Map();
-  for (const c of [...optedInCustomers, ...optedInRepairCustomers]) {
-    if (!phoneMap.has(c.phone)) {
-      phoneMap.set(c.phone, c);
+  if (Array.isArray(recipients) && recipients.length > 0) {
+    const phoneMap = new Map();
+    for (const r of recipients) {
+      if (r && r.phone) {
+        const cleanPhone = String(r.phone).replace(/\D/g, "");
+        if (cleanPhone.length >= 10 && !phoneMap.has(cleanPhone)) {
+          phoneMap.set(cleanPhone, {
+            id: r.id || newId(),
+            name: r.name || "Valued Contact",
+            phone: cleanPhone,
+            shop_name: r.shop_name || "",
+          });
+        }
+      }
     }
+    targets = Array.from(phoneMap.values());
+  } else {
+    // Default selection: customers with whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL
+    const optedInCustomers = db
+      .prepare(
+        "SELECT id, name, phone FROM customers WHERE whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL AND deleted_at IS NULL"
+      )
+      .all();
+
+    const optedInRepairCustomers = db
+      .prepare(
+        "SELECT id, name, phone FROM repair_customers WHERE whatsapp_opt_in = 1 AND wa_opted_out_at IS NULL AND deleted_at IS NULL"
+      )
+      .all();
+
+    // Deduplicate by phone
+    const phoneMap = new Map();
+    for (const c of [...optedInCustomers, ...optedInRepairCustomers]) {
+      if (!phoneMap.has(c.phone)) {
+        phoneMap.set(c.phone, c);
+      }
+    }
+    targets = Array.from(phoneMap.values());
   }
 
-  const targets = Array.from(phoneMap.values());
   const campaignId = newId();
 
   return transaction(() => {
     db.prepare(
-      `INSERT INTO wa_campaigns (id, name, template_id, status, total_count, dry_run)
-       VALUES (?, ?, ?, 'running', ?, ?)`
-    ).run(campaignId, name, template_id, targets.length, dry_run ? 1 : 0);
+      `INSERT INTO wa_campaigns (id, name, template_id, status, total_count, dry_run, audience_type, media_url, media_type, delay_min, delay_max)
+       VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      campaignId,
+      name,
+      template_id,
+      targets.length,
+      dry_run ? 1 : 0,
+      audience,
+      media_url || null,
+      media_type || null,
+      delay_min || 25,
+      delay_max || 60
+    );
 
     for (const target of targets) {
       const rendered = template.content
         .replace(/\{name\}/g, target.name || "Customer")
+        .replace(/\{shop_name\}/g, target.shop_name || "PhoneZone")
         .replace(/\{phone\}/g, target.phone);
 
       db.prepare(
@@ -217,9 +259,101 @@ export function createCampaign({ name, template_id, dry_run = false, audience = 
   });
 }
 
+export function listAllContacts({ search } = {}) {
+  const db = getDb();
+  const contacts = [];
+  const seen = new Set();
+
+  try {
+    // 1. Customers
+    const customers = db.prepare("SELECT id, name, phone, address FROM customers WHERE deleted_at IS NULL").all();
+    for (const c of customers) {
+      const p = String(c.phone || "").replace(/\D/g, "");
+      if (p.length >= 10 && !seen.has(p)) {
+        seen.add(p);
+        contacts.push({ id: c.id, name: c.name || "Customer", phone: p, address: c.address || "", type: "customer" });
+      }
+    }
+  } catch (_e) {}
+
+  try {
+    // 2. Sellers
+    const sellers = db.prepare("SELECT id, name, phone, address FROM sellers WHERE deleted_at IS NULL").all();
+    for (const s of sellers) {
+      const p = String(s.phone || "").replace(/\D/g, "");
+      if (p.length >= 10 && !seen.has(p)) {
+        seen.add(p);
+        contacts.push({ id: s.id, name: s.name || "Seller", phone: p, address: s.address || "", type: "seller" });
+      }
+    }
+  } catch (_e) {}
+
+  try {
+    // 3. Dealers
+    const dealers = db.prepare("SELECT id, shop_name, proprietor_name, phone, address FROM dealers WHERE is_active = 1").all();
+    for (const d of dealers) {
+      const p = String(d.phone || "").replace(/\D/g, "");
+      if (p.length >= 10 && !seen.has(p)) {
+        seen.add(p);
+        contacts.push({
+          id: d.id,
+          name: d.proprietor_name || d.shop_name,
+          shop_name: d.shop_name,
+          phone: p,
+          address: d.address || "",
+          type: "dealer",
+        });
+      }
+    }
+  } catch (_e) {}
+
+  try {
+    // 4. Repair Customers
+    const repairs = db.prepare("SELECT id, name, phone, address FROM repair_customers WHERE deleted_at IS NULL").all();
+    for (const r of repairs) {
+      const p = String(r.phone || "").replace(/\D/g, "");
+      if (p.length >= 10 && !seen.has(p)) {
+        seen.add(p);
+        contacts.push({ id: r.id, name: r.name || "Repair Client", phone: p, address: r.address || "", type: "repair_customer" });
+      }
+    }
+  } catch (_e) {}
+
+  let filtered = contacts;
+  if (search && search.trim()) {
+    const q = search.trim().toLowerCase();
+    filtered = contacts.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.phone.includes(q) ||
+        (c.shop_name && c.shop_name.toLowerCase().includes(q))
+    );
+  }
+
+  const counts = {
+    all: contacts.length,
+    customers: contacts.filter((c) => c.type === "customer").length,
+    sellers: contacts.filter((c) => c.type === "seller").length,
+    dealers: contacts.filter((c) => c.type === "dealer").length,
+    repair_customers: contacts.filter((c) => c.type === "repair_customer").length,
+  };
+
+  return { contacts: filtered, counts };
+}
+
 export function listCampaigns() {
   const db = getDb();
   return db.prepare("SELECT * FROM wa_campaigns ORDER BY created_at DESC").all();
+}
+
+export function getCampaignLogs(campaignId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT id, campaign_id, customer_name, customer_phone, message, status, scheduled_at, sent_at, error
+    FROM wa_queue
+    WHERE campaign_id = ?
+    ORDER BY created_at ASC
+  `).all(campaignId);
 }
 
 export function createTemplate({ name, content, category = "general" }) {

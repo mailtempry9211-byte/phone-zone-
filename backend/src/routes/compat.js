@@ -39,7 +39,7 @@ function guardWrites(req) {
 }
 
 const ALLOWED = new Set([
-  "phones", "customers", "sellers", "messages", "returns",
+  "phones", "customers", "sellers", "dealers", "dealer_batches", "messages", "returns",
   "admin_settings", "invoices", "repairs", "files", "audit_logs",
   "shops",
 ]);
@@ -50,7 +50,7 @@ const ALLOWED = new Set([
  * compatibility layer - removing log rows would defeat the audit trail.
  */
 const DELETE_ALLOWED = new Set([
-  "phones", "customers", "sellers", "messages", "returns",
+  "phones", "customers", "sellers", "dealers", "dealer_batches", "messages", "returns",
   "admin_settings", "invoices", "repairs", "shops",
 ]);
 
@@ -298,10 +298,12 @@ export function buildCompatRouter(staff, canRead = staff) {
     if (t === "phones") {
       const sellerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number FROM sellers WHERE id = ? AND deleted_at IS NULL");
       const customerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number FROM customers WHERE id = ? AND deleted_at IS NULL");
+      const dealerOf = db.prepare("SELECT id, shop_name, proprietor_name, phone, address, gst_number, signature_url, photo_url FROM dealers WHERE id = ?");
       res.json(rows.map((p) => ({
         ...p,
         sellers: p.seller_id ? (sellerOf.get(p.seller_id) || null) : null,
         customers: p.customer_id ? (customerOf.get(p.customer_id) || null) : null,
+        dealers: p.dealer_id ? (dealerOf.get(p.dealer_id) || null) : null,
       })));
     } else if (t === "invoices") {
       const phoneOf = db.prepare("SELECT id, phone_name, model, imei_number, condition, purchase_price, selling_price FROM phones WHERE id = ?");

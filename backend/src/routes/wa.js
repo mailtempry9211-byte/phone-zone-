@@ -54,12 +54,20 @@ export function buildWaRouter(staffAuth, adminAuth) {
   }));
 
   // Staff endpoints
+  r.get("/contacts", staffAuth, wrap((req, res) => {
+    res.json(waService.listAllContacts({ search: req.query.search }));
+  }));
+
   r.get("/queue/status", staffAuth, wrap((_req, res) => {
     res.json(waService.getQueueStatus());
   }));
 
   r.get("/campaigns", staffAuth, wrap((_req, res) => {
     res.json(waService.listCampaigns());
+  }));
+
+  r.get("/campaigns/:id/logs", staffAuth, wrap((req, res) => {
+    res.json(waService.getCampaignLogs(req.params.id));
   }));
 
   r.post("/campaigns", staffAuth, wrap((req, res) => {

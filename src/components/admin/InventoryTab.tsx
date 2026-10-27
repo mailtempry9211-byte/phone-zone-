@@ -431,12 +431,30 @@ const InventoryTab = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 sm:gap-6">
-        {filteredPhones.map((phone) => (
-          <Card key={phone.id} className={`${phone.is_sold ? 'opacity-75 border-green-200' : ''}`}>
+        {filteredPhones.map((phone: any) => {
+          const isDealerPhone = !!(phone.is_dealer || phone.dealer_id);
+          return (
+          <Card
+            key={phone.id}
+            className={`${
+              isDealerPhone
+                ? "bg-sky-50/70 border-sky-300 shadow-sm"
+                : phone.is_sold
+                ? "opacity-75 border-green-200"
+                : ""
+            }`}
+          >
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">{phone.phone_name}</CardTitle>
+                  <div className="flex items-center gap-1.5">
+                    <CardTitle className="text-lg">{phone.phone_name}</CardTitle>
+                    {isDealerPhone && (
+                      <Badge variant="outline" className="text-[10px] bg-sky-100 text-sky-800 border-sky-300 font-semibold">
+                        🏢 B2B Dealer
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-600">{phone.model}</p>
                 </div>
                 <div className="flex space-x-1">
@@ -457,7 +475,14 @@ const InventoryTab = () => {
                 <div><strong>IMEI:</strong> {phone.imei_number}</div>
                 <div><strong>Variant:</strong> {phone.variant || '-'}</div>
                 <div><strong>Colour:</strong> {phone.colour || '-'}</div>
-                <div><strong>Seller:</strong> {phone.sellers?.name}</div>
+                <div>
+                  <strong>{isDealerPhone ? "Dealer:" : "Seller:"}</strong>{" "}
+                  {isDealerPhone ? (
+                    <span className="text-sky-700 font-semibold">{phone.dealers?.shop_name || "B2B Supplier"}</span>
+                  ) : (
+                    phone.sellers?.name || "-"
+                  )}
+                </div>
                 <div><strong>Purchase:</strong> ₹{phone.purchase_price}</div>
                 <div><strong>Selling:</strong> ₹{phone.selling_price}</div>
                 {phone.is_sold && phone.customers && (
@@ -591,7 +616,8 @@ const InventoryTab = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+        );
+      })}
       </div>
 
       {filteredPhones.length === 0 && (

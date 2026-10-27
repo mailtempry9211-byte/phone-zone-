@@ -225,6 +225,13 @@ export type Database = {
           sold_date: string | null
           updated_at: string
           variant: string | null
+          is_dealer?: boolean | number | null
+          dealer_id?: string | null
+          dealers?: any | null
+          batch_purchase_id?: string | null
+          seller_photo_url?: string | null
+          seller_signature_url?: string | null
+          sapath_patra_language?: string | null
         }
         Insert: {
           bill_available?: boolean | null
@@ -253,12 +260,19 @@ export type Database = {
           return_reason?: string | null
           return_status?: string | null
           return_type?: string | null
-          seller_id: string
+          seller_id?: string | null
           selling_price: number
           shop_id?: string | null
           sold_date?: string | null
           updated_at?: string
           variant?: string | null
+          is_dealer?: boolean | number | null
+          dealer_id?: string | null
+          dealers?: any | null
+          batch_purchase_id?: string | null
+          seller_photo_url?: string | null
+          seller_signature_url?: string | null
+          sapath_patra_language?: string | null
         }
         Update: {
           bill_available?: boolean | null
@@ -287,12 +301,19 @@ export type Database = {
           return_reason?: string | null
           return_status?: string | null
           return_type?: string | null
-          seller_id?: string
+          seller_id?: string | null
           selling_price?: number
           shop_id?: string | null
           sold_date?: string | null
           updated_at?: string
           variant?: string | null
+          is_dealer?: boolean | number | null
+          dealer_id?: string | null
+          dealers?: any | null
+          batch_purchase_id?: string | null
+          seller_photo_url?: string | null
+          seller_signature_url?: string | null
+          sapath_patra_language?: string | null
         }
         Relationships: [
           {

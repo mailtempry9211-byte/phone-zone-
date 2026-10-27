@@ -65,75 +65,77 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
   <style>
     @page {
       size: A4 portrait;
-      margin: 8mm 12mm;
+      margin: 6mm 10mm;
     }
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
       color: #1e293b;
       background: #ffffff;
-      line-height: 1.35;
-      font-size: 10px;
-      padding: 4px;
+      line-height: 1.25;
+      font-size: 9.5px;
+      padding: 2px;
     }
     .container {
       max-width: 800px;
       margin: 0 auto;
       border: 1.5px solid #0f172a;
-      padding: 10px 14px;
+      padding: 6px 10px;
       background: #fff;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 6px;
-      margin-bottom: 6px;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
     }
     .shop-info {
       flex: 1;
     }
     .shop-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: #0f172a;
     }
     .shop-meta {
-      font-size: 10px;
+      font-size: 9px;
       color: #475569;
       margin-top: 1px;
     }
     .doc-badge {
       text-align: center;
-      margin: 4px 0 6px;
+      margin: 2px 0 4px;
       background: #f1f5f9;
-      padding: 4px 8px;
+      padding: 2px 6px;
       border-radius: 4px;
       border: 1px solid #cbd5e1;
     }
     .doc-badge h2 {
-      font-size: 13px;
+      font-size: 11.5px;
       font-weight: 700;
       color: #0f172a;
       letter-spacing: 0.5px;
     }
     .doc-badge span {
-      font-size: 9.5px;
+      font-size: 8.5px;
       color: #64748b;
       display: block;
     }
     .photo-box {
-      width: 80px;
-      height: 90px;
+      width: 62px;
+      height: 72px;
       border: 1.5px solid #0f172a;
       background: #f8fafc;
       display: flex;
@@ -141,7 +143,7 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      margin-left: 10px;
+      margin-left: 8px;
       flex-shrink: 0;
     }
     .photo-box img {
@@ -150,31 +152,31 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       object-fit: cover;
     }
     .photo-placeholder {
-      font-size: 8.5px;
+      font-size: 8px;
       color: #94a3b8;
       text-align: center;
-      padding: 4px;
+      padding: 2px;
     }
     .meta-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 3px 12px;
+      gap: 2px 8px;
       background: #f8fafc;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
-      margin-bottom: 6px;
-      font-size: 10px;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      margin-bottom: 4px;
+      font-size: 8.8px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .meta-item {
       display: flex;
-      gap: 5px;
+      gap: 4px;
     }
     .meta-item strong {
       color: #334155;
-      min-width: 95px;
+      min-width: 90px;
       flex-shrink: 0;
     }
     .meta-item span {
@@ -183,27 +185,28 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
     }
     .preamble {
       font-weight: 600;
-      margin-bottom: 5px;
-      padding: 3px 5px;
+      margin-bottom: 4px;
+      padding: 2px 5px;
       background: #fff;
       border-left: 3px solid #2563eb;
-      font-size: 10px;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      font-size: 8.8px;
+      line-height: 1.3;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .clauses-list {
       list-style-type: decimal;
-      padding-left: 16px;
-      margin-bottom: 6px;
+      padding-left: 14px;
+      margin-bottom: 4px;
     }
     .clauses-list li {
-      margin-bottom: 3px;
-      padding-left: 3px;
-      font-size: 9.5px;
-      line-height: 1.35;
+      margin-bottom: 2px;
+      padding-left: 2px;
+      font-size: 8.2px;
+      line-height: 1.25;
       text-align: justify;
-      page-break-inside: avoid;
-      break-inside: avoid;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .clause-hi {
       color: #0f172a;
@@ -211,59 +214,60 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
     }
     .clause-en {
       color: #475569;
-      font-size: 8.5px;
+      font-size: 7.5px;
       display: block;
-      margin-top: 0.5px;
+      margin-top: 0px;
       font-style: italic;
     }
     .closing {
-      font-size: 9.5px;
+      font-size: 8.5px;
       font-weight: 600;
-      margin: 6px 0 8px 0;
+      margin: 3px 0 4px 0;
       text-align: center;
       color: #1e293b;
-      padding: 3px;
+      padding: 2px;
       border-top: 1px dashed #cbd5e1;
       border-bottom: 1px dashed #cbd5e1;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+      line-height: 1.25;
     }
-    .signature-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-top: 8px;
-      padding-top: 4px;
+    .signature-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-    .sign-block {
+    .sign-cell {
       text-align: center;
-      width: 220px;
+      width: 33.33%;
+      vertical-align: top;
+      padding: 0 4px;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
     .sign-box {
-      height: 48px;
+      height: 36px;
       border-bottom: 1.5px solid #0f172a;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
     }
     .sign-box img {
-      max-height: 44px;
+      max-height: 32px;
       max-width: 100%;
       object-fit: contain;
     }
     .sign-title {
       font-weight: 700;
-      font-size: 10px;
+      font-size: 9px;
       color: #0f172a;
     }
     .sign-sub {
-      font-size: 8.5px;
+      font-size: 8px;
       color: #64748b;
     }
     @media print {
@@ -469,40 +473,42 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
     </div>
 
     <!-- Signatures Section -->
-    <div class="signature-row">
-      <div class="sign-block">
-        <div class="sign-box">
-          ${
-            data.sellerSignatureUrl
-              ? `<img src="${data.sellerSignatureUrl}" alt="Seller Signature" />`
-              : `<span style="color:#94a3b8;font-size:10px;">Signature on file</span>`
-          }
-        </div>
-        <div class="sign-title">Signature of Declarant</div>
-        <div class="sign-sub">(विक्रेता के हस्ताक्षर)</div>
-        <div style="font-size:10px;margin-top:2px;font-weight:600;">${data.sellerName}</div>
-      </div>
+    <table class="signature-table">
+      <tr>
+        <td class="sign-cell">
+          <div class="sign-box">
+            ${
+              data.sellerSignatureUrl
+                ? `<img src="${data.sellerSignatureUrl}" alt="Seller Signature" />`
+                : `<span style="color:#94a3b8;font-size:9px;">Signature on file</span>`
+            }
+          </div>
+          <div class="sign-title">Signature of Declarant</div>
+          <div class="sign-sub">(विक्रेता के हस्ताक्षर)</div>
+          <div style="font-size:9.5px;margin-top:2px;font-weight:600;color:#0f172a;">${data.sellerName}</div>
+        </td>
 
-      <div class="sign-block">
-        <div class="sign-box">
-          <span style="color:#94a3b8;font-size:10px;">Witness Signature</span>
-        </div>
-        <div class="sign-title">Witness Signature</div>
-        <div class="sign-sub">(गवाह के हस्ताक्षर)</div>
-      </div>
+        <td class="sign-cell">
+          <div class="sign-box">
+            <span style="color:#94a3b8;font-size:9px;">Witness Signature</span>
+          </div>
+          <div class="sign-title">Witness Signature</div>
+          <div class="sign-sub">(गवाह के हस्ताक्षर)</div>
+        </td>
 
-      <div class="sign-block">
-        <div class="sign-box">
-          ${
-            data.shopSignatureUrl
-              ? `<img src="${data.shopSignatureUrl}" alt="Shop Signature" />`
-              : `<span style="color:#2563eb;font-weight:700;font-size:11px;">${data.shopName || "PhoneZone"}</span>`
-          }
-        </div>
-        <div class="sign-title">For ${data.shopName || "PhoneZone"}</div>
-        <div class="sign-sub">(अधिकृत हस्ताक्षरकर्ता)</div>
-      </div>
-    </div>
+        <td class="sign-cell">
+          <div class="sign-box">
+            ${
+              data.shopSignatureUrl
+                ? `<img src="${data.shopSignatureUrl}" alt="Shop Signature" />`
+                : `<span style="color:#2563eb;font-weight:700;font-size:10px;">${data.shopName || "PhoneZone"}</span>`
+            }
+          </div>
+          <div class="sign-title">For ${data.shopName || "PhoneZone"}</div>
+          <div class="sign-sub">(अधिकृत हस्ताक्षरकर्ता)</div>
+        </td>
+      </tr>
+    </table>
   </div>
 </body>
 </html>`;
