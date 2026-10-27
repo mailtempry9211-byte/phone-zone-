@@ -38,6 +38,13 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
   const { data: adminSettings } = useQuery({
     queryKey: ["admin-settings"],
     queryFn: async () => {
+      try {
+        const sRes = await fetch("/api/settings", { credentials: "include" });
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          if (sData && (sData.primaryPhone || sData.businessName)) return sData;
+        }
+      } catch (_e) {}
       const { data } = await supabase.from("admin_settings").select("*").single();
       return data;
     },
@@ -66,6 +73,16 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
   const purchaseDate = batch?.purchaseDate || batch?.purchase_date || new Date().toISOString().split("T")[0];
   const invoiceNumber = batch?.invoiceNumber || batch?.invoice_number || "PUR-B2B";
   const paymentMethod = batch?.paymentMethod || batch?.payment_method || "Cash";
+
+  const storeName = shop.business_name || shop.businessName || "PHONEZONE";
+  const storeAddress = (shop.address || "Sitapur, UP").replace(/\r?\n/g, ", ");
+  const storePhone = shop.phone_primary || shop.primaryPhone || shop.phone || shop.whatsapp_number || shop.whatsappNumber || "";
+  const storeAltPhone = shop.phone_secondary || shop.secondaryPhone || "";
+  const storeGst = shop.gst_number || shop.gstNumber || "";
+  const storeUdyam = shop.udyam_registration || shop.udyam_number || shop.udyamNumber || "";
+  const rawEmail = (shop.email || "").trim();
+  // Valid email check - never display username "admin" as email. Only real emails with @ and domain
+  const storeEmail = rawEmail.includes("@") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) && !rawEmail.startsWith("admin@placeholder") ? rawEmail : "";
 
   const generateA4Html = () => {
     const dateFormatted = new Date(purchaseDate).toLocaleDateString("en-IN", {
@@ -117,11 +134,14 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
 <body>
   <div class="header">
     <div>
-      <div class="brand-title">${shop.business_name || "PHONEZONE"}</div>
+      <div class="brand-title">${storeName}</div>
       <div class="brand-meta">
-        ${shop.address || "Sitapur, Uttar Pradesh"}<br>
-        Phone: ${shop.phone_primary || "N/A"} | GST: ${shop.gst_number || "N/A"}<br>
-        Udyam Reg. No: ${shop.udyam_registration || "N/A"}
+        ${storeAddress}<br>
+        ${storePhone ? `Phone: ${storePhone}${storeAltPhone ? ` / ${storeAltPhone}` : ""}` : ""}
+        ${storeGst ? ` | GST: ${storeGst}` : ""}
+        ${storePhone || storeGst ? "<br>" : ""}
+        ${storeUdyam ? `Udyam Reg. No: ${storeUdyam}<br>` : ""}
+        ${storeEmail ? `Email: ${storeEmail}` : ""}
       </div>
     </div>
     <div class="inv-title-box">
@@ -134,10 +154,10 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
   <div class="party-grid">
     <div class="party-card">
       <h4>Purchased By (Buyer / Store)</h4>
-      <strong style="font-size:12px;">${shop.business_name || "PHONEZONE"}</strong><br>
-      Address: ${shop.address || "Sitapur, UP"}<br>
-      Phone: ${shop.phone_primary || "N/A"}<br>
-      Email: ${shop.email || "N/A"}
+      <strong style="font-size:12px;">${storeName}</strong><br>
+      ${storeAddress ? `Address: ${storeAddress}<br>` : ""}
+      ${storePhone ? `Phone: ${storePhone}${storeAltPhone ? ` / ${storeAltPhone}` : ""}<br>` : ""}
+      ${storeEmail ? `Email: ${storeEmail}<br>` : ""}
     </div>
     <div class="party-card">
       ${dealer.photo_url ? `<img src="${dealer.photo_url}" alt="Dealer Photo" class="dealer-photo" />` : ""}
@@ -219,9 +239,9 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
     </div>
     <div class="sign-box">
       <div class="sign-line">
-        ${shop.signature_url ? `<img src="${shop.signature_url}" alt="Shop Signature" />` : `<span style="font-size:11px;font-weight:700;color:#0284c7;">${shop.business_name || "PHONEZONE"}</span>`}
+        ${shop.signature_url ? `<img src="${shop.signature_url}" alt="Shop Signature" />` : `<span style="font-size:11px;font-weight:700;color:#0284c7;">${storeName}</span>`}
       </div>
-      <div style="font-weight:700;font-size:11px;">For ${shop.business_name || "PHONEZONE"}</div>
+      <div style="font-weight:700;font-size:11px;">For ${storeName}</div>
       <div style="font-size:9px;color:#64748b;">(Authorized Buyer Signatory)</div>
     </div>
   </div>
@@ -248,9 +268,10 @@ export const DealerBatchInvoiceDialog: React.FC<DealerBatchInvoiceDialogProps> =
   </style>
 </head>
 <body>
-  <div class="center bold" style="font-size:14px;">${shop.business_name || "PHONEZONE"}</div>
-  <div class="center" style="font-size:10px;">${shop.address || "Sitapur, UP"}</div>
-  <div class="center" style="font-size:10px;">Phone: ${shop.phone_primary || ""}</div>
+  <div class="center bold" style="font-size:14px;">${storeName}</div>
+  <div class="center" style="font-size:10px;">${storeAddress}</div>
+  ${storePhone ? `<div class="center" style="font-size:10px;">Phone: ${storePhone}</div>` : ""}
+  ${storeEmail ? `<div class="center" style="font-size:10px;">Email: ${storeEmail}</div>` : ""}
   <div class="line"></div>
   <div class="center bold">B2B BATCH PURCHASE BILL</div>
   <div class="flex"><span>Inv: ${invoiceNumber}</span><span>Date: ${purchaseDate}</span></div>
