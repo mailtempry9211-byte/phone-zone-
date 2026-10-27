@@ -186,15 +186,35 @@ export function createRepairJob({
   });
 }
 
-export function listRepairJobs({ status, search, shop, limit = 100 } = {}) {
+export function listRepairJobs({ status, search, shop, fy: fyParam, limit = 100 } = {}) {
   const db = getDb();
   const capped = Math.min(Math.max(Number(limit) || 100, 1), 500);
   const where = ["j.deleted_at IS NULL"];
   const params = [];
+  const currentFy = fyParam || activeFyLabel();
 
-  if (status && status !== "all") {
-    where.push("j.status = ?");
-    params.push(status);
+  if (currentFy) {
+    if (status && status !== "all") {
+      const lower = status.toLowerCase();
+      if (lower === "delivered" || lower === "cancelled") {
+        where.push("LOWER(j.status) = ? AND (COALESCE(j.financial_year, ?) = ? OR j.carried_to_fy = ?)");
+        params.push(lower, currentFy, currentFy, currentFy);
+      } else {
+        where.push("LOWER(j.status) = ?");
+        params.push(lower);
+      }
+    } else {
+      // Show ALL active tickets (WIP in workshop) + delivered/cancelled tickets of this active FY
+      where.push(`(
+        LOWER(j.status) NOT IN ('delivered', 'cancelled')
+        OR COALESCE(j.financial_year, ?) = ?
+        OR j.carried_to_fy = ?
+      )`);
+      params.push(currentFy, currentFy, currentFy);
+    }
+  } else if (status && status !== "all") {
+    where.push("LOWER(j.status) = ?");
+    params.push(status.toLowerCase());
   }
 
   if (shop && shop !== "all") {
@@ -498,33 +518,57 @@ export function createReworkJob(jobId, { reason, technician, notes, userId } = {
   });
 }
 
-export function getRepairAccounting() {
+export function getRepairAccounting(fyParam) {
   const db = getDb();
-  const summary = db.prepare(`
-    SELECT
-      COUNT(*) AS total_jobs,
-      SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS delivered_jobs,
-      SUM(CASE WHEN is_rework = 1 THEN 1 ELSE 0 END) AS rework_jobs,
-      SUM(CASE WHEN status = 'delivered' THEN COALESCE(final_price, estimate, 0) ELSE 0 END) AS total_revenue,
-      SUM(CASE WHEN status = 'delivered' THEN COALESCE(parts_cost, 0) ELSE 0 END) AS total_parts_cost,
-      SUM(CASE WHEN status = 'delivered' THEN COALESCE(labour_cost, 0) ELSE 0 END) AS total_labour_revenue,
-      SUM(CASE WHEN status = 'received' OR status = 'in_progress' OR status = 'waiting_parts' OR status = 'diagnosing' THEN 1 ELSE 0 END) AS pending_jobs
+  const fy = fyParam || activeFyLabel();
+
+  // Active WIP jobs physically in workshop right now
+  const pendingRow = db.prepare(`
+    SELECT COUNT(*) AS pending_jobs
     FROM repair_jobs
     WHERE deleted_at IS NULL
+      AND LOWER(status) NOT IN ('delivered', 'cancelled')
   `).get();
+
+  // FY-scoped metrics: delivered revenue, parts cost, labour revenue for the active FY book
+  const fyWhere = fy
+    ? "AND (COALESCE(financial_year, ?) = ? OR carried_to_fy = ?)"
+    : "";
+  const fyParams = fy ? [fy, fy, fy] : [];
+
+  const summary = db.prepare(`
+    SELECT
+      COUNT(*) AS total_delivered_in_fy,
+      SUM(CASE WHEN LOWER(status) = 'delivered' THEN 1 ELSE 0 END) AS delivered_jobs,
+      SUM(CASE WHEN is_rework = 1 THEN 1 ELSE 0 END) AS rework_jobs,
+      SUM(CASE WHEN LOWER(status) = 'delivered' THEN COALESCE(final_price, estimate, 0) ELSE 0 END) AS total_revenue,
+      SUM(CASE WHEN LOWER(status) = 'delivered' THEN COALESCE(parts_cost, 0) ELSE 0 END) AS total_parts_cost,
+      SUM(CASE WHEN LOWER(status) = 'delivered' THEN COALESCE(labour_cost, 0) ELSE 0 END) AS total_labour_revenue
+    FROM repair_jobs
+    WHERE deleted_at IS NULL AND LOWER(status) = 'delivered' ${fyWhere}
+  `).get(...fyParams);
 
   const netProfit = (summary?.total_revenue || 0) - (summary?.total_parts_cost || 0);
 
   const recentDelivered = db.prepare(`
     SELECT id, job_no, device_brand, device_model, imei, final_price, parts_cost, labour_cost, delivered_at, created_at
     FROM repair_jobs
-    WHERE status = 'delivered' AND deleted_at IS NULL
+    WHERE LOWER(status) = 'delivered' AND deleted_at IS NULL ${fyWhere}
     ORDER BY COALESCE(delivered_at, updated_at) DESC
     LIMIT 20
-  `).all();
+  `).all(...fyParams);
+
+  const deliveredCount = summary?.delivered_jobs || 0;
+  const pendingJobs = pendingRow?.pending_jobs || 0;
 
   return {
-    ...summary,
+    total_jobs: deliveredCount + pendingJobs,
+    delivered_jobs: deliveredCount,
+    pending_jobs: pendingJobs,
+    rework_jobs: summary?.rework_jobs || 0,
+    total_revenue: summary?.total_revenue || 0,
+    total_parts_cost: summary?.total_parts_cost || 0,
+    total_labour_revenue: summary?.total_labour_revenue || 0,
     net_profit: netProfit,
     recent_delivered: recentDelivered,
   };

@@ -72,11 +72,24 @@ export function listPhones({ status = "all", search = "", limit = 500 } = {}, { 
   const fy = fyWhere();
   if (fy.label) {
     if (status === "available") {
-      where.push("(COALESCE(financial_year, ?) = ? OR carried_to_fy = ?)");
+      // Unsold inventory is closing stock of last year & opening stock of current year
+      where.push(`(
+        (COALESCE(is_sold, 0) = 0 AND (return_status IS NULL OR return_status != 'purchase_returned'))
+        OR COALESCE(financial_year, ?) = ?
+        OR carried_to_fy = ?
+      )`);
       params.push(fy.label, fy.label, fy.label);
-    } else {
-      where.push("COALESCE(financial_year, ?) = ?");
+    } else if (status === "sold") {
+      where.push("is_sold = 1 AND COALESCE(financial_year, ?) = ?");
       params.push(fy.label, fy.label);
+    } else {
+      // "all": show current active unsold stock PLUS any phones purchased or sold in this active FY
+      where.push(`(
+        (COALESCE(is_sold, 0) = 0 AND (return_status IS NULL OR return_status != 'purchase_returned'))
+        OR COALESCE(financial_year, ?) = ?
+        OR carried_to_fy = ?
+      )`);
+      params.push(fy.label, fy.label, fy.label);
     }
   }
   if (shopId) { where.push("COALESCE(shop_id, ?) = ?"); params.push(shopId); }

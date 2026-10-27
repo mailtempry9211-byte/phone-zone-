@@ -76,9 +76,9 @@ export function buildRepairsRouter() {
     res.json(getRepairCustomerHistory(req.params.id));
   }));
 
-  // Accounting route
-  r.get("/accounting", wrap((_req, res) => {
-    res.json(getRepairAccounting());
+  // Accounting route (FY-scoped)
+  r.get("/accounting", wrap((req, res) => {
+    res.json(getRepairAccounting(req.query?.fy));
   }));
 
   // Rework / warranty return route

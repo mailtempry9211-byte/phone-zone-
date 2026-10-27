@@ -29,9 +29,10 @@ export function dashboard({ from, to } = {}) {
               SUM(CASE WHEN is_sold = 0 THEN 1 ELSE 0 END) AS available,
               SUM(CASE WHEN is_sold = 1 THEN 1 ELSE 0 END) AS sold,
               COALESCE(SUM(CASE WHEN is_sold = 0 THEN selling_price END),0) AS stock_value
-       FROM phones WHERE deleted_at IS NULL${fy.sql}${purchased.sql}`,
+       FROM phones WHERE deleted_at IS NULL AND (return_status IS NULL OR return_status != 'purchase_returned')
+       ${fy.label ? `AND (COALESCE(financial_year, ?) = ? OR carried_to_fy = ? OR is_sold = 0)` : ""}${purchased.sql}`,
     )
-    .get(...fy.params, ...purchased.params);
+    .get(...(fy.label ? [fy.label, fy.label, fy.label] : []), ...purchased.params);
 
   const money = db
     .prepare(

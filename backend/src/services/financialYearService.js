@@ -140,17 +140,25 @@ export function carryForwardFinancialYear({ fromYear, toYear, userId }) {
        SET carried_to_fy = ?
        WHERE (financial_year = ? OR carried_to_fy = ?)
          AND COALESCE(is_sold, 0) = 0
+         AND (return_status IS NULL OR return_status != 'purchase_returned')
          AND deleted_at IS NULL`
     ).run(to, from, from);
 
-    // 2. Pending repair jobs: status not in ('DELIVERED', 'CANCELLED')
+    // 2. Pending repair jobs: ONLY active in-progress jobs (never delivered or cancelled)
     const carriedRepairs = db.prepare(
       `UPDATE repair_jobs
        SET carried_to_fy = ?
        WHERE (financial_year = ? OR carried_to_fy = ?)
-         AND status NOT IN ('DELIVERED', 'CANCELLED')
+         AND LOWER(status) NOT IN ('delivered', 'cancelled')
          AND deleted_at IS NULL`
     ).run(to, from, from);
+
+    // Safeguard: Ensure completed/delivered jobs are NEVER marked as carried forward to new years
+    db.prepare(
+      `UPDATE repair_jobs
+       SET carried_to_fy = NULL
+       WHERE LOWER(status) IN ('delivered', 'cancelled')`
+    ).run();
 
     // 3. Mark all changes as reflected
     db.prepare(
@@ -236,9 +244,46 @@ export function assertAdminPassword(userId, password) {
 }
 
 /**
- * Start a new financial year. The new year's book is empty (no accounting is
- * carried forward) - customers and sellers are global so they are simply still
- * there. Old years are untouched.
+ * Automatically carries forward closing unsold inventory and active workshop repair jobs
+ * into the target financial year so the business never loses physical stock or active tickets.
+ */
+export function autoCarryForwardToYear(targetYear) {
+  if (!targetYear) return;
+  const db = getDb();
+
+  // 1. Unsold phones: all phones in hand that are not sold and not returned
+  db.prepare(`
+    UPDATE phones
+    SET carried_to_fy = ?
+    WHERE COALESCE(is_sold, 0) = 0
+      AND (return_status IS NULL OR return_status != 'purchase_returned')
+      AND deleted_at IS NULL
+      AND (carried_to_fy IS NULL OR carried_to_fy != ?)
+      AND (financial_year IS NULL OR financial_year != ?)
+  `).run(targetYear, targetYear, targetYear);
+
+  // 2. Active repair jobs: only open tickets in workshop (received, diagnosing, waiting_parts, in_progress, ready)
+  db.prepare(`
+    UPDATE repair_jobs
+    SET carried_to_fy = ?
+    WHERE LOWER(status) NOT IN ('delivered', 'cancelled')
+      AND deleted_at IS NULL
+      AND (carried_to_fy IS NULL OR carried_to_fy != ?)
+      AND (financial_year IS NULL OR financial_year != ?)
+  `).run(targetYear, targetYear, targetYear);
+
+  // 3. Safeguard: Delivered and cancelled jobs must NEVER have carried_to_fy set
+  db.prepare(`
+    UPDATE repair_jobs
+    SET carried_to_fy = NULL
+    WHERE LOWER(status) IN ('delivered', 'cancelled')
+      AND carried_to_fy IS NOT NULL
+  `).run();
+}
+
+/**
+ * Start a new financial year. Unsold stock and active workshop jobs are carried
+ * forward as opening stock/tickets. Past completed accounting remains closed in old years.
  */
 export function createFinancialYear({ label, startDate, endDate, password, userId }) {
   assertAdminPassword(userId, password);
@@ -255,6 +300,9 @@ export function createFinancialYear({ label, startDate, endDate, password, userI
       `INSERT INTO financial_years (id, label, start_date, end_date, is_active, is_closed)
        VALUES (?,?,?,?,1,0)`,
     ).run(id, finalLabel, startDate || range.startDate, endDate || range.endDate);
+
+    // Auto-carry forward unsold stock and active workshop jobs to the new year
+    autoCarryForwardToYear(finalLabel);
   });
   audit(userId, "financial_year.created", "financial_year", id, { label: finalLabel });
   return { active: getActiveFinancialYear(), years: listFinancialYears() };
@@ -269,6 +317,9 @@ export function activateFinancialYear({ id, password, userId }) {
   transaction(() => {
     db.prepare("UPDATE financial_years SET is_active = 0").run();
     db.prepare("UPDATE financial_years SET is_active = 1 WHERE id = ?").run(id);
+
+    // Auto-reflect closing unsold stock and active tickets into the activated year
+    autoCarryForwardToYear(row.label);
   });
   audit(userId, "financial_year.activated", "financial_year", id, { label: row.label });
   return { active: getActiveFinancialYear(), years: listFinancialYears() };

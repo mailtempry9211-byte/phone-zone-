@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-27T11:07:39.003Z
+Date             : 2026-10-27T11:22:23.444Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,7 +20,7 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-27T11:06:54.040Z
+Date             : 2026-10-27T11:21:37.084Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
@@ -28,7 +28,7 @@ Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
 --- sha256 of security-critical files ---
 789dd29733ed8dde74e91c3a37a1b209c1481e2cf1de6c582473f1623adddc8e  backend/src/routes/index.js
 4f749cc6fc495d88ba7c2cd02588d4cc1e54b80752eba1e81ae1c27bed3d5b8f  backend/src/routes/compat.js
-32cdfcdfd5b9ebc12c6dee072a1097f0fac1e63128e4eb3f0cace6305516a487  backend/src/services/inventoryService.js
+caeeae5b6462202666519d7e2e6558097997940cf78db97264f92973d980f6bb  backend/src/services/inventoryService.js
 834ede395b0f0ce4a4ba04d31f960d587de41d60133a7fd676f986cd14cb9c41  backend/src/services/storageService.js
 e1354d385ddc68931a072751e80f0412304b63ef74762eccce7fc08afa451c2f  backend/src/services/authService.js
 24eff0d0ad18d04f72bbecd145cd2730eeee3fe20d7c3aa6d068d836f6fc168c  backend/src/services/backupService.js
@@ -55,14 +55,14 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
 4410c9e0f80ca7a7a4b8115b8b1e41bdd128e6e3d3bfb15f5f0c3185d9296a54  database/migrations/021_dealers.sql
 
 --- A01: node --check on backend + scripts ---
-  A01 PASS  46 files checked, 0 failed
+  A01 PASS  47 files checked, 0 failed
 
 --- A02 / A03: migrations ---
   A02 PASS  20/20 migrations applied to a brand-new database
   A03 PASS  7 pre-stamped, 20/20 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:48341/api
+  server ready on http://127.0.0.1:48462/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -103,7 +103,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 1cc536c7-d435-42dc-8f2f-2196156891f5
+  A61 PASS  by-phone match returned repair customer 2817824c-2c0d-47cf-a930-76003a60437a
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403

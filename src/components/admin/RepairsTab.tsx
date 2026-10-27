@@ -140,6 +140,13 @@ export const RepairsTab: React.FC = () => {
     }
   };
 
+  // Initial fetch for all badges
+  useEffect(() => {
+    fetchJobs();
+    fetchRepairCustomers();
+    fetchAccounting();
+  }, []);
+
   useEffect(() => {
     if (activeSubTab === "jobs" || activeSubTab === "rework") {
       const timer = setTimeout(() => {
