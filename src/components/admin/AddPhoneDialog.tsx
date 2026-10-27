@@ -36,6 +36,8 @@ const getChoiceText = (c: Choice) =>
   c.select === CUSTOM_VALUE ? c.custom : c.select === NONE_VALUE ? "" : c.select;
 import RepairMatchDialog from "./RepairMatchDialog";
 import RepairHistoryPanel from "./RepairHistoryPanel";
+import PostTransactionShareDialog, { type PostTransactionPhone, type PostTransactionParty } from "./PostTransactionShareDialog";
+import { buildInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates";
 
 interface AddPhoneDialogProps {
   open: boolean;
@@ -56,6 +58,21 @@ const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
   // Cross-year IMEI lookup: warns when this phone already exists in any year.
   const [imeiHit, setImeiHit] = useState<{ count: number; years: string[] } | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  const [adminSettings, setAdminSettings] = useState<any>(null);
+  const [postShareOpen, setPostShareOpen] = useState(false);
+  const [postShareData, setPostShareData] = useState<{
+    phone: PostTransactionPhone;
+    party: PostTransactionParty;
+    invoiceHtml: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setAdminSettings(d))
+      .catch(() => {});
+  }, []);
 
   const [formData, setFormData] = useState({
     // Phone details
@@ -630,8 +647,78 @@ const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
         }).catch(() => {}); // fire-and-forget: never block the save
       }
 
+      // Build purchase invoice HTML (with Sapath Patra) for instant WhatsApp dispatch / viewing
+      const purchaseTerms = (adminSettings?.terms_and_conditions_purchase || adminSettings?.terms_and_conditions || '').split('\n').filter(Boolean);
+      let invoiceHtml = "";
+      try {
+        if (adminSettings) {
+          invoiceHtml = buildInvoiceHtml({
+            kind: 'purchase',
+            style: 'heritage',
+            settings: adminSettings,
+            phone: {
+              phone_name: formData.phone_name,
+              model: formData.model,
+              variant: variant.value,
+              colour: colour.value,
+              imei_number: formData.imei_number,
+              condition: formData.condition,
+              purchase_date: formData.purchase_date || new Date().toISOString(),
+              payment_method: formData.payment_method,
+              bill_available: formData.bill_available,
+              box_available: formData.box_available,
+              charger_available: formData.charger_available,
+              seller_photo_url: formData.seller_photo_url,
+              seller_signature_url: formData.seller_signature_url,
+              sapath_patra_language: formData.sapath_patra_language,
+              sellers: {
+                name: formData.seller_name,
+                phone: formData.seller_phone,
+                address: formData.seller_address,
+                id_proof_type: formData.id_proof_type,
+                id_number: formData.id_number,
+              }
+            },
+            amount: parseFloat(formData.purchase_price) || 0,
+            isBroker: false,
+            brokerName: '',
+            includeSapathPatra: true,
+            photoChoice: formData.purchase_documents.length > 0 ? 'purchase' : 'none',
+            productPhotos: formData.product_photos,
+            documentPhotos: formData.purchase_documents,
+            documentLabel: 'Purchase Documents',
+            terms: purchaseTerms,
+            fallbackTerms: DEFAULT_PURCHASE_TERMS,
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to generate purchase invoice HTML for post-share", e);
+      }
+
+      setPostShareData({
+        phone: {
+          phone_name: formData.phone_name,
+          model: formData.model,
+          imei_number: formData.imei_number,
+          amount: parseFloat(formData.purchase_price) || 0,
+          condition: formData.condition,
+          variant: variant.value,
+          colour: colour.value,
+        },
+        party: {
+          name: formData.seller_name,
+          phone: formData.seller_phone,
+          address: formData.seller_address,
+          idProofType: formData.id_proof_type,
+          idNumber: formData.id_number,
+          role: "seller",
+        },
+        invoiceHtml,
+      });
+
       toast.success("Phone added successfully!");
       onOpenChange(false);
+      setPostShareOpen(true);
       
       // Reset form
       setFormData({
@@ -700,6 +787,7 @@ const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1671,6 +1759,18 @@ const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
         </DialogContent>
       </Dialog>
     </Dialog>
+
+    {/* Post-Purchase WhatsApp Share Prompt Modal */}
+    <PostTransactionShareDialog
+      open={postShareOpen}
+      onOpenChange={setPostShareOpen}
+      type="purchase"
+      phone={postShareData?.phone || null}
+      party={postShareData?.party || null}
+      invoiceHtml={postShareData?.invoiceHtml || ""}
+      adminSettings={adminSettings}
+    />
+    </>
   );
 };
 

@@ -244,6 +244,8 @@ Thank you for purchasing with ${adminSettings?.business_name || ''}!`;
         dispatchWhatsApp({
           phone: customerPhone,
           message,
+          invoiceHtml,
+          pdfFileName: `Sales_Invoice_${phone.imei_number || 'receipt'}.pdf`,
           adminSettings,
         });
         break;

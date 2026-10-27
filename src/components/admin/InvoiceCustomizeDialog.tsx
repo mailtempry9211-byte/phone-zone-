@@ -315,10 +315,11 @@ export const InvoiceCustomizeDialog = ({
             <Button
               type="button"
               onClick={() => handleSubmit("whatsapp")}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              className="bg-emerald-600 text-white hover:bg-emerald-700 font-medium shadow-sm"
+              title="व्हाट्सएप पर इनवॉइस टेक्स्ट एवं पीडीएफ दोनों भेजें"
             >
               <Send className="h-4 w-4 mr-1.5" />
-              WhatsApp
+              WhatsApp (PDF + Text)
             </Button>
           </div>
         </div>

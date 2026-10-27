@@ -4,6 +4,8 @@ export interface SendWhatsAppOptions {
   phone: string;
   message: string;
   pdfBlob?: Blob;
+  pdfBase64?: string;
+  invoiceHtml?: string;
   pdfFileName?: string;
   adminSettings?: any;
 }
@@ -26,6 +28,8 @@ export async function dispatchWhatsApp({
   phone,
   message,
   pdfBlob,
+  pdfBase64: initialPdfBase64,
+  invoiceHtml,
   pdfFileName = "document.pdf",
   adminSettings,
 }: SendWhatsAppOptions): Promise<{ success: boolean; channel: string }> {
@@ -48,32 +52,64 @@ export async function dispatchWhatsApp({
   }
   const channel = effectiveChannel || "click_to_chat";
 
-  // Check if Web Share API with files is available (Android / mobile browser / APK) when in click_to_chat mode
-  if (channel === "click_to_chat" && pdfBlob && typeof navigator !== "undefined" && navigator.canShare) {
-    try {
-      const file = new File([pdfBlob], pdfFileName, { type: "application/pdf" });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: pdfFileName,
-          text: message,
+  // Check if Web Share API with files is available (Android / mobile browser / APK)
+  if (channel === "click_to_chat") {
+    // If we have invoiceHtml but no pdfBlob, try rendering PDF from backend
+    let shareBlob = pdfBlob;
+    if (!shareBlob && invoiceHtml) {
+      try {
+        const rRes = await fetch("/api/invoices/render-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html: invoiceHtml }),
         });
-        toast.success("Shared via device WhatsApp");
-        return { success: true, channel: "web_share" };
+        if (rRes.ok) {
+          shareBlob = await rRes.blob();
+        }
+      } catch {}
+    }
+
+    if (shareBlob && typeof navigator !== "undefined" && navigator.canShare) {
+      try {
+        const file = new File([shareBlob], pdfFileName, { type: "application/pdf" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: pdfFileName,
+            text: message,
+          });
+          toast.success("Shared via device WhatsApp");
+          return { success: true, channel: "web_share" };
+        }
+      } catch (e: any) {
+        if (e.name !== "AbortError") {
+          console.warn("Web share failed, falling back to channel", e);
+        } else {
+          return { success: true, channel: "web_share_aborted" };
+        }
       }
-    } catch (e: any) {
-      if (e.name !== "AbortError") {
-        console.warn("Web share failed, falling back to channel", e);
-      } else {
-        return { success: true, channel: "web_share_aborted" };
-      }
+    }
+
+    // On Desktop browser in Click-to-chat mode: trigger download of the PDF
+    if (shareBlob) {
+      try {
+        const blobUrl = URL.createObjectURL(shareBlob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = pdfFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        toast.info("Invoice PDF downloaded. Opening WhatsApp chat to send message & attach PDF...");
+      } catch {}
     }
   }
 
   if (channel === "openwa") {
     try {
-      let pdfBase64: string | undefined = undefined;
-      if (pdfBlob) {
+      let pdfBase64 = initialPdfBase64;
+      if (!pdfBase64 && pdfBlob) {
         pdfBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -89,6 +125,7 @@ export async function dispatchWhatsApp({
           phone: cleanPhone,
           message,
           pdfBase64,
+          invoiceHtml,
           filename: pdfFileName,
           channel: "sales",
         }),

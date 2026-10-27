@@ -18,6 +18,8 @@ import RepairMatchDialog from "./RepairMatchDialog";
 import { fillPersonFields, type AadhaarData } from "@/lib/aadhaarParser";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import PostTransactionShareDialog, { type PostTransactionPhone, type PostTransactionParty } from "./PostTransactionShareDialog";
+import { buildInvoiceHtml, DEFAULT_SALE_TERMS } from "@/lib/invoiceTemplates";
 
 interface ProcessSaleDialogProps {
   phone: any;
@@ -48,6 +50,21 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
   const [repairCustomerMatch, setRepairCustomerMatch] = useState<any | null>(null);
   const [askedPhones, setAskedPhones] = useState<Set<string>>(new Set());
   const [repairImeiJobs, setRepairImeiJobs] = useState<any[]>([]);
+
+  const [adminSettings, setAdminSettings] = useState<any>(null);
+  const [postShareOpen, setPostShareOpen] = useState(false);
+  const [postShareData, setPostShareData] = useState<{
+    phone: PostTransactionPhone;
+    party: PostTransactionParty;
+    invoiceHtml: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setAdminSettings(d))
+      .catch(() => {});
+  }, []);
 
   // Cross-check: customer phone -> repair customers
   useEffect(() => {
@@ -244,10 +261,94 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to process sale.");
 
+      let customerObj: {
+        name: string;
+        phone: string;
+        address?: string;
+        id_proof_type?: string;
+        id_number?: string;
+      } = { name: "Customer", phone: "", address: "", id_proof_type: "", id_number: "" };
+
+      if (showNewCustomerForm) {
+        customerObj = {
+          name: newCustomer.name,
+          phone: newCustomer.phone,
+          address: newCustomer.address,
+          id_proof_type: newCustomer.id_proof_type,
+          id_number: newCustomer.id_number,
+        };
+      } else {
+        const found = customers?.find((c: any) => c.id === customerId);
+        if (found) {
+          customerObj = {
+            name: found.name || "",
+            phone: found.phone || "",
+            address: found.address || "",
+            id_proof_type: found.id_proof_type || "",
+            id_number: found.id_number || "",
+          };
+        }
+      }
+
+      let invoiceHtml = "";
+      try {
+        if (adminSettings) {
+          invoiceHtml = buildInvoiceHtml({
+            kind: 'sale',
+            style: 'heritage',
+            settings: adminSettings,
+            phone: {
+              ...phone,
+              selling_price: parseFloat(sellingPrice),
+              sold_date: saleDate.toISOString(),
+              customers: {
+                name: customerObj.name,
+                phone: customerObj.phone,
+                address: customerObj.address,
+                id_proof_type: customerObj.id_proof_type,
+                id_number: customerObj.id_number,
+              },
+            },
+            amount: parseFloat(sellingPrice),
+            isBroker: false,
+            brokerName: '',
+            includeSapathPatra: false,
+            photoChoice: saleDocuments.length > 0 ? 'purchase' : 'none',
+            productPhotos: phone.product_photos || [],
+            documentPhotos: saleDocuments,
+            documentLabel: 'Sale Documents',
+            terms: (adminSettings.terms_and_conditions_sale || adminSettings.terms_and_conditions || '').split('\n').filter(Boolean),
+            fallbackTerms: DEFAULT_SALE_TERMS,
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to generate sale invoice HTML for post-share", e);
+      }
+
+      setPostShareData({
+        phone: {
+          phone_name: phone.phone_name,
+          model: phone.model,
+          imei_number: phone.imei_number,
+          amount: parseFloat(sellingPrice),
+          condition: phone.condition,
+        },
+        party: {
+          name: customerObj.name,
+          phone: customerObj.phone,
+          address: customerObj.address,
+          idProofType: customerObj.id_proof_type,
+          idNumber: customerObj.id_number,
+          role: "customer",
+        },
+        invoiceHtml,
+      });
+
       toast.success("Sale processed successfully!");
       queryClient.invalidateQueries({ queryKey: ['phones'] });
       queryClient.invalidateQueries({ queryKey: ['sold-phones'] });
       onOpenChange(false);
+      setPostShareOpen(true);
     } catch (error) {
       console.error('Error processing sale:', error);
       toast.error(error instanceof Error ? error.message : "Failed to process sale");
@@ -257,6 +358,7 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -527,6 +629,18 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
         />
       )}
     </Dialog>
+
+    {/* Post-Sale WhatsApp Share Prompt Modal */}
+    <PostTransactionShareDialog
+      open={postShareOpen}
+      onOpenChange={setPostShareOpen}
+      type="sale"
+      phone={postShareData?.phone || null}
+      party={postShareData?.party || null}
+      invoiceHtml={postShareData?.invoiceHtml || ""}
+      adminSettings={adminSettings}
+    />
+    </>
   );
 };
 

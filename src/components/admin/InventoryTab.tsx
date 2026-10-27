@@ -321,6 +321,8 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
           dispatchWhatsApp({
             phone: phone.customers?.phone || '',
             message,
+            invoiceHtml,
+            pdfFileName: `Sales_Invoice_${phone.imei_number}.pdf`,
             adminSettings,
           });
         } else {
@@ -373,6 +375,8 @@ Thank you for your business with ${adminSettings?.business_name || ''}!`;
           dispatchWhatsApp({
             phone: phone.sellers?.phone || '',
             message,
+            invoiceHtml,
+            pdfFileName: `Purchase_Invoice_${phone.imei_number}.pdf`,
             adminSettings,
           });
         }

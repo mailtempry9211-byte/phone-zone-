@@ -544,6 +544,13 @@ export function buildRouter() {
   // ---------------- invoices ----------------
   r.get("/invoices", staff, wrap((req, res) => res.json(invoices.listInvoices(req.query.type))));
   r.post("/invoices", staff, wrap((req, res) => res.status(201).json(invoices.createInvoice({ ...req.body, shopId: req.body?.shopId || req.user?.shopId }))));
+  r.post("/invoices/render-pdf", staff, wrap((req, res) => {
+    const { html } = req.body || {};
+    if (!html) throw badRequest("html is required.");
+    const buf = invoices.htmlToPdfBuffer(html);
+    if (!buf) throw badRequest("Could not render PDF.");
+    res.type("application/pdf").send(buf);
+  }));
   r.get("/invoices/:id", staff, wrap((req, res) => res.json(invoices.getInvoice(req.params.id))));
   r.get("/invoices/:id/html", staff, wrap((req, res) => {
     const html = invoices.getInvoiceHtml(req.params.id);
