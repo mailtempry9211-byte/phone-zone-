@@ -423,9 +423,26 @@ function renderPhotos(c: InvoiceContent, css: string): string {
 /** The fourth design: a dark, restrained letterhead for premium listings. */
 function renderLuxury(c: InvoiceContent): string {
   const css = `
-    html,body{margin:0;padding:0}
-    body{background:#0c0d10;color:#e8e4da;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .sheet{font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#e8e4da;max-width:190mm;margin:0 auto;padding:14px 16px 22px}
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #0c0d10 !important;
+      color: #e8e4da !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .sheet {
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      color: #e8e4da !important;
+      background-color: #0c0d10 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      max-width: 190mm;
+      margin: 0 auto;
+      padding: 14px 16px 22px;
+      min-height: 100vh;
+    }
     .lux-top{display:flex;align-items:center;gap:16px;padding:16px 0 12px;border-bottom:1px solid #2a2b33}
     .lux-top .icon-box{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:#17181d;border:1px solid #2e303a;width:46px;height:46px}
     .lux-top .icon-box svg{width:24px;height:24px;color:#c9a227}
@@ -507,9 +524,34 @@ function renderLuxury(c: InvoiceContent): string {
       .lux-totals{width:100%}
       .lux-terms .terms-card{grid-template-columns:1fr}
     }
+    @page {
+      margin: 0;
+      size: A4 portrait;
+    }
     @media print{
-      body{background:#0c0d10 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-      .sheet{max-width:100% !important;padding:8mm !important}
+      html, body {
+        background-color: #0c0d10 !important;
+        color: #e8e4da !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        width: 100% !important;
+        min-height: 100% !important;
+      }
+      .sheet {
+        background-color: #0c0d10 !important;
+        color: #e8e4da !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 8mm 10mm !important;
+        box-sizing: border-box !important;
+        min-height: 100vh !important;
+      }
+      .lux-card, .lux-words, .lux-total, .lux-bank, .lux-terms .terms-card > div, .lux-signs .sign, .lux-items thead th, .lux-items td, .icon-box {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
       .lux-photos .photo{width:125px !important;max-width:125px !important;flex:0 0 125px !important}
       .lux-photos .photo .frame{height:94px !important;aspect-ratio:4/3 !important}
       .lux-photos .photo-grid{display:flex !important;flex-direction:row !important;flex-wrap:wrap !important}

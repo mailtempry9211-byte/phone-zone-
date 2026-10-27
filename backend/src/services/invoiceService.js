@@ -13,6 +13,7 @@ import { newId, badRequest } from "../lib/errors.js";
 import { businessConfig } from "../config/business.js";
 import { resolveStoragePath } from "../config/paths.js";
 import { activeFyLabel } from "./financialYearService.js";
+import * as storage from "./storageService.js";
 
 /**
  * Atomically allocates the next invoice number for a type. Never duplicates.
@@ -132,9 +133,61 @@ export function findChromePath() {
   return null;
 }
 
+export function inlineImagesForPdf(html) {
+  if (!html) return html;
+
+  // 1. Resolve /api/public/files/:id and /public/files/:id
+  let processed = html.replace(/(?:src=["'](?:\/api)?\/public\/files\/([a-zA-Z0-9\-_]+)["'])/g, (match, fileId) => {
+    try {
+      const file = storage.getFileRecord(fileId);
+      if (file) {
+        const buf = storage.readFile(file.relative_path);
+        if (buf && buf.length > 0) {
+          const mime = file.mime_type || "image/jpeg";
+          return `src="data:${mime};base64,${buf.toString("base64")}"`;
+        }
+      }
+    } catch {}
+    return match;
+  });
+
+  // 2. Resolve relative file paths if any (e.g. storage/uploads/...)
+  processed = processed.replace(/src=["'](?:file:\/\/\/)?([^"']+\.(?:png|jpe?g|webp|gif|svg))["']/gi, (match, filePath) => {
+    try {
+      if (filePath.startsWith("data:") || filePath.startsWith("http://") || filePath.startsWith("https://")) {
+        return match;
+      }
+      let abs = filePath;
+      if (!fs.existsSync(abs)) {
+        abs = resolveStoragePath(filePath);
+      }
+      if (fs.existsSync(abs)) {
+        const buf = fs.readFileSync(abs);
+        const ext = path.extname(abs).toLowerCase().replace(".", "");
+        const mime = ext === "svg" ? "image/svg+xml" : `image/${ext === "jpg" ? "jpeg" : ext}`;
+        return `src="data:${mime};base64,${buf.toString("base64")}"`;
+      }
+    } catch {}
+    return match;
+  });
+
+  // 3. Inject base href so any other relative URLs can hit local server
+  const port = process.env.PORT || 47713;
+  const baseTag = `<base href="http://127.0.0.1:${port}/">`;
+  if (processed.includes("<head>")) {
+    processed = processed.replace("<head>", `<head>\n  ${baseTag}`);
+  } else if (processed.includes("<head ")) {
+    processed = processed.replace(/<head[^>]*>/, `$& \n  ${baseTag}`);
+  }
+
+  return processed;
+}
+
 export function htmlToPdfBuffer(html) {
   const chrome = findChromePath();
   if (!chrome) return null;
+
+  const inlinedHtml = inlineImagesForPdf(html);
 
   const tempDir = os.tmpdir();
   const id = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
@@ -142,14 +195,17 @@ export function htmlToPdfBuffer(html) {
   const tempPdf = path.join(tempDir, `inv_${id}.pdf`);
 
   try {
-    fs.writeFileSync(tempHtml, html, "utf8");
+    fs.writeFileSync(tempHtml, inlinedHtml, "utf8");
     cp.spawnSync(chrome, [
       "--headless=new",
       "--disable-gpu",
+      "--no-sandbox",
+      "--allow-file-access-from-files",
+      "--enable-local-file-accesses",
       "--no-pdf-header-footer",
       `--print-to-pdf=${tempPdf}`,
       tempHtml,
-    ], { timeout: 15000 });
+    ], { timeout: 20000 });
 
     if (fs.existsSync(tempPdf)) {
       const buf = fs.readFileSync(tempPdf);

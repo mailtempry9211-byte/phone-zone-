@@ -65,7 +65,7 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
   <style>
     @page {
       size: A4 portrait;
-      margin: 12mm 15mm;
+      margin: 8mm 12mm;
     }
     * {
       box-sizing: border-box;
@@ -76,62 +76,64 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       font-family: 'Segoe UI', Arial, sans-serif;
       color: #1e293b;
       background: #ffffff;
-      line-height: 1.45;
-      font-size: 11.5px;
-      padding: 10px;
+      line-height: 1.35;
+      font-size: 10px;
+      padding: 4px;
     }
     .container {
       max-width: 800px;
       margin: 0 auto;
       border: 1.5px solid #0f172a;
-      padding: 18px 22px;
+      padding: 10px 14px;
       background: #fff;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 10px;
-      margin-bottom: 12px;
+      padding-bottom: 6px;
+      margin-bottom: 6px;
     }
     .shop-info {
       flex: 1;
     }
     .shop-title {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: #0f172a;
     }
     .shop-meta {
-      font-size: 11px;
+      font-size: 10px;
       color: #475569;
-      margin-top: 2px;
+      margin-top: 1px;
     }
     .doc-badge {
       text-align: center;
-      margin: 8px 0;
+      margin: 4px 0 6px;
       background: #f1f5f9;
-      padding: 6px 12px;
+      padding: 4px 8px;
       border-radius: 4px;
       border: 1px solid #cbd5e1;
     }
     .doc-badge h2 {
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       color: #0f172a;
       letter-spacing: 0.5px;
     }
     .doc-badge span {
-      font-size: 11px;
+      font-size: 9.5px;
       color: #64748b;
       display: block;
     }
     .photo-box {
-      width: 100px;
-      height: 120px;
+      width: 80px;
+      height: 90px;
       border: 1.5px solid #0f172a;
       background: #f8fafc;
       display: flex;
@@ -139,7 +141,7 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      margin-left: 14px;
+      margin-left: 10px;
       flex-shrink: 0;
     }
     .photo-box img {
@@ -148,29 +150,31 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
       object-fit: cover;
     }
     .photo-placeholder {
-      font-size: 9.5px;
+      font-size: 8.5px;
       color: #94a3b8;
       text-align: center;
-      padding: 6px;
+      padding: 4px;
     }
     .meta-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px 16px;
+      gap: 3px 12px;
       background: #f8fafc;
-      padding: 10px 14px;
+      padding: 6px 10px;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
-      margin-bottom: 12px;
-      font-size: 11px;
+      margin-bottom: 6px;
+      font-size: 10px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .meta-item {
       display: flex;
-      gap: 6px;
+      gap: 5px;
     }
     .meta-item strong {
       color: #334155;
-      min-width: 105px;
+      min-width: 95px;
       flex-shrink: 0;
     }
     .meta-item span {
@@ -179,22 +183,27 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
     }
     .preamble {
       font-weight: 600;
-      margin-bottom: 8px;
-      padding: 4px 6px;
+      margin-bottom: 5px;
+      padding: 3px 5px;
       background: #fff;
       border-left: 3px solid #2563eb;
-      font-size: 11px;
+      font-size: 10px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .clauses-list {
       list-style-type: decimal;
-      padding-left: 18px;
-      margin-bottom: 14px;
+      padding-left: 16px;
+      margin-bottom: 6px;
     }
     .clauses-list li {
-      margin-bottom: 7px;
-      padding-left: 4px;
-      font-size: 10.5px;
+      margin-bottom: 3px;
+      padding-left: 3px;
+      font-size: 9.5px;
+      line-height: 1.35;
       text-align: justify;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .clause-hi {
       color: #0f172a;
@@ -202,53 +211,59 @@ export function buildSapathPatraHtml(data: SapathPatraData): string {
     }
     .clause-en {
       color: #475569;
-      font-size: 10px;
+      font-size: 8.5px;
       display: block;
-      margin-top: 1px;
+      margin-top: 0.5px;
       font-style: italic;
     }
     .closing {
-      font-size: 10.5px;
+      font-size: 9.5px;
       font-weight: 600;
-      margin: 10px 0 16px 0;
+      margin: 6px 0 8px 0;
       text-align: center;
       color: #1e293b;
-      padding: 5px;
+      padding: 3px;
       border-top: 1px dashed #cbd5e1;
       border-bottom: 1px dashed #cbd5e1;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .signature-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      margin-top: 18px;
-      padding-top: 8px;
+      margin-top: 8px;
+      padding-top: 4px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .sign-block {
       text-align: center;
       width: 220px;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
     }
     .sign-box {
-      height: 70px;
+      height: 48px;
       border-bottom: 1.5px solid #0f172a;
-      margin-bottom: 6px;
+      margin-bottom: 3px;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
     }
     .sign-box img {
-      max-height: 65px;
+      max-height: 44px;
       max-width: 100%;
       object-fit: contain;
     }
     .sign-title {
       font-weight: 700;
-      font-size: 11px;
+      font-size: 10px;
       color: #0f172a;
     }
     .sign-sub {
-      font-size: 9.5px;
+      font-size: 8.5px;
       color: #64748b;
     }
     @media print {

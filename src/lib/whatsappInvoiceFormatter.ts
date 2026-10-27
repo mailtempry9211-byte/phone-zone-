@@ -273,3 +273,4 @@ Phone: ${adminSettings?.phone_primary || ""}${adminSettings?.phone_secondary ? `
 ${adminSettings?.whatsapp_number ? `WhatsApp: ${adminSettings.whatsapp_number}\n` : ""}${adminSettings?.instagram ? `Instagram: ${adminSettings.instagram}\n` : ""}${validEmail ? `Email: ${validEmail}\n` : ""}${adminSettings?.google_business_url ? `Store Location: ${adminSettings.google_business_url}\n` : ""}
 🙏 *Thank you for purchasing with ${bizName}!*`;
 }
+
