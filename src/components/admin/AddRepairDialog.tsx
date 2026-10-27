@@ -17,6 +17,7 @@ import { Wrench, Search, AlertTriangle, History, Smartphone, User, ShieldAlert, 
 import RepairHistoryPanel from "./RepairHistoryPanel";
 import ImeiScanButton from "./ImeiScanButton";
 import AadhaarScanButton from "./AadhaarScanButton";
+import RepairShareModal from "./RepairShareModal";
 import { useTacLookup } from "@/hooks/useTacLookup";
 
 interface AddRepairDialogProps {
@@ -79,6 +80,10 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
   // History & warning states
   const [imeiHistory, setImeiHistory] = useState<any[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // Job Sheet WhatsApp Dispatch Dialog
+  const [createdJobForShare, setCreatedJobForShare] = useState<any | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   // TAC Lookup & Specs Auto-fill
   const { status: tacStatus, info: tacInfo, error: tacError, fetchOnline: tacFetch } = useTacLookup(
@@ -233,7 +238,8 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
       }).catch(() => {});
 
       onSuccess();
-      onOpenChange(false);
+      setCreatedJobForShare(data);
+      setShareModalOpen(true);
     } catch (err: any) {
       toast({
         title: "Error Creating Job",
@@ -615,6 +621,21 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {/* Job Sheet WhatsApp Prompt Dialog */}
+        {createdJobForShare && (
+          <RepairShareModal
+            open={shareModalOpen}
+            onOpenChange={(isOpen) => {
+              setShareModalOpen(isOpen);
+              if (!isOpen) {
+                setCreatedJobForShare(null);
+                onOpenChange(false);
+              }
+            }}
+            job={createdJobForShare}
+            mode="jobsheet"
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -292,3 +292,111 @@ export function buildRepairInvoiceHtml({ job, customer, settings }: RepairTempla
 </html>`;
 }
 
+export function formatJobSheetWhatsAppText({ job, settings }: RepairTemplateOptions): string {
+  const s = settings || {};
+  const bizName = s.business_name || s.businessName || "PHONEZONE";
+  const phone = s.phone_primary || s.primaryPhone || "";
+  const address = s.address || "";
+  const custName = job.customer_name || "Valued Customer";
+  const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
+  const date = formatDate(job.received_at || job.created_at);
+
+  return `📱 *${bizName.toUpperCase()} - Device Repair Job Sheet*
+
+📋 *Job Sheet Details:*
+* Job No: ${job.job_no}
+* Date: ${date}
+* Customer: ${custName}
+* Device: ${device || "Mobile Device"}
+* IMEI: ${job.imei || "N/A"}
+* Reported Issue: ${job.problem || "Check & Service"}
+* Estimated Cost: ${formatInr(job.estimate || 0)}
+* Advance Paid: ${formatInr(job.advance_paid || 0)}
+
+🛡️ *Service Guidelines:*
+1. Physical slip or this WhatsApp message is required for device pickup.
+2. Estimated cost may vary based on internal diagnostic testing.
+3. Repaired parts carry service warranty.
+
+📞 *Shop Contact:*
+${address ? `${address}\n` : ""}Phone: ${phone}
+
+Thank you for choosing ${bizName}!`;
+}
+
+export function formatRepairReadyWhatsAppText({ job, settings }: RepairTemplateOptions): string {
+  const s = settings || {};
+  const bizName = s.business_name || s.businessName || "PHONEZONE";
+  const phone = s.phone_primary || s.primaryPhone || "";
+  const address = s.address || "";
+  const custName = job.customer_name || "Valued Customer";
+  const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
+  const finalPrice = job.final_price || job.estimate || 0;
+  const balance = Math.max(0, finalPrice - (job.advance_paid || 0));
+
+  return `✅ *${bizName.toUpperCase()} - Device Ready for Delivery!*
+
+Dear *${custName}*,
+Great news! Your device has been repaired and is *READY FOR PICKUP*.
+
+📱 *Device:* ${device || "Mobile Device"}
+📋 *Job No:* ${job.job_no}
+🔧 *Status:* Ready for Delivery
+💰 *Total Amount:* ${formatInr(finalPrice)}
+${job.advance_paid ? `💳 *Advance Paid:* ${formatInr(job.advance_paid)}\n` : ""}💵 *Balance to Pay:* ${formatInr(balance)}
+
+📍 *Pickup Address:*
+${address ? `${address}\n` : ""}Phone: ${phone}
+
+Please visit our store to collect your device. Thank you!`;
+}
+
+export function formatRepairDeliveredWhatsAppText({ job, settings }: RepairTemplateOptions): string {
+  const s = settings || {};
+  const bizName = s.business_name || s.businessName || "PHONEZONE";
+  const phone = s.phone_primary || s.primaryPhone || "";
+  const custName = job.customer_name || "Valued Customer";
+  const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
+
+  return `🎉 *${bizName.toUpperCase()} - Thank You for Your Visit!*
+
+Dear *${custName}*,
+Your device (*${device}*, Job: *${job.job_no}*) has been successfully *DELIVERED*.
+
+🛡️ *Service Warranty:* ${job.warranty_days || 30} Days Service Warranty on repaired parts.
+⭐ *Customer Feedback:*
+Aapka experience kaisa raha? Agar aapko hamari service pasand aayi toh please Google / store par hume 5-star review dein!
+
+Kisi bhi problem ya query ke liye call karein: ${phone}
+
+Thank you for choosing ${bizName}!`;
+}
+
+export function formatRepairInvoiceWhatsAppText({ job, settings }: RepairTemplateOptions): string {
+  const s = settings || {};
+  const bizName = s.business_name || s.businessName || "PHONEZONE";
+  const phone = s.phone_primary || s.primaryPhone || "";
+  const custName = job.customer_name || "Valued Customer";
+  const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
+  const date = formatDate(job.delivered_at || new Date());
+  const finalPrice = job.final_price || job.estimate || 0;
+
+  return `🧾 *${bizName.toUpperCase()} - Repair Tax Invoice*
+
+📋 *Invoice Reference:*
+* Invoice No: ${job.invoice_no || `INV-${job.job_no}`}
+* Job No: ${job.job_no}
+* Date: ${date}
+* Customer: ${custName}
+* Device: ${device}
+* IMEI: ${job.imei || "N/A"}
+
+💰 *Amount Details:*
+* Total Amount: ${formatInr(finalPrice)}
+* Payment Status: ${job.payment_status?.toUpperCase() || "PAID"}
+🛡️ *Warranty:* ${job.warranty_days || 30} Days Service Warranty
+
+📞 *Support:* ${phone}
+Thank you for trusting ${bizName}!`;
+}
+

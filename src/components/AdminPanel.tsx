@@ -11,6 +11,7 @@ import AuthDialog from "./admin/AuthDialog";
 import StorageUsageCard from "./admin/StorageUsageCard";
 import FinancialYearSwitcher from "./admin/FinancialYearSwitcher";
 import { ReflectPreviousYearDialog } from "./admin/ReflectPreviousYearDialog";
+import UniversalScanner from "./admin/UniversalScanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useFinancialYear } from "@/hooks/useFinancialYear";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -141,6 +142,7 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               <FinancialYearSwitcher />
+              <UniversalScanner />
               <StorageUsageCard />
               <PasswordChangeDialog />
               <Button variant="outline" onClick={onBack}>

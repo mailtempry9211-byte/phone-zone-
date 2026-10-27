@@ -8,6 +8,7 @@ export interface SendWhatsAppOptions {
   invoiceHtml?: string;
   pdfFileName?: string;
   adminSettings?: any;
+  waSessionChannel?: "sales" | "repairs";
 }
 
 export function formatWhatsAppPhone(phone: string): string {
@@ -32,6 +33,7 @@ export async function dispatchWhatsApp({
   invoiceHtml,
   pdfFileName = "document.pdf",
   adminSettings,
+  waSessionChannel = "sales",
 }: SendWhatsAppOptions): Promise<{ success: boolean; channel: string }> {
   const cleanPhone = formatWhatsAppPhone(phone);
   if (!cleanPhone) {
@@ -127,7 +129,7 @@ export async function dispatchWhatsApp({
           pdfBase64,
           invoiceHtml,
           filename: pdfFileName,
-          channel: "sales",
+          channel: waSessionChannel || "sales",
         }),
       });
 

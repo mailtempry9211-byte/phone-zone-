@@ -387,7 +387,7 @@ const scanQr = async (data: Uint8ClampedArray, w: number, h: number) => {
  *  2. crop to the lit label (barcode shot against a dark background)
  *  3. inverted full frame (light bars on a dark label)
  */
-const decodeBarcode = async (file: File | Blob): Promise<{ text: string; format: string } | null> => {
+export const decodeBarcode = async (file: File | Blob): Promise<{ text: string; format: string } | null> => {
   const bitmap = await createImageBitmap(file);
   const long = Math.max(bitmap.width, bitmap.height || 1);
   try {

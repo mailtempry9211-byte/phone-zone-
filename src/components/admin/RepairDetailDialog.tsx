@@ -22,9 +22,11 @@ import {
   CheckCircle2,
   Calendar,
   RotateCcw,
+  Send,
 } from "lucide-react";
 import { buildJobSheetHtml, buildRepairInvoiceHtml } from "@/lib/repairTemplates";
 import { printHtml } from "@/lib/printHtml";
+import RepairShareModal, { type RepairShareMode } from "./RepairShareModal";
 
 interface RepairDetailDialogProps {
   job: any;
@@ -63,6 +65,10 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
   const [reworkOpen, setReworkOpen] = useState(false);
   const [reworkReason, setReworkReason] = useState("");
   const [isSubmittingRework, setIsSubmittingRework] = useState(false);
+
+  // WhatsApp Lifecycle Share Dialog
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareMode, setShareMode] = useState<RepairShareMode>("ready");
 
   if (!job) return null;
 
@@ -108,6 +114,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
       toast({ title: "Status Updated", description: `Job marked as ${newStatus}` });
       setStatusNote("");
       onRefresh();
+
+      // Trigger automatic prompt for WhatsApp message on ready or delivered
+      if (newStatus === "ready") {
+        setShareMode("ready");
+        setShareModalOpen(true);
+      } else if (newStatus === "delivered") {
+        setShareMode("delivered");
+        setShareModalOpen(true);
+      }
     } catch (err: any) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
     } finally {
@@ -221,17 +236,48 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <Button size="sm" variant="outline" onClick={handlePrintJobSheet}>
-                <FileText className="w-4 h-4 mr-1.5 text-blue-600" />
+                <FileText className="w-4 h-4 mr-1 text-blue-600" />
                 Job Sheet
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                onClick={() => {
+                  setShareMode("jobsheet");
+                  setShareModalOpen(true);
+                }}
+              >
+                <Send className="w-3.5 h-3.5 mr-1" />
+                WA Job Sheet
+              </Button>
               <Button size="sm" variant="outline" onClick={handlePrintInvoice}>
-                <Printer className="w-4 h-4 mr-1.5 text-emerald-600" />
+                <Printer className="w-4 h-4 mr-1 text-emerald-600" />
                 Invoice
               </Button>
-              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleWhatsApp}>
-                <MessageSquare className="w-4 h-4 mr-1.5" />
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => {
+                  setShareMode("invoice");
+                  setShareModalOpen(true);
+                }}
+              >
+                <Send className="w-3.5 h-3.5 mr-1" />
+                WA Invoice
+              </Button>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => {
+                  setShareMode("custom");
+                  setShareModalOpen(true);
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" />
                 WhatsApp
               </Button>
               {job.status === "delivered" && (
@@ -462,6 +508,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
               </div>
             </div>
           )}
+
+          {/* Lifecycle WhatsApp Share Dialog */}
+          <RepairShareModal
+            open={shareModalOpen}
+            onOpenChange={setShareModalOpen}
+            job={job}
+            mode={shareMode}
+            onSuccess={() => onRefresh()}
+          />
         </div>
       </DialogContent>
     </Dialog>

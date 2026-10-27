@@ -42,9 +42,10 @@ import { buildInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates
 interface AddPhoneDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialImei?: string;
 }
 
-const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
+const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps) => {
   const queryClient = useQueryClient();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +74,12 @@ const AddPhoneDialog = ({ open, onOpenChange }: AddPhoneDialogProps) => {
       .then((d) => setAdminSettings(d))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (open && initialImei) {
+      setFormData((prev) => ({ ...prev, imei_number: initialImei }));
+    }
+  }, [open, initialImei]);
 
   const [formData, setFormData] = useState({
     // Phone details
