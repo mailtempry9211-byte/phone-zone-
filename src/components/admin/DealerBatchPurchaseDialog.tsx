@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Trash2, Smartphone, Building2, Printer, Share2, CheckCircle2, ShieldCheck, FileText, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Smartphone, Building2, Printer, Share2, CheckCircle2, ShieldCheck, FileText, AlertCircle, ScanLine, Sparkles, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
+import { Checkbox } from "@/components/ui/checkbox";
+import ImeiScanButton from "./ImeiScanButton";
 
 interface BatchPhoneItem {
   id: string;
@@ -28,6 +30,8 @@ interface BatchPhoneItem {
   bill_available: boolean;
   box_available: boolean;
   charger_available: boolean;
+  features?: string;
+  tacInfo?: any;
 }
 
 interface DealerBatchPurchaseDialogProps {
@@ -66,9 +70,11 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
       bill_available: true,
       box_available: true,
       charger_available: true,
+      features: "All Original",
     },
   ]);
 
+  const [scanningRowIndex, setScanningRowIndex] = useState<number | null>(null);
   const [createdBatch, setCreatedBatch] = useState<any | null>(null);
 
   // Fetch all dealers for dropdown
@@ -117,6 +123,7 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
         bill_available: true,
         box_available: true,
         charger_available: true,
+        features: "All Original",
       },
     ]);
   };
@@ -135,6 +142,79 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
       next[index] = { ...next[index], [field]: value };
       return next;
     });
+  };
+
+  const handleImeiChange = async (index: number, newImei: string) => {
+    const clean = newImei.replace(/\D/g, "").slice(0, 15);
+    updateRow(index, "imei", clean);
+
+    if (clean.length >= 8) {
+      try {
+        const res = await fetch(`/api/tac/${clean}`, { credentials: "include" });
+        if (res.ok) {
+          const tacData = await res.json();
+          if (tacData.found) {
+            setPhoneRows((prev) => {
+              const updated = [...prev];
+              const r = { ...updated[index] };
+              if (tacData.brand && (!r.brand || r.brand === "Apple")) r.brand = tacData.brand;
+              if (tacData.model && !r.model) r.model = tacData.model;
+              else if (tacData.phoneName && !r.model) r.model = tacData.phoneName;
+              if (tacData.variant && !r.variant) r.variant = tacData.variant;
+              if (tacData.colour && !r.colour) r.colour = tacData.colour;
+              r.tacInfo = tacData;
+              updated[index] = r;
+              return updated;
+            });
+            toast.success(`TAC Found for Row #${index + 1}: ${tacData.brand} ${tacData.phoneName || tacData.model}`);
+          } else {
+            setPhoneRows((prev) => {
+              const updated = [...prev];
+              updated[index] = { ...updated[index], tacInfo: { found: false, hasKeys: tacData.hasKeys } };
+              return updated;
+            });
+          }
+        }
+      } catch {}
+    } else {
+      setPhoneRows((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], tacInfo: undefined };
+        return updated;
+      });
+    }
+  };
+
+  const fetchOnlineTac = async (index: number, imei: string) => {
+    try {
+      toast.info(`Fetching TAC online for Row #${index + 1}...`);
+      const res = await fetch("/api/tac/fetch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ value: imei, force: true }),
+      });
+      const data = await res.json();
+      if (data.found) {
+        setPhoneRows((prev) => {
+          const updated = [...prev];
+          const r = { ...updated[index] };
+          if (data.brand) r.brand = data.brand;
+          if (data.model) r.model = data.model;
+          else if (data.phoneName) r.model = data.phoneName;
+          if (data.variant) r.variant = data.variant;
+          if (data.colour) r.colour = data.colour;
+          r.tacInfo = data;
+          updated[index] = r;
+          return updated;
+        });
+        toast.success(`Hicelltek API Found: ${data.brand || ""} ${data.phoneName || data.model || ""}`);
+      } else {
+        toast.error(data.error?.message || "Not found on online TAC database.");
+      }
+    } catch {
+      toast.error("Failed to query online TAC API.");
+    }
   };
 
   const totalBatchAmount = phoneRows.reduce((sum, p) => sum + (Number(p.purchase_price) || 0), 0);
@@ -366,7 +446,8 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
         <DialogHeader className="border-b pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -493,122 +574,216 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
               </div>
             </div>
 
-            {/* Multi-phone Table */}
-            <div className="space-y-2">
+            {/* Multi-phone Cards List */}
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                   <Smartphone className="h-4 w-4 text-sky-600" /> Phones In This Batch ({phoneRows.length})
                 </h4>
-                <Button size="sm" variant="outline" onClick={addRow} className="h-8 gap-1 text-xs border-sky-300 text-sky-700 hover:bg-sky-50">
+                <Button size="sm" variant="outline" onClick={addRow} className="h-8 gap-1 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium">
                   <Plus className="h-3.5 w-3.5" /> Add Phone (+ Row)
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-x-auto">
-                <Table className="min-w-[780px]">
-                  <TableHeader className="bg-slate-100">
-                    <TableRow>
-                      <TableHead className="w-8 text-center text-xs">#</TableHead>
-                      <TableHead className="w-32 text-xs">Brand</TableHead>
-                      <TableHead className="w-40 text-xs">Model *</TableHead>
-                      <TableHead className="w-28 text-xs">Variant</TableHead>
-                      <TableHead className="w-24 text-xs">Colour</TableHead>
-                      <TableHead className="w-44 text-xs">15-digit IMEI *</TableHead>
-                      <TableHead className="w-28 text-xs">Condition</TableHead>
-                      <TableHead className="w-32 text-xs">Purchase Price (₹) *</TableHead>
-                      <TableHead className="w-10 text-center"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {phoneRows.map((row, index) => (
-                      <TableRow key={row.id} className="hover:bg-slate-50/80">
-                        <TableCell className="text-center text-xs font-medium text-gray-500">
-                          {index + 1}
-                        </TableCell>
-                        <TableCell>
+              <div className="space-y-2.5">
+                {phoneRows.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className="border rounded-lg p-3 bg-white hover:border-sky-300 transition-all space-y-2 shadow-sm"
+                  >
+                    {/* Top Row: IMEI + Scanner, Brand, Model, Specs, Condition, Price */}
+                    <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center">
+                      {/* Index badge */}
+                      <div className="col-span-2 sm:col-span-1 text-center font-bold text-xs text-sky-800 bg-sky-50 py-1 rounded">
+                        #{index + 1}
+                      </div>
+
+                      {/* 15-digit IMEI with Scanner */}
+                      <div className="col-span-2 sm:col-span-3">
+                        <div className="flex items-center gap-1">
                           <Input
-                            size={1}
-                            placeholder="Apple / Samsung"
-                            value={row.brand}
-                            onChange={(e) => updateRow(index, "brand", e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            placeholder="e.g. iPhone 13"
-                            value={row.model}
-                            onChange={(e) => updateRow(index, "model", e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            placeholder="128GB"
-                            value={row.variant}
-                            onChange={(e) => updateRow(index, "variant", e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            placeholder="Blue"
-                            value={row.colour}
-                            onChange={(e) => updateRow(index, "colour", e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            placeholder="15-digit IMEI"
+                            placeholder="15-digit IMEI *"
                             maxLength={15}
                             value={row.imei}
-                            onChange={(e) => updateRow(index, "imei", e.target.value.replace(/\D/g, ""))}
-                            className={`h-8 text-xs font-mono ${
-                              row.imei.length === 15 ? "border-emerald-500 bg-emerald-50/20" : ""
+                            onChange={(e) => handleImeiChange(index, e.target.value)}
+                            className={`h-8 text-xs font-mono font-semibold ${
+                              row.imei.length === 15 ? "border-emerald-500 bg-emerald-50/30 text-emerald-900" : ""
                             }`}
                           />
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={row.condition}
-                            onValueChange={(val) => updateRow(index, "condition", val)}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="excellent">Excellent</SelectItem>
-                              <SelectItem value="good">Good</SelectItem>
-                              <SelectItem value="fair">Fair</SelectItem>
-                              <SelectItem value="needs_repair">Needs Repair</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            placeholder="Price"
-                            value={row.purchase_price || ""}
-                            onChange={(e) => updateRow(index, "purchase_price", Number(e.target.value))}
-                            className="h-8 text-xs font-semibold"
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
                           <Button
                             type="button"
-                            variant="ghost"
                             size="sm"
-                            onClick={() => removeRow(index)}
-                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            variant="outline"
+                            className="h-8 px-2 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 shrink-0"
+                            title="Scan IMEI Barcode or read with OCR"
+                            onClick={() => setScanningRowIndex(index)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <ScanLine className="h-3.5 w-3.5" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                        {row.tacInfo?.found && (
+                          <div className="text-[10px] text-emerald-700 flex items-center gap-1 mt-0.5 font-medium truncate">
+                            <span>✓ TAC Auto-filled: {row.tacInfo.brand} {row.tacInfo.phoneName || row.tacInfo.model}</span>
+                          </div>
+                        )}
+                        {row.tacInfo && !row.tacInfo.found && row.imei.length >= 8 && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-amber-600">TAC not in DB</span>
+                            <button
+                              type="button"
+                              onClick={() => fetchOnlineTac(index, row.imei)}
+                              className="text-[10px] text-sky-700 hover:text-sky-900 font-semibold underline flex items-center gap-0.5"
+                              title="Fetch specs online from Hicelltek API"
+                            >
+                              <Sparkles className="h-2.5 w-2.5 text-amber-500" /> Fetch Online
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Brand */}
+                      <div className="col-span-1 sm:col-span-2">
+                        <Input
+                          placeholder="Brand (e.g. Apple)"
+                          value={row.brand}
+                          onChange={(e) => updateRow(index, "brand", e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      {/* Model */}
+                      <div className="col-span-1 sm:col-span-2">
+                        <Input
+                          placeholder="Model (e.g. iPhone 13) *"
+                          value={row.model}
+                          onChange={(e) => updateRow(index, "model", e.target.value)}
+                          className="h-8 text-xs font-medium"
+                        />
+                      </div>
+
+                      {/* Variant & Colour */}
+                      <div className="col-span-2 sm:col-span-2 grid grid-cols-2 gap-1">
+                        <Input
+                          placeholder="Variant"
+                          value={row.variant}
+                          onChange={(e) => updateRow(index, "variant", e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          placeholder="Colour"
+                          value={row.colour}
+                          onChange={(e) => updateRow(index, "colour", e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      {/* Condition */}
+                      <div className="col-span-1 sm:col-span-1">
+                        <Select
+                          value={row.condition}
+                          onValueChange={(val) => updateRow(index, "condition", val)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="excellent">Excellent</SelectItem>
+                            <SelectItem value="good">Good</SelectItem>
+                            <SelectItem value="fair">Fair</SelectItem>
+                            <SelectItem value="needs_repair">Needs Repair</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Purchase Price & Delete */}
+                      <div className="col-span-1 sm:col-span-1 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          placeholder="₹ Price *"
+                          value={row.purchase_price || ""}
+                          onChange={(e) => updateRow(index, "purchase_price", Number(e.target.value))}
+                          className="h-8 text-xs font-bold text-gray-900"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeRow(index)}
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Sub-bar: Accessories Checkboxes (Bill, Box, Charger) + Features field */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs bg-slate-50/70 p-2 rounded">
+                      {/* Bill / Box / Charger Checkboxes */}
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide">Included:</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                          <Checkbox
+                            checked={row.bill_available}
+                            onCheckedChange={(c) => updateRow(index, "bill_available", !!c)}
+                          />
+                          <span>Bill</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                          <Checkbox
+                            checked={row.box_available}
+                            onCheckedChange={(c) => updateRow(index, "box_available", !!c)}
+                          />
+                          <span>Box</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                          <Checkbox
+                            checked={row.charger_available}
+                            onCheckedChange={(c) => updateRow(index, "charger_available", !!c)}
+                          />
+                          <span>Charger</span>
+                        </label>
+                      </div>
+
+                      {/* Features input with quick-add chips */}
+                      <div className="flex items-center gap-1.5 flex-1 max-w-lg min-w-[260px]">
+                        <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide shrink-0">Features:</span>
+                        <Input
+                          placeholder="e.g. All Original, Battery 88%, TrueTone (Shows on Homepage)"
+                          value={row.features || ""}
+                          onChange={(e) => updateRow(index, "features", e.target.value)}
+                          className="h-7 text-xs bg-white font-medium"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = row.features ? row.features.split(",").map(f => f.trim()) : [];
+                              if (!current.includes("All Original")) {
+                                updateRow(index, "features", [...current, "All Original"].join(", "));
+                              }
+                            }}
+                            className="text-[10px] bg-emerald-100 text-emerald-800 hover:bg-emerald-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                            title="Add 'All Original' tag for homepage"
+                          >
+                            + All Original
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = row.features ? row.features.split(",").map(f => f.trim()) : [];
+                              if (!current.includes("100% Genuine")) {
+                                updateRow(index, "features", [...current, "100% Genuine"].join(", "));
+                              }
+                            }}
+                            className="text-[10px] bg-sky-100 text-sky-800 hover:bg-sky-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                          >
+                            + Genuine
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -649,6 +824,41 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
         )}
       </DialogContent>
     </Dialog>
+
+    {/* IMEI Scanner & OCR Modal for Batch Phone Row */}
+    {scanningRowIndex !== null && (
+      <Dialog
+        open={scanningRowIndex !== null}
+        onOpenChange={(o) => {
+          if (!o) setScanningRowIndex(null);
+        }}
+      >
+        <DialogContent className="max-w-md z-[100]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-sky-800">
+              <ScanLine className="h-4 w-4 text-sky-600" />
+              Scan IMEI for Batch Row #{scanningRowIndex + 1}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 flex flex-col items-center justify-center min-h-[160px] gap-3">
+            <ImeiScanButton
+              onResult={(res) => {
+                const targetIdx = scanningRowIndex;
+                setScanningRowIndex(null);
+                if (targetIdx !== null) {
+                  handleImeiChange(targetIdx, res.imei);
+                  toast.success(`IMEI Scanned: ${res.imei}`);
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground text-center max-w-xs">
+              Barcode scan karein ya box/sticker ki photo le kar OCR se IMEI extract karein. TAC database specs auto-fill kar dega.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 };
 

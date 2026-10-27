@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-27T09:54:55.914Z
+Date             : 2026-10-27T10:21:56.855Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,7 +20,7 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-27T09:54:11.728Z
+Date             : 2026-10-27T10:21:10.096Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
@@ -62,7 +62,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A03 PASS  7 pre-stamped, 20/20 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:47107/api
+  server ready on http://127.0.0.1:47507/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -103,7 +103,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 7d8579d8-4840-4342-ac11-fab273413f14
+  A61 PASS  by-phone match returned repair customer 6faad7cb-3fc1-4a23-89cf-1c70a838dda5
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403

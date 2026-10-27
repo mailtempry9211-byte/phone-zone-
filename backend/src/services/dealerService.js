@@ -169,19 +169,25 @@ export function createBatchPurchase(data, userId) {
       const sellPrice = Number(p.selling_price || Math.round(price * 1.15));
       totalAmount += price;
 
+      const feats = Array.isArray(p.features)
+        ? p.features
+        : (typeof p.features === "string" && p.features.trim()
+            ? p.features.split(",").map((s) => s.trim()).filter(Boolean)
+            : []);
+
       db.prepare(`
         INSERT INTO phones (
           id, phone_name, model, imei_number, imei2_number, condition,
           purchase_price, selling_price, purchase_date, bill_available,
           box_available, charger_available, variant, colour,
           dealer_id, is_dealer, batch_purchase_id, seller_signature_url,
-          payment_method, financial_year, shop_id
+          payment_method, financial_year, shop_id, features
         ) VALUES (
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, 1, ?, ?,
-          ?, ?, 'shop_1'
+          ?, ?, 'shop_1', ?
         )
       `).run(
         phoneId,
@@ -202,7 +208,8 @@ export function createBatchPurchase(data, userId) {
         batchId,
         dealer.signature_url || null,
         p.payment_method || payment_method,
-        fy
+        fy,
+        JSON.stringify(feats)
       );
 
       // Create individual purchase invoice record
