@@ -103,7 +103,6 @@ export function buildJobSheetHtml({ job, customer, settings, style = "heritage" 
       <div style="display:flex;justify-content:space-between;border:${subBorder};padding:8px;background:${subCardBg};font-size:12px;margin-bottom:10px;">
         <div><b>Estimate:</b> ${formatInr(job.estimate)}</div>
         <div><b>Advance Paid:</b> ${formatInr(job.advance_paid)}</div>
-        ${Number(job.warranty_days) > 0 ? `<div><b>Warranty:</b> ${Number(job.warranty_days)} Days</div>` : ""}
         <div><b>Technician:</b> ${esc(job.technician || "Assigned Tech")}</div>
       </div>
 
@@ -249,7 +248,6 @@ export function buildRepairInvoiceHtml({ job, customer, settings, style = "herit
       <div style="font-weight:bold;font-size:11px;color:${goldAccent};text-transform:uppercase;margin-bottom:4px;">DEVICE SPECIFICATIONS</div>
       <div><b>Model:</b> ${esc(job.device_brand || "")} ${esc(job.device_model || "")}</div>
       <div><b>IMEI:</b> <span style="font-family:monospace;font-weight:bold;">${esc(job.imei || "N/A")}</span></div>
-      ${Number(job.warranty_days) > 0 ? `<div><b>Warranty Period:</b> ${Number(job.warranty_days)} Days</div>` : ""}
     </div>
   </div>
 
@@ -281,10 +279,6 @@ export function buildRepairInvoiceHtml({ job, customer, settings, style = "herit
         ${accNo ? `<div>Account No: ${esc(accNo)}</div>` : ""}
         ${ifsc ? `<div>IFSC: ${esc(ifsc)}</div>` : ""}
         ${upiId ? `<div>UPI ID: ${esc(upiId)}</div>` : ""}
-      </div>` : ""}
-      ${Number(job.warranty_days) > 0 ? `
-      <div style="font-size:10px;color:${textMuted};margin-top:10px;">
-        * Warranty covers parts serviced or replaced as stated (${Number(job.warranty_days)} Days). Does not cover physical or water damage.
       </div>` : ""}
     </div>
 
@@ -331,10 +325,6 @@ export function formatJobSheetWhatsAppText({ job, settings }: RepairTemplateOpti
   const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
   const date = formatDate(job.received_at || job.created_at);
 
-  const warrantyGuidelines = Number(job.warranty_days) > 0
-    ? `🛡️ *Service Guidelines:*\n1. Physical slip or this WhatsApp message is required for device pickup.\n2. Estimated cost may vary based on internal diagnostic testing.\n3. Repaired parts carry ${Number(job.warranty_days)} days service warranty.`
-    : `🛡️ *Service Guidelines:*\n1. Physical slip or this WhatsApp message is required for device pickup.\n2. Estimated cost may vary based on internal diagnostic testing.`;
-
   return `📱 *${bizName.toUpperCase()} - Device Repair Job Sheet*
 
 📋 *Job Sheet Details:*
@@ -347,7 +337,9 @@ export function formatJobSheetWhatsAppText({ job, settings }: RepairTemplateOpti
 * Estimated Cost: ${formatInr(job.estimate || 0)}
 * Advance Paid: ${formatInr(job.advance_paid || 0)}
 
-${warrantyGuidelines}
+🛡️ *Service Guidelines:*
+1. Physical slip or this WhatsApp message is required for device pickup.
+2. Estimated cost may vary based on internal diagnostic testing.
 
 📞 *Shop Contact:*
 ${address ? `${address}\n` : ""}Phone: ${phone}
@@ -389,16 +381,12 @@ export function formatRepairDeliveredWhatsAppText({ job, settings }: RepairTempl
   const custName = job.customer_name || "Valued Customer";
   const device = `${job.device_brand || ""} ${job.device_model || ""}`.trim();
 
-  const warrantyText = Number(job.warranty_days) > 0
-    ? `🛡️ *Service Warranty:* ${Number(job.warranty_days)} Days Service Warranty on repaired parts.\n`
-    : "";
-
   return `🎉 *${bizName.toUpperCase()} - Thank You for Your Visit!*
 
 Dear *${custName}*,
 Your device (*${device}*, Job: *${job.job_no}*) has been successfully *DELIVERED*.
 
-${warrantyText}⭐ *Customer Feedback:*
+⭐ *Customer Feedback:*
 Aapka experience kaisa raha? Agar aapko hamari service pasand aayi toh please Google / store par hume 5-star review dein!
 
 Kisi bhi problem ya query ke liye call karein: ${phone}
@@ -415,10 +403,6 @@ export function formatRepairInvoiceWhatsAppText({ job, settings }: RepairTemplat
   const date = formatDate(job.delivered_at || new Date());
   const finalPrice = job.final_price || job.estimate || 0;
 
-  const warrantyLine = Number(job.warranty_days) > 0
-    ? `* 🛡️ Warranty: ${Number(job.warranty_days)} Days Service Warranty\n`
-    : "";
-
   return `🧾 *${bizName.toUpperCase()} - Repair Tax Invoice*
 
 📋 *Invoice Reference:*
@@ -432,7 +416,7 @@ export function formatRepairInvoiceWhatsAppText({ job, settings }: RepairTemplat
 💰 *Amount Details:*
 * Total Amount: ${formatInr(finalPrice)}
 * Payment Status: ${job.payment_status?.toUpperCase() || "PAID"}
-${warrantyLine}
+
 📞 *Support:* ${phone}
 Thank you for trusting ${bizName}!`;
 }

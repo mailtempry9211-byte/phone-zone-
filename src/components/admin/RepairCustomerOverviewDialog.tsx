@@ -278,10 +278,24 @@ export const RepairCustomerOverviewDialog: React.FC<RepairCustomerOverviewDialog
                   const balance = Number(job.balance_due || 0);
                   const isPaid = job.is_fully_paid || balance <= 0;
 
+                  const wDays = Number(job.warranty_days || 0);
+                  let isWarrantyActive = false;
+                  let daysRemaining = 0;
+                  if (wDays > 0) {
+                    const baseDate = new Date(job.delivered_at || job.updated_at || job.created_at);
+                    const diffDays = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
+                    daysRemaining = Math.max(0, wDays - diffDays);
+                    isWarrantyActive = daysRemaining > 0;
+                  }
+
                   return (
                     <div
                       key={job.id}
-                      className="border rounded-lg p-3.5 bg-white hover:border-indigo-300 transition-all shadow-sm space-y-2.5"
+                      className={`border rounded-lg p-3.5 transition-all shadow-sm space-y-2.5 ${
+                        isWarrantyActive
+                          ? "border-2 border-blue-500 bg-blue-50/30"
+                          : "bg-white hover:border-indigo-300"
+                      }`}
                     >
                       {/* Top Bar: Job No, Status, Device, Date */}
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
@@ -291,6 +305,12 @@ export const RepairCustomerOverviewDialog: React.FC<RepairCustomerOverviewDialog
                           </span>
                           {job.is_rework === 1 && (
                             <Badge className="bg-amber-600 text-white text-[10px]">REWORK</Badge>
+                          )}
+                          {isWarrantyActive && (
+                            <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold flex items-center gap-1 shadow-xs">
+                              <ShieldCheck className="h-2.5 w-2.5" />
+                              {daysRemaining}d Warranty Active
+                            </Badge>
                           )}
                           {getStatusBadge(job.status)}
                           <span className="text-xs font-semibold text-gray-800 flex items-center gap-1">

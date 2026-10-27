@@ -175,19 +175,23 @@ export function createBatchPurchase(data, userId) {
             ? p.features.split(",").map((s) => s.trim()).filter(Boolean)
             : []);
 
+      const photos = Array.isArray(p.product_photos)
+        ? p.product_photos
+        : [];
+
       db.prepare(`
         INSERT INTO phones (
           id, phone_name, model, imei_number, imei2_number, condition,
           purchase_price, selling_price, purchase_date, bill_available,
           box_available, charger_available, variant, colour,
           dealer_id, is_dealer, batch_purchase_id, seller_signature_url,
-          payment_method, financial_year, shop_id, features
+          payment_method, financial_year, shop_id, features, product_photos
         ) VALUES (
           ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, 1, ?, ?,
-          ?, ?, 'shop_1', ?
+          ?, ?, 'shop_1', ?, ?
         )
       `).run(
         phoneId,
@@ -209,16 +213,17 @@ export function createBatchPurchase(data, userId) {
         dealer.signature_url || null,
         p.payment_method || payment_method,
         fy,
-        JSON.stringify(feats)
+        JSON.stringify(feats),
+        JSON.stringify(photos)
       );
 
-      // Create individual purchase invoice record
+      // Create individual purchase invoice record (correct column: invoice_type)
       const invId = newId();
       const singleInvNo = nextInvoiceNumber("purchase", "shop_1");
       db.prepare(`
-        INSERT INTO invoices (id, invoice_number, type, phone_id, amount, shop_id)
-        VALUES (?, ?, 'purchase', ?, ?, 'shop_1')
-      `).run(invId, singleInvNo, phoneId, price);
+        INSERT INTO invoices (id, invoice_number, invoice_type, phone_id, amount, shop_id, financial_year)
+        VALUES (?, ?, 'purchase', ?, ?, 'shop_1', ?)
+      `).run(invId, singleInvNo, phoneId, price, fy);
 
       insertedPhones.push({ id: phoneId, imei, model: p.model, price });
 

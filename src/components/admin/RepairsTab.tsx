@@ -26,6 +26,7 @@ import {
   Phone,
   MessageSquare,
   Smartphone,
+  ShieldCheck,
 } from "lucide-react";
 import AddRepairDialog from "./AddRepairDialog";
 import RepairDetailDialog from "./RepairDetailDialog";
@@ -352,20 +353,41 @@ export const RepairsTab: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {jobs.map((job) => (
-                        <tr
-                          key={job.id}
-                          className="hover:bg-gray-50/80 transition-colors cursor-pointer"
-                          onClick={() => handleOpenDetail(job.id)}
-                        >
-                          <td className="p-3 font-semibold text-indigo-700 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              {job.job_no}
-                              {job.is_rework === 1 && (
-                                <Badge className="bg-amber-600 text-[10px] px-1 py-0">REWORK</Badge>
-                              )}
-                            </div>
-                          </td>
+                      {jobs.map((job) => {
+                        const wDays = Number(job.warranty_days || 0);
+                        let isWarrantyActive = false;
+                        let daysRemaining = 0;
+                        if (wDays > 0) {
+                          const baseDate = new Date(job.delivered_at || job.updated_at || job.created_at);
+                          const diffDays = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
+                          daysRemaining = Math.max(0, wDays - diffDays);
+                          isWarrantyActive = daysRemaining > 0;
+                        }
+
+                        return (
+                          <tr
+                            key={job.id}
+                            className={`transition-colors cursor-pointer ${
+                              isWarrantyActive
+                                ? "bg-blue-50/50 hover:bg-blue-100/60 border-l-4 border-l-blue-600"
+                                : "hover:bg-gray-50/80"
+                            }`}
+                            onClick={() => handleOpenDetail(job.id)}
+                          >
+                            <td className="p-3 font-semibold text-indigo-700 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{job.job_no}</span>
+                                {job.is_rework === 1 && (
+                                  <Badge className="bg-amber-600 text-[10px] px-1 py-0">REWORK</Badge>
+                                )}
+                                {isWarrantyActive && (
+                                  <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold px-1.5 py-0 flex items-center gap-1 shadow-xs" title="Internal Service Warranty Active">
+                                    <ShieldCheck className="w-2.5 h-2.5" />
+                                    {daysRemaining}d Warranty
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
                           <td className="p-3">
                             <div className="font-medium text-gray-900">{job.customer_name}</div>
                             <div className="text-xs text-gray-500">{job.customer_phone}</div>
@@ -452,7 +474,7 @@ export const RepairsTab: React.FC = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      ); })}
                     </tbody>
                   </table>
                 </div>

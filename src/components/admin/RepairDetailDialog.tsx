@@ -341,19 +341,32 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
               <div><b>Accessories:</b> {job.accessories_received || "None"}</div>
             </div>
 
-            {/* Service Warranty Controls */}
+            {/* Service Warranty Controls (Internal Tracking Only) */}
             <div className="sm:col-span-2 pt-2 border-t mt-1 flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded border">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700 text-xs">Service Warranty:</span>
-                {Number(job.warranty_days) > 0 ? (
-                  <Badge className="bg-emerald-600 text-white font-medium hover:bg-emerald-700 text-xs">
-                    🛡️ {job.warranty_days} Days Active
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
-                    ❌ OFF (No Warranty)
-                  </Badge>
-                )}
+                <span className="font-semibold text-gray-700 text-xs">Internal Warranty (Shop Only):</span>
+                {(() => {
+                  const wDays = Number(job.warranty_days || 0);
+                  if (wDays <= 0) {
+                    return (
+                      <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
+                        ❌ OFF (No Warranty)
+                      </Badge>
+                    );
+                  }
+                  const baseDate = new Date(job.delivered_at || job.updated_at || job.created_at);
+                  const diffDays = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
+                  const daysRemaining = Math.max(0, wDays - diffDays);
+                  return daysRemaining > 0 ? (
+                    <Badge className="bg-blue-600 text-white font-semibold hover:bg-blue-700 text-xs shadow-xs">
+                      🛡️ {daysRemaining} Days Active (of {wDays}d)
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
+                      ⏱️ Expired ({wDays}d passed)
+                    </Badge>
+                  );
+                })()}
               </div>
 
               {!isEditingWarranty ? (

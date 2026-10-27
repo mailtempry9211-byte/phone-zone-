@@ -76,7 +76,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
   const [estimate, setEstimate] = useState("");
   const [advancePaid, setAdvancePaid] = useState("");
   const [technician, setTechnician] = useState("");
-  const [hasWarranty, setHasWarranty] = useState(true);
+  const [hasWarranty, setHasWarranty] = useState(false);
   const [warrantyDays, setWarrantyDays] = useState("30");
 
   // History & warning states
@@ -632,9 +632,11 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
             <div className="col-span-1 sm:col-span-3 border rounded-md p-2.5 bg-slate-50 flex flex-wrap items-center justify-between gap-3 mt-1">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-gray-700">Service Warranty Period</span>
+                  <span className="text-xs font-semibold text-gray-700">Service Warranty (Internal Tracking Only)</span>
                   <span className="text-[11px] text-gray-500">
-                    {hasWarranty ? "Warranty active on invoice & job sheet" : "Warranty turned OFF (hidden from all templates)"}
+                    {hasWarranty
+                      ? "Active in workshop system (highlighted in blue). Hidden from customer bills."
+                      : "Default: OFF (Hidden everywhere. Give only to selected customers)."}
                   </span>
                 </div>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
@@ -643,7 +645,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                     onClick={() => setHasWarranty(true)}
                     className={`px-3 py-1 text-xs font-semibold rounded-l-md border transition-colors ${
                       hasWarranty
-                        ? "bg-emerald-600 text-white border-emerald-600"
+                        ? "bg-blue-600 text-white border-blue-600"
                         : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                     }`}
                   >
@@ -654,7 +656,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                     onClick={() => setHasWarranty(false)}
                     className={`px-3 py-1 text-xs font-semibold rounded-r-md border-t border-b border-r transition-colors ${
                       !hasWarranty
-                        ? "bg-rose-600 text-white border-rose-600"
+                        ? "bg-slate-700 text-white border-slate-700"
                         : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                     }`}
                   >
@@ -665,12 +667,12 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
 
               {hasWarranty && (
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="warranty" className="text-xs whitespace-nowrap font-medium text-gray-700">Warranty Days:</Label>
+                  <Label htmlFor="warranty" className="text-xs whitespace-nowrap font-medium text-gray-700">Internal Warranty Days:</Label>
                   <Input
                     id="warranty"
                     type="number"
                     min="1"
-                    className="w-24 h-8 text-xs bg-white font-medium"
+                    className="w-24 h-8 text-xs bg-white font-medium border-blue-300"
                     placeholder="e.g. 30, 40"
                     value={warrantyDays}
                     onChange={(e) => setWarrantyDays(e.target.value)}

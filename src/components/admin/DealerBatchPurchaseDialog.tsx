@@ -8,11 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Trash2, Smartphone, Building2, Printer, Share2, CheckCircle2, ShieldCheck, FileText, AlertCircle, ScanLine, Sparkles, CheckSquare } from "lucide-react";
+import { Plus, Trash2, Smartphone, Building2, Printer, Share2, CheckCircle2, ShieldCheck, FileText, AlertCircle, ScanLine, Sparkles, CheckSquare, Camera, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/utils/imageCompression";
 import ImeiScanButton from "./ImeiScanButton";
 
 interface BatchPhoneItem {
@@ -32,6 +34,7 @@ interface BatchPhoneItem {
   charger_available: boolean;
   features?: string;
   tacInfo?: any;
+  product_photos?: string[];
 }
 
 interface DealerBatchPurchaseDialogProps {
@@ -71,11 +74,47 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
       box_available: true,
       charger_available: true,
       features: "All Original",
+      product_photos: [],
     },
   ]);
 
   const [scanningRowIndex, setScanningRowIndex] = useState<number | null>(null);
   const [createdBatch, setCreatedBatch] = useState<any | null>(null);
+  const [uploadingRowIndex, setUploadingRowIndex] = useState<number | null>(null);
+
+  const handleRowPhotoUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const current = phoneRows[index]?.product_photos || [];
+    if (current.length + e.target.files.length > 4) {
+      toast.error("Maximum 4 product photos per phone");
+      return;
+    }
+    setUploadingRowIndex(index);
+    try {
+      const newUrls: string[] = [];
+      for (const file of Array.from(e.target.files)) {
+        const compressed = await compressImage(file, 300);
+        const ext = compressed.name.split('.').pop() || 'jpg';
+        const path = `product-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
+        const { error } = await supabase.storage.from('phonezone-uploads').upload(path, compressed);
+        if (error) throw error;
+        const { data } = supabase.storage.from('phonezone-uploads').getPublicUrl(path);
+        newUrls.push(data.publicUrl);
+      }
+      updateRow(index, "product_photos", [...current, ...newUrls]);
+      toast.success(`${newUrls.length} photo(s) attached`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload photo");
+    } finally {
+      setUploadingRowIndex(null);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const removeRowPhoto = (rowIndex: number, photoIndex: number) => {
+    const current = phoneRows[rowIndex]?.product_photos || [];
+    updateRow(rowIndex, "product_photos", current.filter((_, i) => i !== photoIndex));
+  };
 
   // Fetch all dealers for dropdown
   const { data: dealers = [] } = useQuery({
@@ -124,6 +163,7 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
         box_available: true,
         charger_available: true,
         features: "All Original",
+        product_photos: [],
       },
     ]);
   };
@@ -600,14 +640,14 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                     className="border rounded-lg p-3 bg-white hover:border-sky-300 transition-all space-y-2 shadow-sm"
                   >
                     {/* Top Row: IMEI + Scanner, Brand, Model, Specs, Condition, Price */}
-                    <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center">
+                    <div className="flex flex-wrap items-center gap-2">
                       {/* Index badge */}
-                      <div className="col-span-2 sm:col-span-1 text-center font-bold text-xs text-sky-800 bg-sky-50 py-1 rounded">
+                      <div className="font-bold text-xs text-sky-800 bg-sky-50 py-1.5 px-2.5 rounded shrink-0">
                         #{index + 1}
                       </div>
 
                       {/* 15-digit IMEI with Scanner */}
-                      <div className="col-span-2 sm:col-span-3">
+                      <div className="flex-1 min-w-[210px] max-w-[280px]">
                         <div className="flex items-center gap-1">
                           <Input
                             placeholder="15-digit IMEI *"
@@ -631,7 +671,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                         </div>
                         {row.tacInfo?.found && (
                           <div className="text-[10px] text-emerald-700 flex items-center gap-1 mt-0.5 font-medium truncate">
-                            <span>✓ TAC Auto-filled: {row.tacInfo.brand} {row.tacInfo.phoneName || row.tacInfo.model}</span>
+                            <span>✓ TAC: {row.tacInfo.brand} {row.tacInfo.phoneName || row.tacInfo.model}</span>
                           </div>
                         )}
                         {row.tacInfo && !row.tacInfo.found && row.imei.length >= 8 && (
@@ -641,7 +681,6 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                               type="button"
                               onClick={() => fetchOnlineTac(index, row.imei)}
                               className="text-[10px] text-sky-700 hover:text-sky-900 font-semibold underline flex items-center gap-0.5"
-                              title="Fetch specs online from Hicelltek API"
                             >
                               <Sparkles className="h-2.5 w-2.5 text-amber-500" /> Fetch Online
                             </button>
@@ -650,9 +689,9 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       </div>
 
                       {/* Brand */}
-                      <div className="col-span-1 sm:col-span-2">
+                      <div className="w-24 sm:w-28 shrink-0">
                         <Input
-                          placeholder="Brand (e.g. Apple)"
+                          placeholder="Brand *"
                           value={row.brand}
                           onChange={(e) => updateRow(index, "brand", e.target.value)}
                           className="h-8 text-xs"
@@ -660,7 +699,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       </div>
 
                       {/* Model */}
-                      <div className="col-span-1 sm:col-span-2">
+                      <div className="flex-1 min-w-[130px] max-w-[200px]">
                         <Input
                           placeholder="Model (e.g. iPhone 13) *"
                           value={row.model}
@@ -670,13 +709,15 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       </div>
 
                       {/* Variant & Colour */}
-                      <div className="col-span-2 sm:col-span-2 grid grid-cols-2 gap-1">
+                      <div className="w-24 shrink-0">
                         <Input
                           placeholder="Variant"
                           value={row.variant}
                           onChange={(e) => updateRow(index, "variant", e.target.value)}
                           className="h-8 text-xs"
                         />
+                      </div>
+                      <div className="w-24 shrink-0">
                         <Input
                           placeholder="Colour"
                           value={row.colour}
@@ -686,7 +727,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       </div>
 
                       {/* Condition */}
-                      <div className="col-span-1 sm:col-span-1">
+                      <div className="w-28 shrink-0">
                         <Select
                           value={row.condition}
                           onValueChange={(val) => updateRow(index, "condition", val)}
@@ -703,29 +744,35 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                         </Select>
                       </div>
 
-                      {/* Purchase Price & Delete */}
-                      <div className="col-span-1 sm:col-span-1 flex items-center gap-1">
-                        <Input
-                          type="number"
-                          placeholder="₹ Price *"
-                          value={row.purchase_price || ""}
-                          onChange={(e) => updateRow(index, "purchase_price", Number(e.target.value))}
-                          className="h-8 text-xs font-bold text-gray-900"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeRow(index)}
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      {/* Purchase Price - Spacious, bold, clearly readable */}
+                      <div className="w-32 sm:w-36 shrink-0">
+                        <div className="relative flex items-center">
+                          <span className="absolute left-2.5 text-xs font-bold text-gray-500">₹</span>
+                          <Input
+                            type="number"
+                            placeholder="Cost Price *"
+                            value={row.purchase_price || ""}
+                            onChange={(e) => updateRow(index, "purchase_price", Number(e.target.value))}
+                            className="h-8 pl-6 pr-2 text-xs font-bold text-gray-900 border-2 border-emerald-300 focus:border-emerald-600 bg-emerald-50/20"
+                          />
+                        </div>
                       </div>
+
+                      {/* Delete */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRow(index)}
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                        title="Remove phone from batch"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
 
-                    {/* Sub-bar: Accessories Checkboxes (Bill, Box, Charger) + Features field */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs bg-slate-50/70 p-2 rounded">
+                    {/* Sub-bar: Accessories Checkboxes + Features field + Photos */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t text-xs bg-slate-50/70 p-2.5 rounded">
                       {/* Bill / Box / Charger Checkboxes */}
                       <div className="flex items-center gap-3">
                         <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide">Included:</span>
@@ -753,10 +800,10 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       </div>
 
                       {/* Features input with quick-add chips */}
-                      <div className="flex items-center gap-1.5 flex-1 max-w-lg min-w-[260px]">
+                      <div className="flex items-center gap-1.5 flex-1 max-w-md min-w-[240px]">
                         <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide shrink-0">Features:</span>
                         <Input
-                          placeholder="e.g. All Original, Battery 88%, TrueTone (Shows on Homepage)"
+                          placeholder="e.g. All Original, Battery 88% (Homepage Display)"
                           value={row.features || ""}
                           onChange={(e) => updateRow(index, "features", e.target.value)}
                           className="h-7 text-xs bg-white font-medium"
@@ -788,6 +835,45 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                             + Genuine
                           </button>
                         </div>
+                      </div>
+
+                      {/* Product Photos Upload & Thumbnails */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="hidden"
+                            disabled={uploadingRowIndex === index}
+                            onChange={(e) => handleRowPhotoUpload(index, e)}
+                          />
+                          <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100 transition-colors">
+                            {uploadingRowIndex === index ? (
+                              <><Loader2 className="h-3 w-3 animate-spin text-sky-600" /> Uploading...</>
+                            ) : (
+                              <><Camera className="h-3.5 w-3.5 text-sky-600" /> 📷 Photos ({row.product_photos?.length || 0}/4)</>
+                            )}
+                          </div>
+                        </label>
+
+                        {row.product_photos && row.product_photos.length > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            {row.product_photos.map((url, pIdx) => (
+                              <div key={pIdx} className="relative group w-7 h-7 rounded border overflow-hidden shrink-0">
+                                <img src={url} alt="Phone photo" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => removeRowPhoto(index, pIdx)}
+                                  className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                  title="Remove photo"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
