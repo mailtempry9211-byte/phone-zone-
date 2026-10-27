@@ -467,7 +467,7 @@ export function cleanAadhaarAddress(text) {
 
   let combined = collected
     .join(", ")
-    .replace(/[£©®§@¢¥°±~^*\"'{}\[\]|<>\\_#$]/g, " ")
+    .replace(/[£©®§@¢¥°±~^*\"'{}\[\]|<>\\_#$%\&]/g, " ")
     .replace(/[\s,.:;"'|\-]+$/, "")
     .replace(/\s{2,}/g, " ")
     .replace(/,\s*,/g, ", ")
@@ -499,6 +499,7 @@ export function cleanAadhaarAddress(text) {
   combined = combined.replace(/\bDIST[.:]?\s*(?:Seapur|Skapur|Saapur|Shapes|Sitapwr|Shags?)\b/gi, "DIST: Sitapur");
   combined = combined.replace(/\b(?:Somer|Umer|mer|Unar|Meta|Praglesh|Oar|Praiosh)\s*Pradesh\b/gi, "Uttar Pradesh");
   combined = combined.replace(/\b[A-Za-z]\s+Uttar\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/\bUttar\s+[a-zA-Z]\s*,?\s*Pradesh\b/gi, "Uttar Pradesh");
   combined = combined.replace(/\bUttar\s*,\s*Pradesh\b/gi, "Uttar Pradesh");
   combined = combined.replace(/,\s*[A-Za-z]\s+number\b/gi, ", number");
   // Universal UP Postal circle rule: any state token before PIN starting with 2 is Uttar Pradesh
@@ -520,6 +521,13 @@ export function cleanAadhaarAddress(text) {
   combined = combined.replace(/,\s*,+/g, ", ");
   combined = combined.replace(/,\s*,+/g, ", ");
 
+  // Clean stray single numbers before landmarks and stray letters before Pradesh
+  combined = combined.replace(/,\s*\d\s+(?=Tola|Mohalla|Village|House|Gali|Ward|PO|Dist)/gi, ", ");
+  combined = combined.replace(/\bUttar\s*,\s*[a-zA-Z0-9]?\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/\bUttar\s+[a-zA-Z0-9]?\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/\bUttar\s*,\s*Pradesh\b/gi, "Uttar Pradesh");
+  combined = combined.replace(/([a-zA-Z]+)\)(?=\s+[a-zA-Z])/g, "$1j");
+
   // Truncate anything after the 6-digit PIN code
   const pinMatch = combined.match(/(.*\b\d{6}\b)/);
   if (pinMatch) {
@@ -533,12 +541,24 @@ function rateAddressQuality(addr) {
   if (!addr || addr.length < 8) return -999;
   let score = 100;
   if (/\b\d{6}\b/.test(addr)) score += 60;
-  if (/^[SDWC]\/O:/i.test(addr)) score += 40;
+  if (/^[SDWC]\/O:/i.test(addr)) score += 50;
+
+  // Real English keywords bonus
+  const kwMatches = addr.match(/\b(?:House|number|H\.N\.|PO|DIST|District|Pradesh|Road|Mohalla|Village|Colony|Nagar|Tola|Floor|Flat|Street|Near|Opposite|Bazar|Bazaar|Ward|Thana|Tehsil)\b/gi) || [];
+  score += kwMatches.length * 20;
 
   // Heavily penalize Hindi OCR leakage / non-English transliteration garbage
-  const noiseMatch = addr.match(/\b(?:eRe|dwar|SES|FFE|Aaa|Arary|aTy|3c|eel|FETA|FHSIHS|MTHS|AHA|SETS|GEE|Hamat|dary|REE|weer)\b/gi);
+  const noiseMatch = addr.match(/\b(?:eRe|dwar|SES|FFE|Aaa|Arary|aTy|3c|eel|FETA|FHSIHS|MTHS|AHA|SETS|GEE|Hamat|dary|REE|weer|FETS|FarHEl|AEN|Ica|gee|aweer|drage|h&)\b/gi);
   if (noiseMatch) {
-    score -= noiseMatch.length * 60;
+    score -= noiseMatch.length * 70;
+  }
+
+  // Penalize non-English uppercase clusters
+  const capsNoise = addr.match(/\b[A-Z]{4,}\b/g) || [];
+  for (const c of capsNoise) {
+    if (!/^(?:HOUSE|VILLAGE|DISTRICT|PRADESH|MOHALLA|COLONY|NAGAR|ROAD|STREET|UTTAR|POST)$/i.test(c)) {
+      score -= 30;
+    }
   }
 
   // Penalize isolated 1-2 letter noise fragments between commas
@@ -554,7 +574,6 @@ function rateAddressQuality(addr) {
     if (w.length >= 3 && /^[A-Za-z0-9]+$/.test(w)) cleanWords++;
   }
 
-  // Cap cleanWords bonus so oversized noisy strings cannot outscore a concise, pristine address
   score += Math.min(cleanWords * 5, 50);
   return score;
 }
@@ -761,15 +780,31 @@ export async function ocrAadhaarBuffer(buffer, side) {
 
   if (!isFront) {
     const candidateRegions = [
-      // Region 1: Right Column (Standard Indian Aadhaar Letter card format: English address on right half, Hindi address on left half)
+      // Region 1: PVC Card Left Half (English is in lower-left, Hindi in upper-left; width < 68% cuts off right-side QR code!)
       {
-        name: "RightColumn",
+        name: "PvcLeftHalf",
+        left: Math.round(curMeta.width * 0.02),
+        top: Math.round(curMeta.height * 0.18),
+        width: Math.round(curMeta.width * 0.66),
+        height: Math.round(curMeta.height * 0.55),
+      },
+      // Region 2: Classic Letter Aadhaar - Right Column (English is on the right half, Hindi on the left half)
+      {
+        name: "ClassicRightColumn",
         left: Math.round(curMeta.width * 0.44),
         top: Math.round(curMeta.height * 0.10),
         width: Math.round(curMeta.width * 0.54),
         height: Math.round(curMeta.height * 0.58),
       },
-      // Region 2: Left Column (Modern PVC/Card format: English address on left half, QR code on right half)
+      // Region 3: PVC Lower-Left (English only, strictly below Hindi address line, left of QR code)
+      {
+        name: "PvcLowerLeft",
+        left: Math.round(curMeta.width * 0.02),
+        top: Math.round(curMeta.height * 0.35),
+        width: Math.round(curMeta.width * 0.66),
+        height: Math.round(curMeta.height * 0.35),
+      },
+      // Region 4: Classic Left Column (PVC format with QR on right, or left-aligned English)
       {
         name: "LeftColumn",
         left: Math.round(curMeta.width * 0.02),
@@ -777,7 +812,7 @@ export async function ocrAadhaarBuffer(buffer, side) {
         width: Math.round(curMeta.width * 0.52),
         height: Math.round(curMeta.height * 0.58),
       },
-      // Region 3: Upper-middle band (wider crop in case card is shifted or single-block)
+      // Region 5: Upper-middle band (wider crop in case card is shifted or single-block)
       {
         name: "UpperBand",
         left: Math.round(curMeta.width * 0.03),
@@ -785,7 +820,7 @@ export async function ocrAadhaarBuffer(buffer, side) {
         width: Math.round(curMeta.width * 0.94),
         height: Math.round(curMeta.height * 0.62),
       },
-      // Region 4: Full frame (last resort fallback)
+      // Region 6: Full frame (last resort fallback)
       {
         name: "FullFrame",
         left: 0,
@@ -826,12 +861,11 @@ export async function ocrAadhaarBuffer(buffer, side) {
 
         if (nAddr) {
           let q = rateAddressQuality(nAddr);
-          // Bonus if obtained from clean isolated column
-          if (reg.name === "RightColumn" || reg.name === "LeftColumn") {
+          // Bonus if obtained from clean isolated column/quadrant
+          if (reg.name === "ClassicRightColumn" || reg.name === "PvcLeftHalf" || reg.name === "PvcLowerLeft" || reg.name === "LeftColumn") {
             q += 40;
           }
           addrList.push({ addr: nAddr, score: q });
-          if (q >= 190) break; // High quality address found with PIN code and clean words
         }
       } catch (_e) {}
     }
@@ -844,43 +878,56 @@ export async function ocrAadhaarBuffer(buffer, side) {
     address = addrList[0]?.addr || null;
   }
 
-  // Step 3: Extract Aadhaar Number (dedicated bottom band crop + full text)
+  // Step 3: Extract Aadhaar Number (dedicated multi-band crops + full text)
   let idNumber = "";
   let checksumOk = false;
 
-  const bottomCrop = {
-    left: Math.round(curMeta.width * 0.08),
-    top: Math.round(curMeta.height * 0.62),
-    width: Math.round(curMeta.width * 0.84),
-    height: Math.round(curMeta.height * 0.35),
-  };
+  const numberBands = [
+    // Band 1: Wide middle-to-bottom (45% to 85% height) - handles portrait photos with borders and PVC cards
+    {
+      left: Math.round(curMeta.width * 0.05),
+      top: Math.round(curMeta.height * 0.45),
+      width: Math.round(curMeta.width * 0.90),
+      height: Math.round(curMeta.height * 0.42),
+    },
+    // Band 2: Very bottom (60% to 95% height) - classic letter card format
+    {
+      left: Math.round(curMeta.width * 0.08),
+      top: Math.round(curMeta.height * 0.60),
+      width: Math.round(curMeta.width * 0.84),
+      height: Math.round(curMeta.height * 0.36),
+    },
+  ];
 
-  for (const th of [0, 115, 135]) {
-    try {
-      let p = sharp(rotBuf).extract(bottomCrop).resize({ width: 1200 }).grayscale();
-      if (th > 0) p = p.threshold(th);
-      else p = p.normalize().sharpen();
-      const b = await p.png().toBuffer();
-      await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
-      const res = await worker.recognize(b);
-      const text = res.data?.text || "";
-      const nums = text.match(/\b([0-9OoQlI|!SsBb]{4}[ -]?){2}[0-9OoQlI|!SsBb]{4}\b/g) || [];
-      for (const n of nums) {
-        const clean = normalizeOcrDigits(n).replace(/\D/g, "");
-        if (clean.length === 12 && verhoeffValidate(clean)) {
-          idNumber = clean;
-          checksumOk = true;
-          break;
+  for (const bottomCrop of numberBands) {
+    if (idNumber && checksumOk) break;
+    for (const th of [0, 115, 135]) {
+      try {
+        let p = sharp(rotBuf).extract(bottomCrop).resize({ width: 1200 }).grayscale();
+        if (th > 0) p = p.threshold(th);
+        else p = p.normalize().sharpen();
+        const b = await p.png().toBuffer();
+        await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
+        const res = await worker.recognize(b);
+        const text = res.data?.text || "";
+        const nums = text.match(/\b([0-9OoQlI|!SsBb]{4}[ -]?){2}[0-9OoQlI|!SsBb]{4}\b/g) || [];
+        for (const n of nums) {
+          const clean = normalizeOcrDigits(n).replace(/\D/g, "");
+          if (clean.length === 12 && verhoeffValidate(clean)) {
+            idNumber = clean;
+            checksumOk = true;
+            break;
+          }
+          const rep = repairAadhaar(clean);
+          if (rep) {
+            idNumber = rep;
+            checksumOk = true;
+            break;
+          }
         }
-        const rep = repairAadhaar(clean);
-        if (rep) {
-          idNumber = rep;
-          checksumOk = true;
-          break;
-        }
-      }
-      if (idNumber && checksumOk) break;
-    } catch (_e) {}
+        if (idNumber && checksumOk) break;
+      } catch (_e) {}
+    }
   }
 
   if (!idNumber) {
