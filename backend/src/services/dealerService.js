@@ -137,6 +137,30 @@ export function createBatchPurchase(data, userId) {
     const fy = activeFyLabel();
     const invoiceNumber = `PUR-B2B-${Date.now().toString().slice(-6)}`;
     const effectiveDate = purchase_date || new Date().toISOString().split("T")[0];
+    const normalizedPaymentMethod = (() => {
+      const s = String(payment_method || "cash").toLowerCase().trim();
+      if (s.includes("upi")) return "upi";
+      if (s.includes("card")) return "card";
+      if (s.includes("bank") || s.includes("transfer") || s.includes("neft") || s.includes("rtgs") || s.includes("imps")) return "bank_transfer";
+      return "cash";
+    })();
+
+    // Ensure dealer has a corresponding record in sellers table so phones.seller_id NOT NULL constraint and invoice reports are satisfied
+    let sellerRow = db.prepare("SELECT id FROM sellers WHERE id = ?").get(dealer.id);
+    if (!sellerRow) {
+      db.prepare(`
+        INSERT OR IGNORE INTO sellers (
+          id, name, phone, address, id_proof_type, id_number, seller_photo_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'pan', ?, ?, datetime('now'), datetime('now'))
+      `).run(
+        dealer.id,
+        `${dealer.shop_name} (${dealer.proprietor_name})`,
+        dealer.phone,
+        dealer.address || dealer.city || "Sitapur",
+        dealer.pan_number || dealer.gst_number || "B2BDEALER",
+        dealer.photo_url || null
+      );
+    }
 
     let totalAmount = 0;
     const insertedPhones = [];
@@ -179,26 +203,27 @@ export function createBatchPurchase(data, userId) {
         ? p.product_photos
         : [];
 
+      const fullImei = p.imei2?.trim() ? `${imei}, ${p.imei2.trim()}` : imei;
+
       db.prepare(`
         INSERT INTO phones (
-          id, phone_name, model, imei_number, imei2_number, condition,
+          id, phone_name, model, imei_number, condition,
           purchase_price, selling_price, purchase_date, bill_available,
           box_available, charger_available, variant, colour,
-          dealer_id, is_dealer, batch_purchase_id, seller_signature_url,
+          seller_id, dealer_id, is_dealer, batch_purchase_id, seller_signature_url,
           payment_method, financial_year, shop_id, features, product_photos
         ) VALUES (
-          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, 1, ?, ?,
+          ?, ?, 1, ?, ?,
           ?, ?, 'shop_1', ?, ?
         )
       `).run(
         phoneId,
         (p.brand || p.phone_name).trim(),
         p.model.trim(),
-        imei,
-        p.imei2?.trim() || null,
+        fullImei,
         p.condition || "good",
         price,
         sellPrice,
@@ -209,21 +234,22 @@ export function createBatchPurchase(data, userId) {
         p.variant?.trim() || null,
         p.colour?.trim() || null,
         dealer.id,
+        dealer.id,
         batchId,
         dealer.signature_url || null,
-        p.payment_method || payment_method,
+        normalizedPaymentMethod,
         fy,
         JSON.stringify(feats),
         JSON.stringify(photos)
       );
 
-      // Create individual purchase invoice record (correct column: invoice_type)
+      // Create individual purchase invoice record (correct column: invoice_type & seller_id)
       const invId = newId();
       const singleInvNo = nextInvoiceNumber("purchase", "shop_1");
       db.prepare(`
-        INSERT INTO invoices (id, invoice_number, invoice_type, phone_id, amount, shop_id, financial_year)
-        VALUES (?, ?, 'purchase', ?, ?, 'shop_1', ?)
-      `).run(invId, singleInvNo, phoneId, price, fy);
+        INSERT INTO invoices (id, invoice_number, invoice_type, phone_id, seller_id, amount, shop_id, financial_year)
+        VALUES (?, ?, 'purchase', ?, ?, ?, 'shop_1', ?)
+      `).run(invId, singleInvNo, phoneId, dealer.id, price, fy);
 
       insertedPhones.push({ id: phoneId, imei, model: p.model, price });
 
@@ -251,7 +277,7 @@ export function createBatchPurchase(data, userId) {
       effectiveDate,
       phones.length,
       totalAmount,
-      payment_method,
+      normalizedPaymentMethod,
       notes?.trim() || null
     );
 
