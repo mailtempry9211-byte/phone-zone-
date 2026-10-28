@@ -270,10 +270,10 @@ export async function getSessionStatus(channel = "sales") {
 
     // Try to get QR code
     let qrCode = null;
-    let currentStatus = sessionData?.status || "disconnected";
+    let qrStatus = sessionData?.status || "disconnected";
     try {
       const qrData = await openWaFetch(`/api/sessions/${sessionId}/qr`);
-      currentStatus = qrData.status || currentStatus;
+      qrStatus = qrData.status || qrStatus;
       qrCode = qrData.qrCode || qrData.qr || null;
       if (qrData.status === "ready" || qrData.status === "authenticated") {
         return {
@@ -305,7 +305,7 @@ export async function getSessionStatus(channel = "sales") {
       channel,
       sessionId,
       connected: false,
-      status: currentStatus,
+      status: qrStatus,
       qrCode,
     };
   } catch (err) {
