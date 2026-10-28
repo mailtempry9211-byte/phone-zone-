@@ -58,8 +58,6 @@ const SettingsTab = () => {
         toast.success(
           value === "openwa"
             ? "WhatsApp Channel saved: OpenWA Gateway active!"
-            : value === "chrome_extension"
-            ? "WhatsApp Channel saved: Chrome Extension active!"
             : "WhatsApp Channel saved: Click-to-Chat active!"
         );
       }
@@ -931,13 +929,8 @@ const SettingsTab = () => {
               },
               {
                 value: "openwa",
-                label: "OpenWA Gateway API — Automated Background Dispatch",
+                label: "OpenWA Gateway API — Automated Background Dispatch (Recommended)",
                 hint: "Sends messages directly in background via the local OpenWA WhatsApp server configured in Marketing tab without manual interaction.",
-              },
-              {
-                value: "chrome_extension",
-                label: "PhoneZone Chrome Extension — Local PC Web WhatsApp",
-                hint: "Uses the PhoneZone Chrome Extension on this computer to inject and queue messages in WhatsApp Web. Requires running locally on main PC.",
               },
             ].map(({ value, label, hint }) => (
               <label
@@ -1037,13 +1030,7 @@ const SettingsTab = () => {
 
           {formData.whatsapp_channel === "click_to_chat" && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800">
-              💡 <strong>Note for Marketing:</strong> With Click-to-Chat selected, bulk marketing requires opening each chat individually. For sending mass promotional messages, Chrome Extension or OpenWA is recommended.
-            </div>
-          )}
-
-          {formData.whatsapp_channel === "chrome_extension" && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
-              ℹ️ <strong>Local PC Requirement:</strong> Chrome Extension feature only operates when hosting and accessing PhoneZone locally from your main desktop PC where the extension is installed.
+              💡 <strong>Note for Marketing:</strong> With Click-to-Chat selected, bulk marketing requires opening each chat individually. For sending mass promotional messages, OpenWA Gateway is recommended.
             </div>
           )}
         </CardContent>

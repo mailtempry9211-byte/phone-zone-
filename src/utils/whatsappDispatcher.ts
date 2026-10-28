@@ -110,10 +110,6 @@ export async function dispatchWhatsApp({
     } catch (err: any) {
       toast.warning("OpenWA Gateway unreachable. Opening Click-to-Chat fallback.");
     }
-  } else if (channel === "chrome_extension") {
-    try {
-      window.postMessage({ type: "PHONEZONE_WHATSAPP_DISPATCH", phone: cleanPhone, message }, "*");
-    } catch {}
   }
 
   // 2. Click-to-Chat Fallback (Only mobile uses Web Share API; Windows/PC NEVER triggers OS Share dialog)

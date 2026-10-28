@@ -738,7 +738,7 @@ export default function MarketingTab() {
               <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                 📖 WhatsApp Features &amp; Setup Complete Guide (व्हाट्सएप फीचर्स उपयोग करने की पूरी गाइड)
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 <div className="border rounded-md p-3 bg-white space-y-1">
                   <div className="font-bold text-emerald-700">1. Click-to-Chat (wa.me URL)</div>
                   <p className="text-gray-600">
@@ -746,15 +746,9 @@ export default function MarketingTab() {
                   </p>
                 </div>
                 <div className="border rounded-md p-3 bg-white space-y-1">
-                  <div className="font-bold text-blue-700">2. OpenWA Gateway (पूर्ण ऑटोमेशन)</div>
+                  <div className="font-bold text-blue-700">2. OpenWA Gateway (पूर्ण ऑटोमेशन - Recommended)</div>
                   <p className="text-gray-600">
                     बैकग्राउंड में अपने-आप PDF और टेक्स्ट मैसेज चले जाते हैं।
-                  </p>
-                </div>
-                <div className="border rounded-md p-3 bg-white space-y-1">
-                  <div className="font-bold text-purple-700">3. Chrome Extension (PC मार्केटिंग)</div>
-                  <p className="text-gray-600">
-                    WhatsApp Web में सुरक्षित अंतराल (25-70 सेकंड) के साथ मैसेज कतार में भेजता है।
                   </p>
                 </div>
               </div>
@@ -1678,87 +1672,6 @@ export default function MarketingTab() {
                 ))
               )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Extension Tokens & Setup */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-primary" /> Chrome Extension Access Tokens
-          </CardTitle>
-          <CardDescription>
-            Authenticate the Chrome extension to retrieve the dispatch queue securely.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Description (e.g. Shop Counter PC Chrome)"
-              value={tokenDesc}
-              onChange={(e) => setTokenDesc(e.target.value)}
-            />
-            <Button onClick={() => createTokenMutation.mutate()}>Generate Token</Button>
-          </div>
-
-          {generatedToken && (
-            <Alert className="bg-green-50 border-green-300">
-              <AlertTitle className="text-green-800 font-bold">New Token Generated</AlertTitle>
-              <AlertDescription className="text-xs font-mono break-all text-green-900 mt-1 select-all">
-                {generatedToken}
-                <div className="mt-2 text-xs font-sans text-gray-600">
-                  Copy this token now and paste it into the PhoneZone Chrome Extension settings popup.
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="border rounded-md overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-muted text-gray-700">
-                <tr>
-                  <th className="p-2">Description</th>
-                  <th className="p-2">Created</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tokens.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-3 text-center text-gray-400">
-                      No tokens issued.
-                    </td>
-                  </tr>
-                ) : (
-                  tokens.map((tok: any) => (
-                    <tr key={tok.id} className="border-t">
-                      <td className="p-2 font-medium">{tok.description || "Extension"}</td>
-                      <td className="p-2 text-gray-500">{new Date(tok.created_at).toLocaleDateString()}</td>
-                      <td className="p-2">
-                        {tok.revoked_at ? (
-                          <Badge variant="destructive">Revoked</Badge>
-                        ) : (
-                          <Badge className="bg-green-600">Active</Badge>
-                        )}
-                      </td>
-                      <td className="p-2 text-right">
-                        {!tok.revoked_at && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => revokeTokenMutation.mutate(tok.id)}
-                          >
-                            Revoke
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
         </CardContent>
       </Card>
