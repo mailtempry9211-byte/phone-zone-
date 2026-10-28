@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Globe,
@@ -26,6 +27,7 @@ interface NgrokState {
   authtoken: string;
   claimedDomain: string;
   isEnabled: boolean;
+  autoStart?: boolean;
   lastUrl: string | null;
   running: boolean;
   error: string | null;
@@ -36,12 +38,14 @@ export default function NgrokTab() {
     authtoken: "",
     claimedDomain: "",
     isEnabled: false,
+    autoStart: true,
     lastUrl: null,
     running: false,
     error: null,
   });
   const [tokenInput, setTokenInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
+  const [autoStartInput, setAutoStartInput] = useState(true);
   const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -54,6 +58,7 @@ export default function NgrokTab() {
         setState(data);
         setTokenInput(data.authtoken || "");
         setDomainInput(data.claimedDomain || "");
+        setAutoStartInput(data.autoStart ?? true);
 
         if (data.running && data.lastUrl) {
           generateQr(data.lastUrl);
@@ -91,7 +96,7 @@ export default function NgrokTab() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authtoken: tokenInput, claimedDomain: domainInput }),
+        body: JSON.stringify({ authtoken: tokenInput, claimedDomain: domainInput, autoStart: autoStartInput }),
       });
       if (!res.ok) throw new Error("Failed to save settings");
       toast.success("Ngrok configuration saved");
@@ -237,6 +242,23 @@ export default function NgrokTab() {
                 <p className="text-[11px] text-gray-500 mt-1">
                   Enter hostname only (e.g. talented-wolf-primarily.ngrok-free.app). https:// and trailing / are stripped automatically.
                 </p>
+              </div>
+
+              {/* Auto-Start Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50">
+                <div className="space-y-0.5">
+                  <Label htmlFor="ngrok_tab_autostart" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Auto-start Tunnel on Application Launch
+                  </Label>
+                  <p className="text-[11px] text-gray-500">
+                    PhoneZone start hote hi Ngrok tunnel automatic start ho jayega aur live URL active rahegi.
+                  </p>
+                </div>
+                <Switch
+                  id="ngrok_tab_autostart"
+                  checked={autoStartInput}
+                  onCheckedChange={setAutoStartInput}
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-3 pt-2">

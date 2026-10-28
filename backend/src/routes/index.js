@@ -491,7 +491,11 @@ export function buildRouter() {
   r.get("/imei-history", staff, wrap((req, res) => res.json(financialYears.imeiHistory(req.query.imei))));
 
   // ---------------- ngrok embedded tunnel ----------------
-  r.get("/ngrok/status", staff, wrap((_req, res) => res.json(ngrokService.getNgrokConfig())));
+  r.get("/ngrok/status", staff, wrap(async (_req, res) => res.json(await ngrokService.getNgrokConfig())));
+  r.get("/ngrok/public-status", wrap(async (_req, res) => {
+    const cfg = await ngrokService.getNgrokConfig();
+    res.json({ running: cfg.running, lastUrl: cfg.lastUrl });
+  }));
   r.post("/ngrok/save", requireAuth, requireRole("admin"), wrap(async (req, res) =>
     res.json(await ngrokService.saveNgrokSettings(req.body))));
   r.post("/ngrok/start", requireAuth, requireRole("admin"), wrap(async (req, res) =>

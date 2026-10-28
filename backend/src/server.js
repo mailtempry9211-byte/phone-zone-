@@ -118,6 +118,14 @@ if (isMain) {
         console.log("No accounts exist yet - finish the first-run setup screen to create the owner account.\n");
       }
     }
+
+    // Auto-start background services (OpenWA & Ngrok) if configured by owner
+    import("./services/openWaService.js")
+      .then((m) => m.autoStartOpenWaOnBoot().catch((err) => logger.warn("OpenWA auto-start error", err)))
+      .catch(() => {});
+    import("./services/ngrokService.js")
+      .then((m) => m.autoStartTunnelOnBoot().catch((err) => logger.warn("Ngrok auto-start error", err)))
+      .catch(() => {});
   });
   const shutdown = () => {
     server.close(() => {

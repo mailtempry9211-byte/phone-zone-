@@ -45,9 +45,16 @@ function autoDetectOpenWaApiKey() {
 
 export function getOpenWaConfig() {
   const db = getDb();
-  const row = db.prepare(
-    "SELECT openwa_url, openwa_api_key, openwa_unified_mode FROM admin_settings WHERE id = '00000000-0000-0000-0000-000000000001'"
-  ).get();
+  let row = null;
+  try {
+    row = db.prepare(
+      "SELECT openwa_url, openwa_api_key, openwa_unified_mode, openwa_auto_start FROM admin_settings WHERE id = '00000000-0000-0000-0000-000000000001'"
+    ).get();
+  } catch {
+    row = db.prepare(
+      "SELECT openwa_url, openwa_api_key, openwa_unified_mode FROM admin_settings WHERE id = '00000000-0000-0000-0000-000000000001'"
+    ).get();
+  }
 
   let apiKey = row?.openwa_api_key || "";
   // If no valid key or placeholder key, auto-detect
@@ -69,23 +76,41 @@ export function getOpenWaConfig() {
     serverUrl: row?.openwa_url || DEFAULT_OPENWA_URL,
     apiKey,
     unifiedMode: Boolean(row?.openwa_unified_mode ?? true), // Default to unified single session
+    autoStart: row?.openwa_auto_start !== undefined ? Boolean(row.openwa_auto_start) : true,
   };
 }
 
-export function saveOpenWaConfig({ serverUrl, apiKey, unifiedMode }) {
+export function saveOpenWaConfig({ serverUrl, apiKey, unifiedMode, autoStart }) {
   const db = getDb();
-  db.prepare(
-    `UPDATE admin_settings 
-     SET openwa_url = COALESCE(?, openwa_url),
-         openwa_api_key = COALESCE(?, openwa_api_key),
-         openwa_unified_mode = COALESCE(?, openwa_unified_mode),
-         updated_at = datetime('now')
-     WHERE id = '00000000-0000-0000-0000-000000000001'`
-  ).run(
-    serverUrl !== undefined ? String(serverUrl).trim() : null,
-    apiKey !== undefined ? String(apiKey).trim() : null,
-    unifiedMode !== undefined ? (unifiedMode ? 1 : 0) : null
-  );
+  try {
+    db.prepare(
+      `UPDATE admin_settings 
+       SET openwa_url = COALESCE(?, openwa_url),
+           openwa_api_key = COALESCE(?, openwa_api_key),
+           openwa_unified_mode = COALESCE(?, openwa_unified_mode),
+           openwa_auto_start = COALESCE(?, openwa_auto_start),
+           updated_at = datetime('now')
+       WHERE id = '00000000-0000-0000-0000-000000000001'`
+    ).run(
+      serverUrl !== undefined ? String(serverUrl).trim() : null,
+      apiKey !== undefined ? String(apiKey).trim() : null,
+      unifiedMode !== undefined ? (unifiedMode ? 1 : 0) : null,
+      autoStart !== undefined ? (autoStart ? 1 : 0) : null
+    );
+  } catch {
+    db.prepare(
+      `UPDATE admin_settings 
+       SET openwa_url = COALESCE(?, openwa_url),
+           openwa_api_key = COALESCE(?, openwa_api_key),
+           openwa_unified_mode = COALESCE(?, openwa_unified_mode),
+           updated_at = datetime('now')
+       WHERE id = '00000000-0000-0000-0000-000000000001'`
+    ).run(
+      serverUrl !== undefined ? String(serverUrl).trim() : null,
+      apiKey !== undefined ? String(apiKey).trim() : null,
+      unifiedMode !== undefined ? (unifiedMode ? 1 : 0) : null
+    );
+  }
 }
 
 /**
@@ -363,28 +388,66 @@ export async function checkPortListening(port = 2785, host = "127.0.0.1", timeou
   });
 }
 
+export async function getPortPid(port = 2785) {
+  try {
+    const { execSync } = await import("node:child_process");
+    if (process.platform === "win32") {
+      const out = execSync(`netstat -ano | findstr /R /C:":${port} .*LISTENING"`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      const line = out.trim().split("\n")[0];
+      if (line) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parseInt(parts[parts.length - 1], 10);
+        if (pid && !isNaN(pid)) return pid;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export async function getServerStatus() {
   const listening = await checkPortListening(2785);
+  const pid = (await getPortPid(2785)) || openWaChildProcess?.pid || null;
   let sessionCount = 0;
+  let sessionInfo = null;
+
   if (listening) {
     try {
       const res = await openWaFetch("/api/sessions");
       const list = Array.isArray(res) ? res : (res?.data || []);
       sessionCount = list.length;
     } catch {}
+
+    try {
+      sessionInfo = await getSessionStatus("sales");
+    } catch {}
   }
+
+  const cfg = getOpenWaConfig();
   return {
     running: listening,
     port: 2785,
-    pid: openWaChildProcess?.pid || null,
+    pid,
     sessionCount,
+    autoStart: cfg.autoStart,
+    session: sessionInfo,
   };
 }
 
 export async function startOpenWaServer() {
   const isListening = await checkPortListening(2785);
   if (isListening) {
-    return { ok: true, message: "OpenWA server is already running on port 2785" };
+    // Check if responsive
+    try {
+      await openWaFetch("/api/sessions");
+      // Responsive! Ensure session is awake
+      getSessionStatus("sales").catch(() => {});
+      return { ok: true, message: "OpenWA server is running on port 2785" };
+    } catch (err) {
+      // If port is listening but unreachable (zombie), kill it
+      logger.warn("[OpenWA] Port 2785 is listening but unresponsive, killing stuck process...", err);
+      await stopOpenWaServer();
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }
 
   const dir = findOpenWaDirectory();
@@ -397,6 +460,18 @@ export async function startOpenWaServer() {
     throw new Error(`OpenWA build not found at ${mainJs}.`);
   }
 
+  // Ensure OpenWA .env has AUTO_START_SESSIONS=true
+  try {
+    const envPath = path.join(dir, ".env");
+    if (fs.existsSync(envPath)) {
+      let envContent = fs.readFileSync(envPath, "utf8");
+      if (envContent.includes("AUTO_START_SESSIONS=false")) {
+        envContent = envContent.replace("AUTO_START_SESSIONS=false", "AUTO_START_SESSIONS=true");
+        fs.writeFileSync(envPath, envContent, "utf8");
+      }
+    }
+  } catch {}
+
   const child = spawn(process.execPath, [mainJs], {
     cwd: dir,
     env: { ...process.env, PORT: "2785" },
@@ -406,9 +481,12 @@ export async function startOpenWaServer() {
   child.unref();
   openWaChildProcess = child;
 
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 500));
     if (await checkPortListening(2785)) {
+      setTimeout(() => {
+        getSessionStatus("sales").catch(() => {});
+      }, 1500);
       return { ok: true, message: "OpenWA server started successfully", pid: child.pid };
     }
   }
@@ -417,6 +495,17 @@ export async function startOpenWaServer() {
 }
 
 export async function stopOpenWaServer() {
+  const pid = (await getPortPid(2785)) || openWaChildProcess?.pid;
+  if (pid) {
+    try {
+      if (process.platform === "win32") {
+        const { execSync } = await import("node:child_process");
+        execSync(`taskkill /F /T /PID ${pid}`, { stdio: "ignore" });
+      } else {
+        process.kill(pid, "SIGTERM");
+      }
+    } catch {}
+  }
   if (openWaChildProcess) {
     try {
       openWaChildProcess.kill();
@@ -424,6 +513,19 @@ export async function stopOpenWaServer() {
     openWaChildProcess = null;
   }
   return { ok: true, message: "OpenWA server stopped" };
+}
+
+export async function autoStartOpenWaOnBoot() {
+  try {
+    const config = getOpenWaConfig();
+    if (config.autoStart) {
+      logger.info("[OpenWA] Auto-starting WhatsApp Gateway on boot...");
+      const startRes = await startOpenWaServer();
+      logger.info("[OpenWA] Server boot result:", startRes);
+    }
+  } catch (err) {
+    logger.warn(`[OpenWA] Failed to auto-start on boot: ${err.message}`);
+  }
 }
 
 export async function requestPairingCode({ channel = "sales", phone }) {

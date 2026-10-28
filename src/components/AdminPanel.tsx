@@ -12,6 +12,8 @@ import StorageUsageCard from "./admin/StorageUsageCard";
 import FinancialYearSwitcher from "./admin/FinancialYearSwitcher";
 import { ReflectPreviousYearDialog } from "./admin/ReflectPreviousYearDialog";
 import UniversalScanner from "./admin/UniversalScanner";
+import OpenWaUniversalControl from "./admin/OpenWaUniversalControl";
+import NgrokUniversalControl from "./admin/NgrokUniversalControl";
 import { useAuth } from "@/hooks/useAuth";
 import { useFinancialYear } from "@/hooks/useFinancialYear";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -143,6 +145,8 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <FinancialYearSwitcher />
               <UniversalScanner />
+              <OpenWaUniversalControl />
+              <NgrokUniversalControl />
               <StorageUsageCard compact />
               <PasswordChangeDialog />
               <Button variant="outline" size="sm" onClick={onBack} className="h-9">
