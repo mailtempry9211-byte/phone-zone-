@@ -247,11 +247,25 @@ export async function getSessionStatus(channel = "sales") {
       };
     }
 
-    // If not ready, start session if stopped
-    try {
-      await openWaFetch(`/api/sessions/${sessionId}/start`, { method: "POST" });
-    } catch {
-      // already running or error
+    const currentStatus = String(sessionData?.status || "").toLowerCase();
+    const isStartingOrActive = [
+      "starting",
+      "initializing",
+      "authenticating",
+      "scan_qr_code",
+      "qr",
+      "ready",
+      "authenticated",
+    ].includes(currentStatus);
+
+    // Only attempt to start session if stopped, disconnected, or failed.
+    // NEVER send repeated start requests while it is already starting or initializing!
+    if (!isStartingOrActive && currentStatus !== "") {
+      try {
+        await openWaFetch(`/api/sessions/${sessionId}/start`, { method: "POST" });
+      } catch {
+        // already running or error
+      }
     }
 
     // Try to get QR code
@@ -468,6 +482,29 @@ export async function startOpenWaServer() {
       if (envContent.includes("AUTO_START_SESSIONS=false")) {
         envContent = envContent.replace("AUTO_START_SESSIONS=false", "AUTO_START_SESSIONS=true");
         fs.writeFileSync(envPath, envContent, "utf8");
+      }
+    }
+  } catch {}
+
+  // Clean up any stale Chrome lockfiles from previous crashes or sudden reboots
+  try {
+    const sessionsDir = path.join(dir, "data", "sessions");
+    if (fs.existsSync(sessionsDir)) {
+      const entries = fs.readdirSync(sessionsDir);
+      for (const entry of entries) {
+        const sub = path.join(sessionsDir, entry);
+        try {
+          if (fs.statSync(sub).isDirectory()) {
+            const lock = path.join(sub, "lockfile");
+            if (fs.existsSync(lock)) fs.unlinkSync(lock);
+            const singletonLock = path.join(sub, "SingletonLock");
+            if (fs.existsSync(singletonLock)) fs.unlinkSync(singletonLock);
+            const singletonCookie = path.join(sub, "SingletonCookie");
+            if (fs.existsSync(singletonCookie)) fs.unlinkSync(singletonCookie);
+            const singletonSocket = path.join(sub, "SingletonSocket");
+            if (fs.existsSync(singletonSocket)) fs.unlinkSync(singletonSocket);
+          }
+        } catch {}
       }
     }
   } catch {}
