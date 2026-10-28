@@ -279,8 +279,22 @@ export function updateRepairJobStatus(id, { status, note, userId, payment_status
     if (status === "ready" && !job.ready_at) {
       sets.push("ready_at = datetime('now')");
     }
-    if (status === "delivered" && !job.delivered_at) {
-      sets.push("delivered_at = datetime('now')");
+    if (status === "delivered") {
+      if (!job.delivered_at) {
+        sets.push("delivered_at = datetime('now')");
+      }
+      sets.push("carried_to_fy = NULL");
+    } else {
+      // If moving backwards from delivered to workshop, clear delivery timestamp
+      if (job.status === "delivered") {
+        sets.push("delivered_at = NULL");
+      }
+      // Ensure ticket is carried into active FY if it originated in a previous FY
+      const activeFy = activeFyLabel();
+      if (activeFy && job.financial_year && job.financial_year !== activeFy) {
+        sets.push("carried_to_fy = ?");
+        params.push(activeFy);
+      }
     }
 
     if (final_price !== undefined) {

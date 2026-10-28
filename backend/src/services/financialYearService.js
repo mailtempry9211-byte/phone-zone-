@@ -250,8 +250,10 @@ export function assertAdminPassword(userId, password) {
 export function autoCarryForwardToYear(targetYear) {
   if (!targetYear) return;
   const db = getDb();
+  const targetRow = db.prepare("SELECT start_date FROM financial_years WHERE label = ?").get(targetYear);
+  if (!targetRow) return;
 
-  // 1. Unsold phones: all phones in hand that are not sold and not returned
+  // 1. Unsold phones: all phones in hand that are not sold, not returned, from prior or current years
   db.prepare(`
     UPDATE phones
     SET carried_to_fy = ?
@@ -260,7 +262,10 @@ export function autoCarryForwardToYear(targetYear) {
       AND deleted_at IS NULL
       AND (carried_to_fy IS NULL OR carried_to_fy != ?)
       AND (financial_year IS NULL OR financial_year != ?)
-  `).run(targetYear, targetYear, targetYear);
+      AND (financial_year IS NULL OR financial_year IN (
+        SELECT label FROM financial_years WHERE start_date <= ?
+      ))
+  `).run(targetYear, targetYear, targetYear, targetRow.start_date);
 
   // 2. Active repair jobs: only open tickets in workshop (received, diagnosing, waiting_parts, in_progress, ready)
   db.prepare(`
@@ -270,7 +275,10 @@ export function autoCarryForwardToYear(targetYear) {
       AND deleted_at IS NULL
       AND (carried_to_fy IS NULL OR carried_to_fy != ?)
       AND (financial_year IS NULL OR financial_year != ?)
-  `).run(targetYear, targetYear, targetYear);
+      AND (financial_year IS NULL OR financial_year IN (
+        SELECT label FROM financial_years WHERE start_date <= ?
+      ))
+  `).run(targetYear, targetYear, targetYear, targetRow.start_date);
 
   // 3. Safeguard: Delivered and cancelled jobs must NEVER have carried_to_fy set
   db.prepare(`

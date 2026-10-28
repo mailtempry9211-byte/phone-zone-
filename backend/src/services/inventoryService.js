@@ -53,7 +53,7 @@ const hydrate = (row) =>
 
 /** PUBLIC endpoint data - no purchase price, IMEI, seller or profit. */
 export function listPublicInventory({ limit = 100 } = {}, { shopId } = {}) {
-  const fy = fyWhere("financial_year", false);
+  const fy = fyWhere("financial_year", true);
   const sw = shopWhere(shopId);
   return getDb()
     .prepare(

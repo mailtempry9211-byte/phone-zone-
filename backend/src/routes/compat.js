@@ -261,7 +261,26 @@ export function buildCompatRouter(staff, canRead = staff) {
     // years) says so explicitly and is trusted verbatim.
     if (FY_SCOPED.has(t) && !allYears && !filters.some((f) => f.col === FY_COLUMN)) {
       const fy = activeFyLabel();
-      if (fy) filters.push({ op: "eq", col: FY_COLUMN, val: fy });
+      if (fy) {
+        if (t === "phones") {
+          const isSoldFilter = filters.find((f) => f.col === "is_sold");
+          if (isSoldFilter && Number(isSoldFilter.val) === 1) {
+            // Sold tab: only show phones sold in this active year or carried into this year
+            filters.push({
+              op: "or",
+              val: `financial_year.eq.${fy},carried_to_fy.eq.${fy}`,
+            });
+          } else {
+            // Inventory tab / general stock: show this year's phones, carried unsold phones, or any unsold phone in stock
+            filters.push({
+              op: "or",
+              val: `financial_year.eq.${fy},carried_to_fy.eq.${fy},is_sold.eq.0`,
+            });
+          }
+        } else {
+          filters.push({ op: "eq", col: FY_COLUMN, val: fy });
+        }
+      }
     }
     // Soft-deleted rows are hidden from normal reads. A client that really wants
     // them (or a historical view) says so with an explicit deleted_at filter.

@@ -36,7 +36,7 @@ interface RepairDetailDialogProps {
   job: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onRefresh: () => void;
+  onRefresh: (updatedJob?: any) => void;
 }
 
 const STATUS_OPTIONS = [
@@ -45,17 +45,23 @@ const STATUS_OPTIONS = [
   { value: "waiting_parts", label: "Waiting for Parts", color: "bg-amber-100 text-amber-800" },
   { value: "in_progress", label: "In Progress", color: "bg-indigo-100 text-indigo-800" },
   { value: "ready", label: "Ready for Delivery", color: "bg-emerald-100 text-emerald-800" },
-  { value: "delivered", label: "Delivered", color: "bg-green-100 text-green-800" },
+  { value: "delivered", label: "Delivered (Closed)", color: "bg-green-100 text-green-800" },
   { value: "cancelled", label: "Cancelled", color: "bg-red-100 text-red-800" },
 ];
 
 export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
-  job,
+  job: initialJob,
   open,
   onOpenChange,
   onRefresh,
 }) => {
   const { toast } = useToast();
+  const [job, setJob] = useState<any>(initialJob);
+
+  React.useEffect(() => {
+    setJob(initialJob);
+  }, [initialJob]);
+
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusNote, setStatusNote] = useState("");
 
@@ -93,12 +99,14 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
         body: JSON.stringify({ warranty_days: newDays }),
       });
       if (!res.ok) throw new Error("Failed to update warranty");
+      const updated = await res.json();
+      setJob(updated);
       toast({
         title: "Warranty Updated",
         description: newDays > 0 ? `Service Warranty set to ${newDays} days.` : "Service Warranty turned OFF.",
       });
       setIsEditingWarranty(false);
-      onRefresh();
+      onRefresh(updated);
     } catch (err: any) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
     } finally {
@@ -145,9 +153,11 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
         body: JSON.stringify({ status: newStatus, note: statusNote.trim() || undefined }),
       });
       if (!res.ok) throw new Error("Failed to update status");
+      const updated = await res.json();
+      setJob(updated);
       toast({ title: "Status Updated", description: `Job marked as ${newStatus}` });
       setStatusNote("");
-      onRefresh();
+      onRefresh(updated);
 
       // Trigger automatic prompt & dialog for WhatsApp message on ready or delivered
       if (newStatus === "ready") {
@@ -190,11 +200,13 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
         }),
       });
       if (!res.ok) throw new Error("Failed to add item");
+      const updated = await res.json();
+      setJob(updated);
       toast({ title: "Item Added", description: `${itemDesc} recorded.` });
       setItemDesc("");
       setItemPrice("");
       setIsBoard(false);
-      onRefresh();
+      onRefresh(updated);
     } catch (err: any) {
       toast({ title: "Add item failed", description: err.message, variant: "destructive" });
     } finally {

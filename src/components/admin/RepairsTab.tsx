@@ -188,7 +188,7 @@ export const RepairsTab: React.FC = () => {
       case "ready":
         return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">Ready</Badge>;
       case "delivered":
-        return <Badge variant="default" className="bg-green-600 text-white">Delivered</Badge>;
+        return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1 shadow-xs"><CheckCircle2 className="w-3 h-3" /> Delivered (Closed)</Badge>;
       case "cancelled":
         return <Badge variant="destructive">Cancelled</Badge>;
       default:
@@ -202,7 +202,7 @@ export const RepairsTab: React.FC = () => {
     { id: "in_progress", label: "In Progress" },
     { id: "waiting_parts", label: "Waiting Parts" },
     { id: "ready", label: "Ready" },
-    { id: "delivered", label: "Delivered" },
+    { id: "delivered", label: "Delivered (Closed)" },
   ];
 
   const reworkJobs = jobs.filter((j) => j.is_rework === 1 || j.job_no?.startsWith("RW-"));
@@ -886,7 +886,10 @@ export const RepairsTab: React.FC = () => {
         job={selectedJob}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        onRefresh={fetchJobs}
+        onRefresh={(updatedJob) => {
+          fetchJobs();
+          if (updatedJob) setSelectedJob(updatedJob);
+        }}
       />
 
       {/* Repair Document & Invoice Center Dialog (from Table Actions) */}

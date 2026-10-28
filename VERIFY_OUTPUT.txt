@@ -1,10 +1,10 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-27T11:39:44.220Z
+Date             : 2026-10-27T12:25:13.545Z
 Node             : v24.21.0
 Platform         : win32 x64
 
-SUMMARY: PASSED 61 / FAILED 0 / SKIPPED 0
+SUMMARY: PASSED 60 / FAILED 1 / SKIPPED 0
   (Counts cover the A-numbers of PhoneZone_MASTER_PROMPT.md section 5 for this
    stage, plus SUITE1/SUITE2 = backend/test/offline-suite.mjs and
    backend/test/first-setup-suite.mjs, plus R01..R06 = the repair-round checks
@@ -13,20 +13,21 @@ SUMMARY: PASSED 61 / FAILED 0 / SKIPPED 0
    follow-up guards: filterless/bogus-filter updates and selects, read-only
    audit_logs, non-writable files metadata, and column-name injection.)
 
-FAILED ITEMS: none
+FAILED ITEMS:
+  - A20 -> tsc 2 (18 error line(s) in 1 file(s); touched by this stage: none), build 0
 
 ========================================================================
 
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-27T11:38:57.132Z
+Date             : 2026-10-27T12:24:30.164Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
 
 --- sha256 of security-critical files ---
-789dd29733ed8dde74e91c3a37a1b209c1481e2cf1de6c582473f1623adddc8e  backend/src/routes/index.js
+f6b4be7b57cd7904006e8a759e8ad663e11050fa06ec1f41e83e3a675dc4c28a  backend/src/routes/index.js
 4f749cc6fc495d88ba7c2cd02588d4cc1e54b80752eba1e81ae1c27bed3d5b8f  backend/src/routes/compat.js
 caeeae5b6462202666519d7e2e6558097997940cf78db97264f92973d980f6bb  backend/src/services/inventoryService.js
 834ede395b0f0ce4a4ba04d31f960d587de41d60133a7fd676f986cd14cb9c41  backend/src/services/storageService.js
@@ -62,7 +63,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A03 PASS  7 pre-stamped, 20/20 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:47937/api
+  server ready on http://127.0.0.1:47807/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -103,7 +104,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer db9fd41c-f163-46c8-9b66-323f47669f7d
+  A61 PASS  by-phone match returned repair customer 713187a5-2639-4ea8-8daa-ee38e7257092
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403
@@ -126,7 +127,29 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   SUITE2 PASS  32 passed, 0 failed
 
 --- A20: typecheck and production build ---
-  tsc exit 0
+  tsc exit 2
+  tsc reported 18 error line(s):
+    18 x src/components/admin/DealerBatchInvoiceDialog.tsx
+src/components/admin/DealerBatchInvoiceDialog.tsx(122,16): error TS2339: Property 'address' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(123,23): error TS2339: Property 'phone_primary' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(123,61): error TS2339: Property 'gst_number' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(124,31): error TS2339: Property 'udyam_registration' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(137,46): error TS2339: Property 'business_name' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(138,23): error TS2339: Property 'address' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(139,21): error TS2339: Property 'phone_primary' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(140,21): error TS2339: Property 'email' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(222,16): error TS2339: Property 'signature_url' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(222,50): error TS2339: Property 'signature_url' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(222,161): error TS2339: Property 'business_name' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(224,63): error TS2339: Property 'business_name' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(252,59): error TS2339: Property 'business_name' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(253,54): error TS2339: Property 'address' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(254,61): error TS2339: Property 'phone_primary' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(290,35): error TS2339: Property 'business_name' does not exist on type '{}'.
+src/components/admin/DealerBatchInvoiceDialog.tsx(412,91): error TS2339: Property 'gst_number' does not exist on type '{ account_holder_name: string; account_number: string; address: string; bank_name: string; business_hours: string; business_name: string; business_tagline: string; created_at: string; currency_code: string; ... 23 more ...; show_google_business: number; }'.
+
+npm notice run phonezone@1.0.0 npx
+npm notice run tsc --noEmit -p tsconfig.app.json
   npm run build exit 0
-  A20 PASS  tsc 0 (0 error line(s) in 0 file(s); touched by this stage: none), build 0
+  A20 FAIL  tsc 2 (18 error line(s) in 1 file(s); touched by this stage: none), build 0
 

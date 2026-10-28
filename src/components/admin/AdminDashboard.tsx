@@ -21,6 +21,7 @@ import MarketingTab from "./MarketingTab";
 import UsersTab from "./UsersTab";
 import NgrokTab from "./NgrokTab";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { useFinancialYear } from "@/hooks/useFinancialYear";
 import { Globe, ShoppingBag, Wrench, Settings2, LayoutGrid, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 
 export type DepartmentMode = "sales" | "repairs" | "management" | "all";
@@ -42,13 +43,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialDepartment = "sa
     }
   }, [initialDepartment]);
 
+  const { active: activeFy } = useFinancialYear();
+  const activeYear = activeFy?.label || "default";
+
   const { data: stats } = useQuery({
-    queryKey: ['admin-stats'],
+    queryKey: ['admin-stats', activeYear],
     queryFn: () => data.getAdminStats()
   });
 
   const { data: repairStats } = useQuery({
-    queryKey: ['repair-accounting-stats'],
+    queryKey: ['repair-accounting-stats', activeYear],
     queryFn: async () => {
       const res = await fetch("/api/repair/accounting");
       if (res.ok) return res.json();

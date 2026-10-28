@@ -122,7 +122,7 @@ export const RepairCustomerOverviewDialog: React.FC<RepairCustomerOverviewDialog
       case "ready":
         return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 text-[10px]">Ready</Badge>;
       case "delivered":
-        return <Badge className="bg-green-600 text-white text-[10px]">Delivered</Badge>;
+        return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]">Delivered (Closed)</Badge>;
       case "cancelled":
         return <Badge variant="destructive" className="text-[10px]">Cancelled</Badge>;
       default:
