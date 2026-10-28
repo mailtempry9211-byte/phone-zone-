@@ -98,66 +98,85 @@ export function smartTitleCase(input) {
 const stripWords = (t) => String(t ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const notNa = (p) => !!p && p !== "N/A" && p !== "NA";
 
+function isMetaOrYear(str) {
+  const t = String(str || "").trim();
+  if (/^(19\d\d|20\d\d)$/.test(t)) return true;
+  if (/^(Global Model|US Model|China Model|India Model|EU Model|Japan Model|NA Model|Asia Model)$/i.test(t)) return true;
+  if (/^(N\/A|NA|None|Test device|Test IMEI)$/i.test(t)) return true;
+  if (/^QC\s+SD/i.test(t) || /^MT\s+D\s+\d+/i.test(t)) return true;
+  return false;
+}
+
+function isTechnicalCode(str, brand) {
+  let cleaned = String(str || "").trim();
+  if (brand && cleaned.toLowerCase().startsWith(brand.toLowerCase())) {
+    cleaned = cleaned.slice(brand.length).trim();
+  }
+  cleaned = cleaned.replace(/^(Mobile|Chongqing|Communication|Electronics|Technology)\s+/i, "").trim();
+
+  if (!cleaned) return true;
+
+  const tokens = cleaned.split(/\s+/);
+  if (tokens.length === 1) {
+    const tok = tokens[0];
+    if (/^[A-Z]{1,4}-\w+/i.test(tok) || /^[A-Z]{2,4}\d{3,}/i.test(tok) || /^\d{4,}[A-Z0-9]+/i.test(tok) || /^[A-Z]\d{4}[A-Z0-9]*/i.test(tok)) {
+      return true;
+    }
+    const digits = (tok.match(/\d/g) || []).length;
+    const letters = (tok.match(/[A-Za-z]/g) || []).length;
+    if (digits >= 2 && letters >= 2 && tok.length >= 6) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * SPECS comes in 3 formats (comma separated):
- *   A) "MARKETING NAME, Maker MODELCODE[, Region/Model note][, Year]"
- *      (the year is often GLUED to the model code: 'Samsung SM-A546E2023')
- *   B) "Single name only" (no model code)
- *   C) "BRAND, NAME" (all of Not_Common: 'APPLE, APPLE IPAD (5TH GEN)')
- * Returns { brand, phoneName, model, extra }.
+ * Extracts human-recognizable commercial marketing name from SPECS.
+ * Always prefers user-facing names (e.g. "Xiaomi 17 Pro Max (China)", "Realme C85 Pro")
+ * over factory hardware numbers (e.g. "2509FPN0BC", "RMX5555").
  */
 export function parseSpecs(brandRaw, specsRaw) {
   const brand = normalizeBrand(brandRaw);
   const raw = String(specsRaw ?? "").trim();
-  const parts = raw ? raw.split(/\s*,\s*/) : [];
+  const parts = raw ? raw.split(/\s*,\s*/).map((p) => p.trim()).filter(Boolean) : [];
 
-  let nameRaw = "";
-  let codePart = null;
-  const firstIsBrand = parts.length > 0 && !!brand && parts[0].trim().toLowerCase() === brand.toLowerCase();
-  if (firstIsBrand && parts.length > 1) {
-    // format C: brand repeated as its own column
-    nameRaw = parts[1];
-    codePart = null;
-  } else {
-    nameRaw = parts[0] ?? "";
-    codePart = parts[1] ?? null;
+  if (!parts.length) {
+    return { brand, phoneName: brand || "Unknown", model: brand || "Unknown", extra: "" };
   }
-  const extra = parts.slice(2).filter(notNa).join(", ");
 
-  // Prepend the normalized brand only when it is not already inside the name.
-  const brandInName = !!brand && nameRaw.toLowerCase().includes(brand.toLowerCase());
-  const nameCased = smartTitleCase(nameRaw);
-  const phoneName = (brandInName ? nameCased : brand ? `${brand} ${nameCased}` : nameCased).trim() || brand || "Unknown";
+  const usableParts = parts.filter((p) => !isMetaOrYear(p));
+  if (!usableParts.length) {
+    usableParts.push(parts[0]);
+  }
 
-  // ---- model code ----
-  let model = "";
-  const code = codePart && notNa(codePart.trim()) ? codePart.trim() : null;
-  if (code) {
-    let cleaned = code;
-    // strip a glued year: trailing 4-digit 2005..2027 attached to a letter/digit,
-    // only when at least 3 characters would remain ('V2033'/'CPH1921' are NOT years).
-    const ym = cleaned.match(/^(.*[A-Za-z0-9])((?:200[5-9]|201\d|202[0-7]))$/);
-    if (ym && ym[1].length >= 3) cleaned = ym[1];
+  let bestMarketingName = "";
+  let bestModelCode = "";
 
-    const tokens = cleaned.split(/\s+/);
-    const candidate = tokens[tokens.length - 1] || "";
-    const codeWords = stripWords(cleaned);
-    const nameWords = stripWords(nameRaw);
-    const sameWords =
-      codeWords === nameWords ||
-      (tokens.length > 1 && stripWords(tokens.slice(1).join(" ")) === stripWords(nameRaw.replace(/^\s*\S+\s*/, "")));
-
-    if (candidate && digitsOf(candidate) >= 1 && !sameWords) {
-      model = candidate;
+  for (const part of usableParts) {
+    if (isTechnicalCode(part, brand)) {
+      if (!bestModelCode) bestModelCode = part;
+    } else {
+      if (!bestMarketingName) {
+        bestMarketingName = part;
+      } else {
+        const richPattern = /\b(Pro|Max|Ultra|Plus|Note|Galaxy|Edge|Fold|Flip|Prime|Lite|Air|Neo|Turbo|Poco|Redmi)\b/i;
+        if (richPattern.test(part) && !richPattern.test(bestMarketingName)) {
+          bestMarketingName = part;
+        }
+      }
     }
   }
 
-  if (!model) {
-    // fallback: phone name without the brand prefix (the model field is required)
-    let base = phoneName;
-    if (brand && base.toLowerCase().startsWith(brand.toLowerCase() + " ")) base = base.slice(brand.length).trim();
-    model = base || phoneName || "Unknown";
+  if (!bestMarketingName) {
+    bestMarketingName = usableParts[0] || parts[0];
   }
+
+  let nameCased = smartTitleCase(bestMarketingName).replace(/\?+$/, "").trim();
+  const brandInName = !!brand && nameCased.toLowerCase().includes(brand.toLowerCase());
+  const phoneName = (brandInName ? nameCased : brand ? `${brand} ${nameCased}` : nameCased).trim() || brand || "Unknown";
+  const model = phoneName;
+  const extra = parts.slice(1).filter((p) => notNa(p) && p !== bestMarketingName).join(", ");
 
   return { brand, phoneName, model, extra };
 }
@@ -166,13 +185,14 @@ export function parseSpecs(brandRaw, specsRaw) {
 
 function rowToApi(row) {
   if (!row) return { found: false };
+  const parsed = row.specs_raw ? parseSpecs(row.brand, row.specs_raw) : null;
   return {
     found: true,
     tac: row.tac,
-    brand: row.brand,
-    phoneName: row.phone_name,
-    model: row.model,
-    specs: row.specs || "",
+    brand: parsed?.brand || row.brand,
+    phoneName: parsed?.phoneName || row.phone_name,
+    model: parsed?.model || row.model,
+    specs: parsed?.extra || row.specs || "",
     source: row.source,
   };
 }

@@ -969,7 +969,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       <><Loader2 className="h-3 w-3 animate-spin" /> Checking TAC database...</>
                     )}
                     {tacStatus === "found" && (
-                      <><Wifi className="h-3 w-3" /> {tacInfo?.brand} {tacInfo?.phoneName} - filled from {tacInfo?.source} TAC data</>
+                      <><Wifi className="h-3 w-3" /> {tacInfo?.phoneName || `${tacInfo?.brand || ""} ${tacInfo?.model || ""}`.trim()} - filled from {tacInfo?.source} TAC data</>
                     )}
                     {tacStatus === "fetching" && (
                       <><Globe className="h-3 w-3 animate-spin" /> Asking the Hicelltek API (uses 1 free lookup)...</>

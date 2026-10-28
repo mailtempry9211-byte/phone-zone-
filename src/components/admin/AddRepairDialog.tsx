@@ -462,7 +462,7 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                   {tacStatus === "found" && (
                     <div className="flex items-center gap-1 flex-wrap">
                       <Wifi className="h-3 w-3 text-emerald-600 shrink-0" />
-                      <span className="font-semibold">{tacInfo?.brand} {tacInfo?.phoneName || tacInfo?.model}</span>
+                      <span className="font-semibold">{tacInfo?.phoneName || `${tacInfo?.brand || ""} ${tacInfo?.model || ""}`.trim()}</span>
                       <Badge variant="outline" className="text-[10px] py-0 px-1 border-emerald-300 bg-emerald-50 text-emerald-800">
                         ✓ Auto-filled
                       </Badge>
