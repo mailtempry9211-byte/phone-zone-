@@ -17,7 +17,22 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = path.resolve(process.env.PHONEZONE_DATA_DIR || path.join(ROOT, "data"));
+function resolveDataDir() {
+  if (process.env.PHONEZONE_DATA_DIR && fs.existsSync(path.join(process.env.PHONEZONE_DATA_DIR, "database", "phonezone.db"))) {
+    return path.resolve(process.env.PHONEZONE_DATA_DIR);
+  }
+  const appData = process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || "", "AppData", "Roaming"), "PhoneZone")
+    : path.join(process.env.HOME || "", ".local", "share", "PhoneZone");
+  if (fs.existsSync(path.join(appData, "database", "phonezone.db"))) {
+    return appData;
+  }
+  if (fs.existsSync(path.join(ROOT, "data", "database", "phonezone.db"))) {
+    return path.join(ROOT, "data");
+  }
+  return process.env.PHONEZONE_DATA_DIR ? path.resolve(process.env.PHONEZONE_DATA_DIR) : appData;
+}
+const DATA = resolveDataDir();
 const DB_FILE = path.join(DATA, "database", "phonezone.db");
 const BACKUPS = path.join(DATA, "backups");
 const PORT = Number(process.env.PHONEZONE_PORT || 47713);

@@ -10,7 +10,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { SERVER } from "./config/business.js";
 import { APP_ROOT, defaultDataDir, ensureDirs, PATHS } from "./config/paths.js";
-import { initDatabase, closeDatabase } from "./db/index.js";
+import { initDatabase, closeDatabase, getDb } from "./db/index.js";
 import { ensureBootstrapAdmin, purgeExpiredSessions } from "./services/authService.js";
 import { buildRouter } from "./routes/index.js";
 import { logger } from "./lib/logger.js";
@@ -112,7 +112,11 @@ if (isMain) {
     if (bootstrap.created) {
       console.log(`\nAdmin account created from PHONEZONE_ADMIN_PASSWORD: ${bootstrap.email}\n`);
     } else {
-      console.log("No accounts exist yet - finish the first-run setup screen to create the owner account.\n");
+      const db = getDb();
+      const count = db.prepare("SELECT COUNT(*) AS c FROM users").get()?.c || 0;
+      if (count === 0) {
+        console.log("No accounts exist yet - finish the first-run setup screen to create the owner account.\n");
+      }
     }
   });
   const shutdown = () => {

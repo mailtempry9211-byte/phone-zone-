@@ -23,7 +23,21 @@ if errorlevel 1 (
 )
 popd
 echo Starting PhoneZone on http://127.0.0.1:47713
-set PHONEZONE_DATA_DIR=%cd%\data
+if not defined PHONEZONE_DATA_DIR (
+  if exist "%cd%\data\database\phonezone.db" (
+    set "PHONEZONE_DATA_DIR=%cd%\data"
+  ) else if exist "%APPDATA%\PhoneZone\database\phonezone.db" (
+    set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+  ) else (
+    set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+  )
+) else (
+  if not exist "%PHONEZONE_DATA_DIR%\database\phonezone.db" (
+    if exist "%APPDATA%\PhoneZone\database\phonezone.db" (
+      set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+    )
+  )
+)
 pushd backend
 node src/server.js
 popd

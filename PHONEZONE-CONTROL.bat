@@ -15,7 +15,21 @@ rem ============================================================
 set "ROOT=%~dp0"
 set "PORT=47713"
 set "URL=http://127.0.0.1:%PORT%"
-set "PHONEZONE_DATA_DIR=%ROOT%data"
+if not defined PHONEZONE_DATA_DIR (
+  if exist "%ROOT%data\database\phonezone.db" (
+    set "PHONEZONE_DATA_DIR=%ROOT%data"
+  ) else if exist "%APPDATA%\PhoneZone\database\phonezone.db" (
+    set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+  ) else (
+    set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+  )
+) else (
+  if not exist "%PHONEZONE_DATA_DIR%\database\phonezone.db" (
+    if exist "%APPDATA%\PhoneZone\database\phonezone.db" (
+      set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+    )
+  )
+)
 set "PHONEZONE_PORT=%PORT%"
 set "TOOLS=%ROOT%scripts\pz-tools.mjs"
 
@@ -307,7 +321,13 @@ exit /b 1
 
 rem  exit 0 = business setup finished, exit 1 = first-time setup needed
 :is_configured
-if not exist "%PHONEZONE_DATA_DIR%\database\phonezone.db" exit /b 1
+if not exist "%PHONEZONE_DATA_DIR%\database\phonezone.db" (
+  if exist "%APPDATA%\PhoneZone\database\phonezone.db" (
+    set "PHONEZONE_DATA_DIR=%APPDATA%\PhoneZone"
+  ) else (
+    exit /b 1
+  )
+)
 node "%TOOLS%" status >nul 2>&1
 if errorlevel 2 exit /b 0
 exit /b %errorlevel%

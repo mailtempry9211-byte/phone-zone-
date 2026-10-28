@@ -37,7 +37,22 @@ export function defaultDataDir() {
   return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"), app);
 }
 
-export const APP_DATA_DIR = path.resolve(process.env.PHONEZONE_DATA_DIR || defaultDataDir());
+function resolveAppDataDir() {
+  if (process.env.PHONEZONE_DATA_DIR) {
+    const candidate = path.resolve(process.env.PHONEZONE_DATA_DIR);
+    if (fs.existsSync(path.join(candidate, "database", "phonezone.db"))) {
+      return candidate;
+    }
+    const def = defaultDataDir();
+    if (fs.existsSync(path.join(def, "database", "phonezone.db")) && !process.env.PHONEZONE_FORCE_EMPTY_DIR) {
+      return def;
+    }
+    return candidate;
+  }
+  return defaultDataDir();
+}
+
+export const APP_DATA_DIR = resolveAppDataDir();
 
 export const PATHS = {
   dataDir: APP_DATA_DIR,
