@@ -274,21 +274,21 @@ const CustomersTab = () => {
 
       {/* Customer Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-blue-600">{customers?.length || 0}</div>
-          <div className="text-sm text-blue-700">Total Customers</div>
+        <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-blue-700 dark:text-blue-300">{customers?.length || 0}</div>
+          <div className="text-sm font-semibold text-blue-800 dark:text-blue-400">Total Customers</div>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-green-600">
+        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
             {customers?.filter(c => c.phones?.length > 0).length || 0}
           </div>
-          <div className="text-sm text-green-700">Active Customers</div>
+          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">Active Customers</div>
         </div>
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-purple-600">
+        <div className="bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-purple-700 dark:text-purple-300">
             ₹{customers?.reduce((sum, c) => sum + (c.phones?.reduce((s: number, p: any) => s + Number(p.selling_price), 0) || 0), 0).toLocaleString() || 0}
           </div>
-          <div className="text-sm text-purple-700">Total Revenue</div>
+          <div className="text-sm font-semibold text-purple-800 dark:text-purple-400">Total Revenue</div>
         </div>
       </div>
 

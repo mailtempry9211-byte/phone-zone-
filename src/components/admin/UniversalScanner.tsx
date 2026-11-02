@@ -31,7 +31,7 @@ import RepairDetailDialog from "./RepairDetailDialog";
 import AddPhoneDialog from "./AddPhoneDialog";
 import AddRepairDialog from "./AddRepairDialog";
 
-export const UniversalScanner: React.FC = () => {
+export const UniversalScanner: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -237,7 +237,7 @@ export const UniversalScanner: React.FC = () => {
         type="button"
         variant="outline"
         size="sm"
-        className="h-9 px-3 text-xs font-bold border-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-900 shadow-sm flex items-center gap-1.5 transition-all"
+        className={className || "h-8 px-2.5 text-xs font-semibold bg-slate-900 border border-blue-500/40 text-blue-300 hover:bg-slate-800 hover:text-blue-200 shadow-sm flex items-center gap-1.5 transition-all"}
         onClick={() => {
           setModalOpen(true);
           setUnmatchedResult(null);
@@ -348,7 +348,7 @@ export const UniversalScanner: React.FC = () => {
 
             {/* Loading Indicator */}
             {scanning && (
-              <div className="flex items-center justify-center gap-2 py-3 text-xs text-blue-700 font-semibold bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-center gap-2 py-3 text-xs text-blue-700 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/30 rounded-xl">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{statusMsg || "Scanning & identifying code..."}</span>
               </div>
@@ -356,7 +356,7 @@ export const UniversalScanner: React.FC = () => {
 
             {/* Unmatched / Decision Banner */}
             {unmatchedResult && (
-              <div className="border rounded-xl p-3 bg-slate-50 space-y-2.5">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-800/80 space-y-2.5">
                 {unmatchedResult.isSold ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700">

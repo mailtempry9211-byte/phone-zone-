@@ -3,16 +3,19 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isOfflineMode } from "@/lib/data/config";
+import { compressImage } from "@/utils/imageCompression";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2 } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const SettingsTab = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [masterPassword, setMasterPassword] = useState("");
+  const [isResettingSetup, setIsResettingSetup] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading } = useQuery({
@@ -105,7 +108,7 @@ const SettingsTab = () => {
         phone_primary: settings.phone_primary || "",
         phone_secondary: settings.phone_secondary || "",
         email: settings.email || "",
-        instagram: settings.instagram || "",
+        instagram: (settings.instagram || "").replace(/^@+/, ""),
         logo_url: settings.logo_url || "",
         signature_url: settings.signature_url || "",
         udyam_number: settings.udyam_number || "",
@@ -419,9 +422,10 @@ const SettingsTab = () => {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'logo' | 'signature') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
     try {
+      const file = await compressImage(rawFile, 250);
       // Offline/EXE build: use the dedicated file endpoint. It stores the image
       // as a PUBLIC admin asset, so invoices and the homepage can render it
       // without a session. Uploading it through the generic bucket made it
@@ -630,13 +634,31 @@ const SettingsTab = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="phone_primary">Primary Phone</Label>
+              <Label htmlFor="phone_primary">Primary Phone (Calling &amp; Default WhatsApp)</Label>
               <Input
                 id="phone_primary"
                 placeholder="Enter primary phone number"
                 value={formData.phone_primary}
-                onChange={(e) => setFormData({...formData, phone_primary: e.target.value})}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((prev) => ({
+                    ...prev,
+                    phone_primary: val,
+                    whatsapp_number: (!prev.whatsapp_number || prev.whatsapp_number === prev.phone_primary) ? val : prev.whatsapp_number,
+                  }));
+                }}
               />
+            </div>
+
+            <div>
+              <Label htmlFor="whatsapp_number">WhatsApp Number (Click-to-Chat &amp; Inquiries)</Label>
+              <Input
+                id="whatsapp_number"
+                placeholder="e.g. 7275862175 (Defaults to Primary Phone if empty)"
+                value={formData.whatsapp_number}
+                onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+              />
+              <p className="text-[11px] text-gray-500 mt-0.5">Used across all "Chat on WhatsApp" and repair booking buttons on your storefront.</p>
             </div>
 
             <div>
@@ -670,13 +692,17 @@ const SettingsTab = () => {
             </div>
 
             <div>
-              <Label htmlFor="instagram">Instagram Handle</Label>
-              <Input
-                id="instagram"
-                placeholder="@phonezonestp"
-                value={formData.instagram}
-                onChange={(e) => setFormData({...formData, instagram: e.target.value})}
-              />
+              <Label htmlFor="instagram">Instagram Handle (without @)</Label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-semibold">@</span>
+                <Input
+                  id="instagram"
+                  placeholder="phonezone_stp"
+                  className="pl-7"
+                  value={formData.instagram}
+                  onChange={(e) => setFormData({...formData, instagram: e.target.value.replace(/^@+/, '').trim()})}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1230,6 +1256,86 @@ const SettingsTab = () => {
           </CardContent>
         </Card>
       )}
+      {/* New Company Setup & Onboarding Wizard (Master Admin Password Protected) */}
+      <Card className="border-red-500/40 bg-gradient-to-br from-red-950/20 via-slate-900 to-slate-950 text-white shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-red-400 flex items-center gap-2 text-base sm:text-lg">
+            <ShieldAlert className="h-5 w-5 text-red-400" />
+            New Store / Company Setup Wizard (Master Admin Password Protected)
+          </CardTitle>
+          <p className="text-xs text-slate-300">
+            Agar aapko ek nayi company ya nayi shop configure karni hai ya initial First-Run Setup Wizard ko dobara chalana hai, to apna Master Admin Password enter karke naya setup shuru kar sakte hain.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-xl space-y-2 text-xs text-red-200">
+            <p className="font-semibold text-red-100 flex items-center gap-1.5">
+              <span>⚠️ Important Security Protection:</span>
+            </p>
+            <p>
+              Yeh option sirf authorized store owner / master admin ke liye hai. Master Password verify hone ke baad First Setup Wizard khulega jisme aap Store Name, Tagline, Address, Phone Numbers, Udyam Registration, Bank Details aur Branding Logo naye sire se configure ya update kar sakenge.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-200">
+                Enter Master Admin Password
+              </Label>
+              <Input
+                type="password"
+                placeholder="Enter master password to unlock new setup"
+                value={masterPassword}
+                onChange={(e) => setMasterPassword(e.target.value)}
+                className="bg-slate-900/80 border-slate-700 text-white placeholder:text-slate-500"
+              />
+            </div>
+
+            <Button
+              variant="destructive"
+              disabled={isResettingSetup || !masterPassword.trim()}
+              onClick={async () => {
+                if (!masterPassword.trim()) {
+                  toast.error("Please enter the Master Admin Password to proceed.");
+                  return;
+                }
+                setIsResettingSetup(true);
+                try {
+                  const res = await fetch("/api/setup/reset", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ masterPassword }),
+                    credentials: "include",
+                  });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    throw new Error(data.error || "Password verification failed");
+                  }
+                  toast.success("Master Admin Password verified! Redirecting to Setup Wizard...");
+                  setTimeout(() => {
+                    window.location.href = "/setup?force=1&mode=new";
+                  }, 600);
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to verify Master Admin Password");
+                } finally {
+                  setIsResettingSetup(false);
+                }
+              }}
+              className="w-full font-bold shadow-md h-10 gap-1.5"
+            >
+              {isResettingSetup ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Verifying...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4" /> Start New Company Setup
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

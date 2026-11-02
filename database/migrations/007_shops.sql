@@ -27,10 +27,10 @@ CREATE INDEX IF NOT EXISTS idx_phones_shop_id ON phones(shop_id);
 
 INSERT OR IGNORE INTO shops (id, name, address, phone, email) VALUES (
   'shop_1',
-  'MOBILE WORLD',
-  'sitapur',
-  '8418944572',
-  'mohdzubair4572@naviaxis'
+  'Main Store',
+  '',
+  '',
+  ''
 );
 
 -- Pre-existing rows (and any row created before the shop picker existed) belong

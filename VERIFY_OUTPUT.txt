@@ -1,10 +1,10 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-10-27T12:25:13.545Z
+Date             : 2026-11-02T07:50:43.805Z
 Node             : v24.21.0
 Platform         : win32 x64
 
-SUMMARY: PASSED 60 / FAILED 1 / SKIPPED 0
+SUMMARY: PASSED 62 / FAILED 0 / SKIPPED 0
   (Counts cover the A-numbers of PhoneZone_MASTER_PROMPT.md section 5 for this
    stage, plus SUITE1/SUITE2 = backend/test/offline-suite.mjs and
    backend/test/first-setup-suite.mjs, plus R01..R06 = the repair-round checks
@@ -13,34 +13,33 @@ SUMMARY: PASSED 60 / FAILED 1 / SKIPPED 0
    follow-up guards: filterless/bogus-filter updates and selects, read-only
    audit_logs, non-writable files metadata, and column-name injection.)
 
-FAILED ITEMS:
-  - A20 -> tsc 2 (18 error line(s) in 1 file(s); touched by this stage: none), build 0
+FAILED ITEMS: none
 
 ========================================================================
 
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-10-27T12:24:30.164Z
+Date             : 2026-11-02T07:49:46.435Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
 
 --- sha256 of security-critical files ---
-f6b4be7b57cd7904006e8a759e8ad663e11050fa06ec1f41e83e3a675dc4c28a  backend/src/routes/index.js
-4f749cc6fc495d88ba7c2cd02588d4cc1e54b80752eba1e81ae1c27bed3d5b8f  backend/src/routes/compat.js
-caeeae5b6462202666519d7e2e6558097997940cf78db97264f92973d980f6bb  backend/src/services/inventoryService.js
-834ede395b0f0ce4a4ba04d31f960d587de41d60133a7fd676f986cd14cb9c41  backend/src/services/storageService.js
-e1354d385ddc68931a072751e80f0412304b63ef74762eccce7fc08afa451c2f  backend/src/services/authService.js
-24eff0d0ad18d04f72bbecd145cd2730eeee3fe20d7c3aa6d068d836f6fc168c  backend/src/services/backupService.js
-65610fe2538be0445ffcdd523c65248298388454ce47eeacb62f8ed0983439f2  package.json
+c4549c2e9bb45dd5d1a59ec14a6ec9bd4d5387e23442a1440a326bf2cce1389c  backend/src/routes/index.js
+01fdbe3e29c7e3cdd4bad0a59de251b6de5dd73e9b43ba4776a8377dbce9b3a1  backend/src/routes/compat.js
+90844eed80405522b4a1e40201fd88e20b1d020830c9ee8b2a0332973c914b57  backend/src/services/inventoryService.js
+11ec1c1fc1c26dbe82082dc016d0f7b850ef99410726ef1c7431a0c84cd9a56b  backend/src/services/storageService.js
+9ba9670ec1a7eb5a066da7da5f84ea42a020ca742498d93e299efb6e6f7cac9f  backend/src/services/authService.js
+93f96d827f059626fcf2de773cac10f175a00f1ffe0610e7d3a0097a73fcea59  backend/src/services/backupService.js
+62fd132f47a1f6545f188665133dbff7e7b5ba0fa83a98dce01ebeee0600288e  package.json
 802c0161880cd94e4b736df7d63bce48f472a2b14888d0c55d734a953d516dd9  database/migrations/001_initial_schema.sql
 37490d92c93dea76f10125acffe8795cd3c49658797a2f5bd95dcff8ab77c915  database/migrations/002_business_settings.sql
 c45040ef1e5a24eadae21f0444152d07b2ae8aff05ed399fef72b3f02fa202f7  database/migrations/003_add_bank_verification_and_separate_terms.sql
 300cb7949ca2ed413e6377f62cb1913ff21a84613fbd6a6d443e09cbe23ac875  database/migrations/004_tac_and_hicelltek.sql
 297d45ad82af676f76c12803f158b50600ea41fb8fd203ddfb05d246798e97f4  database/migrations/005_phone_variant_colour.sql
 95bcad44bdaaca73b41ab3e1e88a9dc5c4e62e90d5b2102579f4f398569b0029  database/migrations/006_financial_years.sql
-f1f3d3d5ba157d9c4e19ef1f11ef328bbeb384d55264e3b13c185120b3d463ac  database/migrations/007_shops.sql
+88b3a11a909fa327598f4958847a01e0401a4025fc3157146996153f813e4677  database/migrations/007_shops.sql
 9e1be90d2c3b2ec957f75a5c9c017d85c5ea2a78438e4935e6da2ade615367d0  database/migrations/009_hashed_sessions.sql
 fa12f7a0569b3da80e6cd3dbf2a5bb5a4d533993a08f788a17fe2ad32f563405  database/migrations/010_public_product_photos.sql
 3a864eb36dfae6f4767d25ab81e5025136315d6d2193fa6aedc7176967abff15  database/migrations/011_repairs.sql
@@ -54,16 +53,22 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
 54b34edf6a217fcc01a5b6359f4523a5dd244b0232bff98aed1089d438e816e8  database/migrations/019_repair_rework.sql
 64db29b0e21167911e8b7f824cc44c564edcf46b1bb137112c5bd284b0adb894  database/migrations/020_whatsapp_channel_and_sapath.sql
 4410c9e0f80ca7a7a4b8115b8b1e41bdd128e6e3d3bfb15f5f0c3185d9296a54  database/migrations/021_dealers.sql
+d18f7b59919e8febcf9201a4cc5a09cc5d9444c6a3638c888758b1680710f5dc  database/migrations/022_autostart_services.sql
+73cb903808ad515f4ff52aecb8cc5a9598506481a2c6f677ffaaf480f08b01c3  database/migrations/023_google_drive_backup.sql
+eabdefb788e796bcab45bc6ce118050c25e0da57bff44a20108f38ec218ca483  database/migrations/024_homepage_customization.sql
+e480d59509259fdfb4dbe09addbdd4db5f1b4ff5d24360ad0f68e9e519068126  database/migrations/025_sale_documents_and_dealer_ledger.sql
+b39033e415b27e8a3c9f487ea5c4dcd682cd8e0b56f2e5d1e2085de3fdc6c17c  database/migrations/026_batch_sales_and_public_sale_docs.sql
+087064f78361e026a3cec2e2acd750251a3b6a24ca64ed313a81068aab0790aa  database/migrations/027_dealer_photos_public.sql
 
 --- A01: node --check on backend + scripts ---
-  A01 PASS  47 files checked, 0 failed
+  A01 PASS  50 files checked, 0 failed
 
 --- A02 / A03: migrations ---
-  A02 PASS  20/20 migrations applied to a brand-new database
-  A03 PASS  7 pre-stamped, 20/20 after startup
+  A02 PASS  26/26 migrations applied to a brand-new database
+  A03 PASS  7 pre-stamped, 26/26 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:47807/api
+  server ready on http://127.0.0.1:47459/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -104,7 +109,7 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 713187a5-2639-4ea8-8daa-ee38e7257092
+  A61 PASS  by-phone match returned repair customer 24084140-170d-4325-bb84-10e7bcfd49cb
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403
@@ -125,31 +130,11 @@ b7ff07ffbae5cd94b6efab220691554cb63ef73ffb79ca8ca53bfef0dfd54fa1  database/migra
   SUITE1 PASS  138 passed, 0 failed
   test/first-setup-suite.mjs: 32 passed, 0 failed
   SUITE2 PASS  32 passed, 0 failed
+  test/dashboard-suite.mjs: 6 passed, 0 failed
+  SUITE3 PASS  6 passed, 0 failed
 
 --- A20: typecheck and production build ---
-  tsc exit 2
-  tsc reported 18 error line(s):
-    18 x src/components/admin/DealerBatchInvoiceDialog.tsx
-src/components/admin/DealerBatchInvoiceDialog.tsx(122,16): error TS2339: Property 'address' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(123,23): error TS2339: Property 'phone_primary' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(123,61): error TS2339: Property 'gst_number' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(124,31): error TS2339: Property 'udyam_registration' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(137,46): error TS2339: Property 'business_name' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(138,23): error TS2339: Property 'address' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(139,21): error TS2339: Property 'phone_primary' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(140,21): error TS2339: Property 'email' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(222,16): error TS2339: Property 'signature_url' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(222,50): error TS2339: Property 'signature_url' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(222,161): error TS2339: Property 'business_name' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(224,63): error TS2339: Property 'business_name' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(252,59): error TS2339: Property 'business_name' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(253,54): error TS2339: Property 'address' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(254,61): error TS2339: Property 'phone_primary' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(290,35): error TS2339: Property 'business_name' does not exist on type '{}'.
-src/components/admin/DealerBatchInvoiceDialog.tsx(412,91): error TS2339: Property 'gst_number' does not exist on type '{ account_holder_name: string; account_number: string; address: string; bank_name: string; business_hours: string; business_name: string; business_tagline: string; created_at: string; currency_code: string; ... 23 more ...; show_google_business: number; }'.
-
-npm notice run phonezone@1.0.0 npx
-npm notice run tsc --noEmit -p tsconfig.app.json
+  tsc exit 0
   npm run build exit 0
-  A20 FAIL  tsc 2 (18 error line(s) in 1 file(s); touched by this stage: none), build 0
+  A20 PASS  tsc 0 (0 error line(s) in 0 file(s); touched by this stage: none), build 0
 

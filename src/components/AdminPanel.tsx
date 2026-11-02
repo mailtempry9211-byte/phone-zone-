@@ -1,25 +1,23 @@
 
-import { useState } from "react";
+import React, { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, LogOut, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import AdminDashboard from "./admin/AdminDashboard";
-import PasswordChangeDialog from "./admin/PasswordChangeDialog";
+import { LogoutBackupDialog } from "./admin/LogoutBackupDialog";
+import { ForgotPasswordDialog } from "./admin/ForgotPasswordDialog";
 import AuthDialog from "./admin/AuthDialog";
-import StorageUsageCard from "./admin/StorageUsageCard";
-import FinancialYearSwitcher from "./admin/FinancialYearSwitcher";
 import { ReflectPreviousYearDialog } from "./admin/ReflectPreviousYearDialog";
-import UniversalScanner from "./admin/UniversalScanner";
-import OpenWaUniversalControl from "./admin/OpenWaUniversalControl";
-import NgrokUniversalControl from "./admin/NgrokUniversalControl";
 import { useAuth } from "@/hooks/useAuth";
 import { useFinancialYear } from "@/hooks/useFinancialYear";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { createOfflineSupabase } from "@/lib/data/offlineSupabase";
 import { supabase } from "@/integrations/supabase/client";
 import { isOfflineMode } from "@/lib/data/config";
+
+// Lazy-load AdminDashboard so unauthenticated users or public visitors never download it
+const AdminDashboard = React.lazy(() => import("./admin/AdminDashboard"));
 
 /** Build the online Supabase client for the AdminPanel login flow. */
 function createOnlineSupabase() {
@@ -32,9 +30,11 @@ interface AdminPanelProps {
 }
 
 const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) => {
-  const [email, setEmail] = useState("admin");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoginPending, setIsLoginPending] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [forgotDialogOpen, setForgotDialogOpen] = useState(false);
   const { user, signIn, signOut } = useAuth();
   const { isPreviousYear, active, latestYear } = useFinancialYear();
 
@@ -58,6 +58,12 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
       }
       toast.success("Logged in successfully");
       setPassword("");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("phonezone_admin_active", "true");
+        const url = new URL(window.location.href);
+        url.searchParams.set("admin", "1");
+        window.history.replaceState({}, "", url.toString());
+      }
     } catch (err: any) {
       toast.error(err.message || "Login failed. Is the backend running?");
     } finally {
@@ -67,10 +73,19 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
 
   const handleLogout = async () => {
     setPassword("");
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("phonezone_admin_active");
+      sessionStorage.removeItem("phonezone_admin_tab");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("admin");
+      url.searchParams.delete("tab");
+      window.history.replaceState({}, "", url.toString());
+    }
     if (user) {
       await signOut();
     }
     toast.success("Logged out successfully");
+    onBack();
   };
 
   // Require Supabase authentication for admin access
@@ -100,7 +115,16 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
               />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  onClick={() => setForgotDialogOpen(true)}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  Forgot Password? (पासवर्ड भूल गए?)
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -125,54 +149,35 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
             <p className="text-sm text-gray-600 mb-2">Or sign in with Supabase Auth:</p>
             <AuthDialog />
           </div>
+
+          <ForgotPasswordDialog
+            open={forgotDialogOpen}
+            onOpenChange={setForgotDialogOpen}
+            initialEmail={email}
+            onPasswordResetSuccess={(resetEmail) => {
+              setEmail(resetEmail);
+              setPassword("");
+            }}
+          />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">PhoneZone Admin</h1>
-              <p className="text-gray-600 text-sm sm:text-base">Management Panel</p>
-              {user && (
-                <p className="text-sm text-blue-600 break-all">Signed in as: {user.email}</p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <FinancialYearSwitcher />
-              <UniversalScanner />
-              <OpenWaUniversalControl />
-              <NgrokUniversalControl />
-              <StorageUsageCard compact />
-              <PasswordChangeDialog />
-              <Button variant="outline" size="sm" onClick={onBack} className="h-9">
-                Back to Store
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleLogout} disabled={!user} className="h-9">
-                <LogOut className="h-4 w-4 mr-1.5" />
-                Log out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       {isPreviousYear && (
-        <div className="bg-amber-600 text-white px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="bg-amber-600 text-white px-4 py-2 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-200" />
             <span>
-              <strong>Previous Financial Year Mode ({active?.label}):</strong> You are viewing an older financial year. The current active book is <strong>{latestYear}</strong>.
+              <strong>Previous Financial Year Mode ({active?.label}):</strong> Older financial year active. Current active book is <strong>{latestYear}</strong>.
             </span>
           </div>
           <Button
             size="sm"
             variant="secondary"
-            className="bg-white text-amber-900 hover:bg-amber-50 h-7 text-xs font-semibold"
+            className="bg-white text-amber-900 hover:bg-amber-50 h-6 text-xs font-semibold px-2 py-0"
             onClick={() => {
               window.dispatchEvent(
                 new CustomEvent("phonezone:previous-year-change", {
@@ -181,15 +186,34 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
               );
             }}
           >
-            <RefreshCw className="h-3 w-3 mr-1 text-amber-700" /> Reflect / Carry Forward to {latestYear}
+            <RefreshCw className="h-3 w-3 mr-1 text-amber-700" /> Reflect to {latestYear}
           </Button>
         </div>
       )}
 
       <ReflectPreviousYearDialog />
+      <LogoutBackupDialog
+        open={logoutDialogOpen}
+        onOpenChange={setLogoutDialogOpen}
+        onConfirmLogout={handleLogout}
+      />
       
       <ErrorBoundary>
-        <AdminDashboard initialDepartment={initialDepartment} />
+        <Suspense
+          fallback={
+            <div className="min-h-[60vh] flex flex-col items-center justify-center text-cyan-400 font-mono">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400 mb-3" />
+              <p className="text-xs">Loading Management Console...</p>
+            </div>
+          }
+        >
+          <AdminDashboard
+            initialDepartment={initialDepartment}
+            onBack={onBack}
+            user={user}
+            onOpenLogout={() => setLogoutDialogOpen(true)}
+          />
+        </Suspense>
       </ErrorBoundary>
     </div>
   );

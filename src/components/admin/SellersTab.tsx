@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Search, Phone, MessageSquare, FileText, History, Smartphone, ShieldCheck } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Phone, MessageSquare, FileText, History, Smartphone, ShieldCheck, Camera, Eye } from "lucide-react";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { compressImage } from "@/utils/imageCompression";
 import ReturnHistoryDialog from "./ReturnHistoryDialog";
 import PhoneHistoryDialog from "./PhoneHistoryDialog";
 import AadhaarScanButton from "./AadhaarScanButton";
@@ -29,13 +30,40 @@ const SellersTab = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
 
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [previewPhotoTitle, setPreviewPhotoTitle] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     address: "",
     id_proof_type: "" as IdProofType,
-    id_number: ""
+    id_number: "",
+    seller_photo_url: ""
   });
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    try {
+      const compressed = await compressImage(file, 300);
+      const fileExt = compressed.name.split(".").pop() || "jpg";
+      const filePath = `seller-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { error: uploadErr } = await supabase.storage.from("phonezone-uploads").upload(filePath, compressed);
+      if (uploadErr) throw uploadErr;
+      const { data } = supabase.storage.from("phonezone-uploads").getPublicUrl(filePath);
+      setFormData((prev) => ({ ...prev, seller_photo_url: data.publicUrl }));
+      toast.success("Seller photo uploaded successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload photo");
+    } finally {
+      setIsUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
 
   // Step 3: offline Aadhaar OCR fills name/address/number, never overwrites
   // what the user already typed.
@@ -73,7 +101,8 @@ const SellersTab = () => {
       phone: "",
       address: "",
       id_proof_type: "" as IdProofType,
-      id_number: ""
+      id_number: "",
+      seller_photo_url: ""
     });
   };
 
@@ -84,12 +113,14 @@ const SellersTab = () => {
 
   const handleEdit = (seller: any) => {
     setSelectedSeller(seller);
+    const existingPhoto = (seller as any).seller_photo_url || (seller as any).photo_url || (seller.phones as any[])?.find((p: any) => p?.seller_photo_url)?.seller_photo_url || "";
     setFormData({
       name: seller.name,
       phone: seller.phone,
       address: seller.address,
       id_proof_type: seller.id_proof_type as IdProofType,
-      id_number: seller.id_number
+      id_number: seller.id_number,
+      seller_photo_url: existingPhoto
     });
     setShowEditDialog(true);
   };
@@ -111,6 +142,7 @@ const SellersTab = () => {
             address: formData.address,
             id_proof_type: formData.id_proof_type,
             id_number: formData.id_number,
+            seller_photo_url: formData.seller_photo_url || null,
             updated_at: new Date().toISOString()
           })
           .eq('id', selectedSeller.id);
@@ -127,7 +159,8 @@ const SellersTab = () => {
             phone: formData.phone,
             address: formData.address,
             id_proof_type: formData.id_proof_type,
-            id_number: formData.id_number
+            id_number: formData.id_number,
+            seller_photo_url: formData.seller_photo_url || null
           });
 
         if (error) throw error;
@@ -308,27 +341,27 @@ const SellersTab = () => {
 
       {/* Seller Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-blue-600">{sellers?.length || 0}</div>
-          <div className="text-sm text-blue-700">Total Sellers</div>
+        <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-blue-700 dark:text-blue-300">{sellers?.length || 0}</div>
+          <div className="text-sm font-semibold text-blue-800 dark:text-blue-400">Total Sellers</div>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-green-600">
+        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
             {sellers?.filter(s => s.phones?.length > 0).length || 0}
           </div>
-          <div className="text-sm text-green-700">Active Sellers</div>
+          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">Active Sellers</div>
         </div>
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-purple-600">
+        <div className="bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-purple-700 dark:text-purple-300">
             {sellers?.reduce((sum, s) => sum + (s.phones?.length || 0), 0) || 0}
           </div>
-          <div className="text-sm text-purple-700">Total Phones Supplied</div>
+          <div className="text-sm font-semibold text-purple-800 dark:text-purple-400">Total Phones Supplied</div>
         </div>
-        <div className="bg-orange-50 p-4 rounded-lg">
-          <div className="text-2xl font-bold text-orange-600">
+        <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-500/30 p-4 rounded-xl shadow-xs">
+          <div className="text-2xl font-black text-amber-700 dark:text-amber-300">
             ₹{sellers?.reduce((sum, s) => sum + (s.phones?.reduce((ps: number, p: any) => ps + Number(p.purchase_price), 0) || 0), 0).toLocaleString() || 0}
           </div>
-          <div className="text-sm text-orange-700">Total Amount Paid</div>
+          <div className="text-sm font-semibold text-amber-800 dark:text-amber-400">Total Amount Paid</div>
         </div>
       </div>
 
@@ -368,7 +401,12 @@ const SellersTab = () => {
                           <img
                             src={sellerPhoto}
                             alt={seller.name}
-                            className="h-10 w-10 rounded-full object-cover border border-gray-200 shrink-0"
+                            className="h-10 w-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:scale-105 hover:border-blue-400 transition-all shadow-xs"
+                            onClick={() => {
+                              setPreviewPhotoUrl(sellerPhoto);
+                              setPreviewPhotoTitle(`${seller.name} - Seller Photo`);
+                            }}
+                            title="Click to view full-size photo"
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";
                             }}
@@ -546,6 +584,46 @@ const SellersTab = () => {
                   required
                 />
               </div>
+
+              <div className="md:col-span-2">
+                <Label>Seller Photo</Label>
+                <div className="flex items-center gap-3 mt-1.5">
+                  {formData.seller_photo_url && (
+                    <div className="relative group">
+                      <img
+                        src={formData.seller_photo_url}
+                        alt="Preview"
+                        className="h-14 w-14 rounded-lg object-cover border border-slate-300 shadow-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, seller_photo_url: "" })}
+                        className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full h-4 w-4 flex items-center justify-center text-xs font-bold shadow-xs hover:bg-red-700"
+                        title="Remove photo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={photoInputRef}
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    <Camera className="h-4 w-4 mr-1.5" />
+                    {isUploadingPhoto ? "Uploading..." : formData.seller_photo_url ? "Change Photo" : "Upload Photo"}
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end space-x-4">
@@ -630,6 +708,46 @@ const SellersTab = () => {
                   required
                 />
               </div>
+
+              <div className="md:col-span-2">
+                <Label>Seller Photo</Label>
+                <div className="flex items-center gap-3 mt-1.5">
+                  {formData.seller_photo_url && (
+                    <div className="relative group">
+                      <img
+                        src={formData.seller_photo_url}
+                        alt="Preview"
+                        className="h-14 w-14 rounded-lg object-cover border border-slate-300 shadow-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, seller_photo_url: "" })}
+                        className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full h-4 w-4 flex items-center justify-center text-xs font-bold shadow-xs hover:bg-red-700"
+                        title="Remove photo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={photoInputRef}
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    <Camera className="h-4 w-4 mr-1.5" />
+                    {isUploadingPhoto ? "Uploading..." : formData.seller_photo_url ? "Change Photo" : "Upload Photo"}
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end space-x-4">
@@ -667,6 +785,45 @@ const SellersTab = () => {
         open={!!sapathPatraPhone}
         onOpenChange={(o) => { if (!o) setSapathPatraPhone(null); }}
       />
+
+      {/* Seller Full-Size Photo Preview Dialog */}
+      <Dialog open={!!previewPhotoUrl} onOpenChange={() => setPreviewPhotoUrl(null)}>
+        <DialogContent className="max-w-md p-4 bg-slate-900 text-white border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-100">
+              {previewPhotoTitle || "Seller Photo"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-3">
+            {previewPhotoUrl && (
+              <img
+                src={previewPhotoUrl}
+                alt={previewPhotoTitle}
+                className="max-h-[65vh] max-w-full rounded-xl object-contain border border-slate-700 shadow-xl"
+              />
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+              onClick={() => {
+                if (!previewPhotoUrl) return;
+                const a = document.createElement("a");
+                a.href = previewPhotoUrl;
+                a.download = `${(previewPhotoTitle || "seller").replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
+                a.click();
+              }}
+            >
+              Download Photo
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPreviewPhotoUrl(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

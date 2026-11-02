@@ -42,6 +42,11 @@ tmp-*.mjs
 tmp-*.png
 back-*.png
 scratch/
+tac_full.xlsx
+extracted_pdf.txt
+clean_pdf_text.txt
+full_pdf_extracted.txt
+REF_*.png
 
 # ---- builds / dependencies ----
 node_modules

@@ -13,7 +13,7 @@ import ShopManagementDialog from "./ShopManagementDialog";
 import PhotoViewer from "./PhotoViewer";
 import ProcessSaleDialog from "./ProcessSaleDialog";
 import InvoiceCustomizeDialog, { type InvoiceCustomization } from "./InvoiceCustomizeDialog";
-import { buildInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates";
+import { buildInvoiceHtml, buildCombinedPurchaseInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates";
 import { downloadSaleWallpaper } from "@/lib/deviceQr";
 import { toast } from "sonner";
 import { numberToWords } from "@/utils/numberToWords";
@@ -22,11 +22,16 @@ import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { formatPurchaseInvoiceText, formatSalesInvoiceText } from "@/lib/whatsappInvoiceFormatter";
 import SapathPatraModal from "./SapathPatraModal";
 import DealerBatchInvoiceDialog from "./DealerBatchInvoiceDialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** Sentinel for the Radix select - an empty string is not a legal item value. */
 const ALL_SHOPS = "all";
 
-const InventoryTab = () => {
+interface InventoryTabProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
   const [selectedPhone, setSelectedPhone] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -35,6 +40,17 @@ const InventoryTab = () => {
   const [sapathPhone, setSapathPhone] = useState<any | null>(null);
   const [batchInvoiceId, setBatchInvoiceId] = useState<string | null>(null);
   const [showBatchInvoiceDialog, setShowBatchInvoiceDialog] = useState(false);
+  const [selectedPhoneIds, setSelectedPhoneIds] = useState<Set<string>>(new Set());
+  const [selectedBatchPhones, setSelectedBatchPhones] = useState<any[]>([]);
+
+  const toggleSelectPhone = (id: string) => {
+    setSelectedPhoneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const [currentPhotos, setCurrentPhotos] = useState<string[]>([]);
   const [currentPhotoTitle, setCurrentPhotoTitle] = useState("");
   const [invoiceDialogPhone, setInvoiceDialogPhone] = useState<any>(null);
@@ -44,7 +60,7 @@ const InventoryTab = () => {
   const [shopDialogExistingShopId, setShopDialogExistingShopId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [conditionFilter, setConditionFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("available");
   const [selectedShop, setSelectedShop] = useState<string | null>(null);
   const [shops, setShops] = useState<Array<{id: string; name: string}>>([]);
   const queryClient = useQueryClient();
@@ -124,7 +140,7 @@ const InventoryTab = () => {
       
       const matchesCondition = conditionFilter === "all" || phone.condition === conditionFilter;
       const matchesStatus = statusFilter === "all" || 
-        (statusFilter === "sold" && phone.is_sold) ||
+        ((statusFilter === "sold" || statusFilter === "sold_purchase") && phone.is_sold) ||
         (statusFilter === "available" && !phone.is_sold);
       
       // Mirrors the backend's COALESCE(shop_id, ?) rule: a phone that has no
@@ -217,9 +233,25 @@ const InventoryTab = () => {
       : (phone.product_photos?.filter((photo: string) => {
           return photo.includes('product-photos') || !photo.includes('sale-documents');
         }) || []);
-    const documentPhotos = photos.photos === 'none' || photos.photos === 'product'
+    let documentPhotos = photos.photos === 'none' || photos.photos === 'product'
       ? []
       : (phone.purchase_documents || []);
+    let paymentProofPhotos = photos.photos === 'none' || photos.photos === 'product'
+      ? []
+      : (phone.payment_proof_photos || []);
+
+    // Extra phones inherit seller KYC documents & payment proof from batch siblings if empty
+    if (phone.batch_purchase_id && phones && (!documentPhotos.length || !paymentProofPhotos.length)) {
+      const sibling = phones.find((p: any) => p.batch_purchase_id === phone.batch_purchase_id && ((p.purchase_documents && p.purchase_documents.length > 0) || (p.payment_proof_photos && p.payment_proof_photos.length > 0)));
+      if (sibling) {
+        if (!documentPhotos.length && sibling.purchase_documents && sibling.purchase_documents.length > 0 && photos.photos !== 'none' && photos.photos !== 'product') {
+          documentPhotos = sibling.purchase_documents;
+        }
+        if (!paymentProofPhotos.length && sibling.payment_proof_photos && sibling.payment_proof_photos.length > 0 && photos.photos !== 'none' && photos.photos !== 'product') {
+          paymentProofPhotos = sibling.payment_proof_photos;
+        }
+      }
+    }
 
     // In Inventory Tab, invoice is always the Purchase Invoice (from seller).
     // For sales invoices to customers, users go to the Sold tab.
@@ -239,6 +271,7 @@ const InventoryTab = () => {
       photoChoice: photos.photos,
       productPhotos,
       documentPhotos,
+      paymentProofPhotos,
       documentLabel: 'Purchase Documents',
       terms: (adminSettings.terms_and_conditions_purchase || adminSettings.terms_and_conditions || '').split('\n').filter(Boolean),
       fallbackTerms: DEFAULT_PURCHASE_TERMS,
@@ -307,13 +340,57 @@ const InventoryTab = () => {
     }
   };
 
+  const openCombinedPurchaseInvoice = (batchId: string) => {
+    if (!phones || !adminSettings) return;
+    const batchPhones = phones.filter((p: any) => p.batch_purchase_id === batchId);
+    if (!batchPhones.length) {
+      toast.error("Batch phones not found");
+      return;
+    }
+    const prime = batchPhones[0];
+    const seller = prime.sellers || {
+      name: "Walk-in Seller",
+      phone: "-",
+      address: "-",
+    };
+
+    const allDocPhotos = Array.from(new Set(batchPhones.flatMap((p: any) => p.purchase_documents || [])));
+    const allPayPhotos = Array.from(new Set(batchPhones.flatMap((p: any) => p.payment_proof_photos || [])));
+    const totalAmount = batchPhones.reduce((sum: number, p: any) => sum + Number(p.purchase_price || 0), 0);
+    const purchaseTerms = (adminSettings?.terms_and_conditions_purchase || adminSettings?.terms_and_conditions || "").split("\n").filter(Boolean);
+
+    const invoiceHtml = buildCombinedPurchaseInvoiceHtml({
+      settings: adminSettings,
+      seller,
+      phones: batchPhones.map((p: any) => ({
+        phone_name: p.phone_name,
+        model: p.model,
+        imei_number: p.imei_number,
+        variant: p.variant,
+        colour: p.colour,
+        condition: p.condition,
+        purchase_price: Number(p.purchase_price || 0),
+        product_photos: p.product_photos || [],
+      })),
+      totalAmount,
+      invoiceNumber: `PUR-${batchId.slice(-8).toUpperCase()}`,
+      purchaseDate: prime.purchase_date ? new Date(prime.purchase_date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN"),
+      paymentMethod: prime.payment_method || "Cash",
+      terms: purchaseTerms,
+      documentPhotos: allDocPhotos,
+      paymentProofPhotos: allPayPhotos,
+    });
+
+    printHtml(invoiceHtml);
+  };
+
   const getConditionColor = (condition: string) => {
     switch (condition) {
-      case 'excellent': return 'bg-green-100 text-green-800';
-      case 'good': return 'bg-blue-100 text-blue-800';
-      case 'fair': return 'bg-yellow-100 text-yellow-800';
-      case 'poor': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'excellent': return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-500/40 font-bold';
+      case 'good': return 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-500/40 font-bold';
+      case 'fair': return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-500/40 font-bold';
+      case 'poor': return 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-500/40 font-bold';
+      default: return 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 font-bold';
     }
   };
 
@@ -336,9 +413,9 @@ const InventoryTab = () => {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-        <Button onClick={() => setAddDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <Button onClick={() => setAddDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+          <Plus className="h-4 w-4 mr-1.5" />
           Add Phone
         </Button>
         <Button
@@ -348,8 +425,9 @@ const InventoryTab = () => {
             setShopDialogExistingShopId(null);
             setShopDialogOpen(true);
           }}
+          className="font-semibold"
         >
-          <Building2 className="h-4 w-4 mr-2" />
+          <Building2 className="h-4 w-4 mr-1.5" />
           Add New Shop
         </Button>
         {shops.length > 0 && (
@@ -360,11 +438,52 @@ const InventoryTab = () => {
               setShopDialogExistingShopId(selectedShop);
               setShopDialogOpen(true);
             }}
+            className="font-semibold"
           >
-            <Copy className="h-4 w-4 mr-2" />
+            <Copy className="h-4 w-4 mr-1.5" />
             Copy Shop Details
           </Button>
         )}
+
+        {/* View Switcher: Available Stock vs Sold Phones Purchase Records */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+          <Button
+            size="sm"
+            variant={statusFilter === "available" ? "default" : "ghost"}
+            onClick={() => setStatusFilter("available")}
+            className={`text-xs h-8 font-bold ${statusFilter === "available" ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            Available Stock ({phones?.filter((p: any) => !p.is_sold).length || 0})
+          </Button>
+          <Button
+            size="sm"
+            variant={statusFilter === "sold_purchase" ? "default" : "ghost"}
+            onClick={() => setStatusFilter("sold_purchase")}
+            title="View sold phones purchase history & purchase invoices"
+            className={`text-xs h-8 font-bold ${statusFilter === "sold_purchase" ? "bg-amber-600 hover:bg-amber-700 text-white shadow-sm" : "text-slate-600 dark:text-slate-300"}`}
+          >
+            Sold Phones Purchase Records ({phones?.filter((p: any) => p.is_sold).length || 0})
+          </Button>
+          {onNavigateTab && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onNavigateTab("sold")}
+              title="Navigate to Sold Phones Sales Records"
+              className="text-xs h-8 font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-500"
+            >
+              Sold Phones (Sales) &rarr;
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={statusFilter === "all" ? "default" : "ghost"}
+            onClick={() => setStatusFilter("all")}
+            className={`text-xs h-8 font-semibold ${statusFilter === "all" ? "bg-slate-700 text-white" : "text-slate-500 dark:text-slate-400"}`}
+          >
+            All ({phones?.length || 0})
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-4" style={{ marginBottom: '12px' }}>
@@ -439,33 +558,46 @@ const InventoryTab = () => {
           return (
           <Card
             key={phone.id}
-            className={`${
+            className={`transition-all rounded-2xl border ${
               isDealerPhone
-                ? "bg-sky-50/70 border-sky-300 shadow-sm"
+                ? "bg-sky-50/70 border-sky-300 text-slate-900 shadow-sm dark:bg-[#0c1424] dark:border-sky-500/50 dark:text-slate-100 dark:shadow-[0_0_20px_rgba(14,165,233,0.12)]"
                 : phone.is_sold
-                ? "opacity-75 border-green-200"
-                : ""
+                ? "bg-slate-50 border-emerald-300 opacity-90 text-slate-900 dark:bg-slate-900/60 dark:border-emerald-500/40 dark:text-slate-100"
+                : "bg-white border-slate-200 text-slate-900 shadow-sm dark:bg-[#0d121f] dark:border-slate-800 dark:text-slate-100"
             }`}
           >
             <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <CardTitle className="text-lg">{phone.phone_name}</CardTitle>
-                    {isDealerPhone && (
-                      <Badge variant="outline" className="text-[10px] bg-sky-100 text-sky-800 border-sky-300 font-semibold">
-                        🏢 B2B Dealer
-                      </Badge>
-                    )}
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex items-start gap-2.5">
+                  {!phone.is_sold && (
+                    <div className="pt-0.5">
+                      <Checkbox
+                        id={`select-${phone.id}`}
+                        checked={selectedPhoneIds.has(phone.id)}
+                        onCheckedChange={() => toggleSelectPhone(phone.id)}
+                        className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600 h-4 w-4 rounded"
+                        title="Select for batch sale"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">{phone.phone_name}</CardTitle>
+                      {isDealerPhone && (
+                        <Badge variant="outline" className="text-[10px] bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-500/40 font-bold">
+                          🏢 B2B Dealer
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-0.5">{phone.model}</p>
                   </div>
-                  <p className="text-sm text-gray-600">{phone.model}</p>
                 </div>
-                <div className="flex space-x-1">
+                <div className="flex space-x-1 shrink-0">
                   <Badge className={getConditionColor(phone.condition)}>
                     {phone.condition}
                   </Badge>
                   {phone.is_sold && (
-                    <Badge className="bg-green-100 text-green-800">
+                    <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-500/40 font-bold">
                       SOLD
                     </Badge>
                   )}
@@ -474,52 +606,52 @@ const InventoryTab = () => {
             </CardHeader>
             
             <CardContent className="space-y-3">
-              <div className="text-sm">
-                <div><strong>IMEI:</strong> {phone.imei_number}</div>
-                <div><strong>Variant:</strong> {phone.variant || '-'}</div>
-                <div><strong>Colour:</strong> {phone.colour || '-'}</div>
+              <div className="text-sm space-y-1 text-slate-700 dark:text-slate-300">
+                <div><strong className="text-slate-900 dark:text-slate-100 font-bold">IMEI:</strong> <span className="font-mono">{phone.imei_number}</span></div>
+                <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Variant:</strong> {phone.variant || '-'}</div>
+                <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Colour:</strong> {phone.colour || '-'}</div>
                 <div>
-                  <strong>{isDealerPhone ? "Dealer:" : "Seller:"}</strong>{" "}
+                  <strong className="text-slate-900 dark:text-slate-100 font-bold">{isDealerPhone ? "Dealer:" : "Seller:"}</strong>{" "}
                   {isDealerPhone ? (
-                    <span className="text-sky-700 font-semibold">{phone.dealers?.shop_name || "B2B Supplier"}</span>
+                    <span className="text-sky-700 dark:text-sky-400 font-bold">{phone.dealers?.shop_name || "B2B Supplier"}</span>
                   ) : (
-                    phone.sellers?.name || "-"
+                    <span className="font-semibold text-slate-900 dark:text-slate-200">{phone.sellers?.name || "-"}</span>
                   )}
                 </div>
-                <div><strong>Purchase:</strong> ₹{phone.purchase_price}</div>
-                <div><strong>Selling:</strong> ₹{phone.selling_price}</div>
+                <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Purchase:</strong> <span className="font-semibold">₹{phone.purchase_price}</span></div>
+                <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Selling:</strong> <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{phone.selling_price}</span></div>
                 {phone.is_sold && phone.customers && (
-                  <div><strong>Customer:</strong> {phone.customers.name}</div>
+                  <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Customer:</strong> <span className="font-semibold text-slate-900 dark:text-slate-200">{phone.customers.name}</span></div>
                 )}
                 {phone.rating && (
-                  <div><strong>Rating:</strong> {phone.rating}/5</div>
+                  <div><strong className="text-slate-900 dark:text-slate-100 font-bold">Rating:</strong> {phone.rating}/5</div>
                 )}
               </div>
 
               <div className="flex flex-wrap gap-1">
                 {phone.bill_available && (
-                  <Badge variant="outline" className="text-xs">Bill</Badge>
+                  <Badge variant="outline" className="text-xs bg-slate-100 border-slate-300 text-slate-800 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300 font-semibold">Bill</Badge>
                 )}
                 {phone.box_available && (
-                  <Badge variant="outline" className="text-xs">Box</Badge>
+                  <Badge variant="outline" className="text-xs bg-slate-100 border-slate-300 text-slate-800 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300 font-semibold">Box</Badge>
                 )}
                 {phone.charger_available && (
-                  <Badge variant="outline" className="text-xs">Charger</Badge>
+                  <Badge variant="outline" className="text-xs bg-slate-100 border-slate-300 text-slate-800 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300 font-semibold">Charger</Badge>
                 )}
               </div>
 
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
                 <span>Product: {phone.product_photos?.length || 0}</span>
                 <span>Docs: {phone.purchase_documents?.length || 0}</span>
                 <span>Payment: {phone.payment_proof_photos?.length || 0}</span>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pt-1">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleEdit(phone)}
-                  className="flex-1"
+                  className="flex-1 font-semibold border-slate-300 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
@@ -530,6 +662,7 @@ const InventoryTab = () => {
                   size="sm"
                   onClick={() => viewPhotos(phone, 'product')}
                   disabled={!phone.product_photos?.length}
+                  className="font-semibold border-slate-300 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   Photos
@@ -540,44 +673,71 @@ const InventoryTab = () => {
                   size="sm"
                   onClick={() => viewPhotos(phone, 'purchase')}
                   disabled={!phone.purchase_documents?.length}
+                  className="font-semibold border-slate-300 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   Docs
                 </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => viewPhotos(phone, 'payment')}
+                  disabled={!phone.payment_proof_photos?.length}
+                  title="Payment Proof"
+                  className="font-semibold border-slate-300 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  Payment
+                </Button>
                 
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 w-full">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => { setInvoiceDialogPhone(phone); setInvoiceDialogOpen(true); }}
                     title="Customize & generate purchase invoice"
+                    className="font-semibold border-slate-300 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     <Receipt className="h-4 w-4 mr-1" />
                     Invoice
                   </Button>
                   {phone.batch_purchase_id && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setBatchInvoiceId(phone.batch_purchase_id);
-                        setShowBatchInvoiceDialog(true);
-                      }}
-                      title="View combined wholesale B2B batch purchase bill (सभी फ़ोन्स का संयुक्त बिल)"
-                      className="text-sky-700 hover:text-sky-800 hover:bg-sky-50 border-sky-300 font-semibold"
-                    >
-                      <Building2 className="h-4 w-4 mr-1 text-sky-600" />
-                      B2B Bill
-                    </Button>
+                    Boolean(phone.is_dealer) ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setBatchInvoiceId(phone.batch_purchase_id);
+                          setShowBatchInvoiceDialog(true);
+                        }}
+                        title="View combined wholesale B2B batch purchase bill (सभी फ़ोन्स का संयुक्त बिल)"
+                        className="text-sky-700 dark:text-sky-300 hover:text-sky-800 dark:hover:text-white bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-500/40 font-bold"
+                      >
+                        <Building2 className="h-4 w-4 mr-1 text-sky-600 dark:text-sky-400" />
+                        B2B Bill
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openCombinedPurchaseInvoice(phone.batch_purchase_id)}
+                        title="View combined purchase voucher for multiple phones from this seller (संयुक्त खरीद रसीद)"
+                        className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-white bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/40 font-bold"
+                      >
+                        <Receipt className="h-4 w-4 mr-1 text-emerald-600 dark:text-emerald-400" />
+                        Combined Bill
+                      </Button>
+                    )
                   )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSapathPhone(phone)}
                     title="Legal Sapath Patra (शपथ पत्र)"
-                    className="text-blue-700 hover:text-blue-800 hover:bg-blue-50"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-white bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-500/40 font-bold"
                   >
-                    <ShieldCheck className="h-4 w-4 mr-1 text-blue-600" />
+                    <ShieldCheck className="h-4 w-4 mr-1 text-blue-600 dark:text-blue-400" />
                     शपथ पत्र
                   </Button>
                   {!phone.is_sold && (
@@ -594,8 +754,9 @@ const InventoryTab = () => {
                         })
                       }
                       title="Download Sale QR Wallpaper (set on phone screen to sell instantly)"
+                      className="border-slate-300 dark:border-slate-700 dark:bg-slate-800/80"
                     >
-                      <QrCode className="h-4 w-4 text-blue-600" />
+                      <QrCode className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     </Button>
                   )}
                   <Button
@@ -603,7 +764,7 @@ const InventoryTab = () => {
                     size="sm"
                     onClick={() => generateInvoice(phone, 'whatsapp')}
                     title="WhatsApp Purchase Invoice"
-                    className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                    className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-white bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-500/40 font-bold"
                   >
                     <Share className="h-4 w-4 mr-1" />
                     WhatsApp
@@ -611,12 +772,12 @@ const InventoryTab = () => {
                 </div>
                 
                 {!phone.is_sold && (
-                  <>
+                  <div className="flex items-center gap-2 w-full pt-1">
                     <Button
                       variant="default"
                       size="sm"
                       onClick={() => handleProcessSale(phone)}
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex-1 shadow-sm"
                     >
                       <ShoppingCart className="h-4 w-4 mr-1" />
                       Process Sale
@@ -625,11 +786,12 @@ const InventoryTab = () => {
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDelete(phone.id, phone.is_sold)}
+                      className="font-bold shadow-sm"
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
                       Delete
                     </Button>
-                  </>
+                  </div>
                 )}
               </div>
             </CardContent>
@@ -641,6 +803,43 @@ const InventoryTab = () => {
       {filteredPhones.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No phones found matching your criteria.</p>
+        </div>
+      )}
+
+      {selectedPhoneIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-900/95 text-white backdrop-blur border border-emerald-500/50 shadow-2xl rounded-2xl px-6 py-3.5 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-slate-950">
+              {selectedPhoneIds.size}
+            </span>
+            <span>Selected for Multi-Phone Sale</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                const batchPhones = (phones || []).filter((p: any) => selectedPhoneIds.has(p.id));
+                setSelectedBatchPhones(batchPhones);
+                setSelectedPhone(null);
+                setProcessSaleDialogOpen(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md"
+            >
+              <ShoppingCart className="h-4 w-4 mr-1.5" />
+              Process Multi-Sale ({selectedPhoneIds.size})
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedPhoneIds(new Set());
+                setSelectedBatchPhones([]);
+              }}
+              className="text-slate-300 hover:text-white hover:bg-slate-800"
+            >
+              Clear
+            </Button>
+          </div>
         </div>
       )}
 
@@ -664,8 +863,18 @@ const InventoryTab = () => {
 
       <ProcessSaleDialog
         phone={selectedPhone}
+        phones={selectedBatchPhones}
         open={processSaleDialogOpen}
-        onOpenChange={setProcessSaleDialogOpen}
+        onOpenChange={(open) => {
+          setProcessSaleDialogOpen(open);
+          if (!open) {
+            setSelectedBatchPhones([]);
+          }
+        }}
+        onSuccess={() => {
+          setSelectedPhoneIds(new Set());
+          setSelectedBatchPhones([]);
+        }}
       />
 
       <InvoiceCustomizeDialog

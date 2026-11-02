@@ -15,6 +15,44 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const formatUser = (me: any) => {
+  if (!me) return null;
+  const roles = Array.isArray(me.roles)
+    ? me.roles
+    : me.role
+    ? [me.role]
+    : me.user_metadata?.roles || me.app_metadata?.roles || [];
+  const primaryRole = roles[0] || me.role || "staff";
+  const assignedShop = me.assignedShopId || me.shop_id || (roles.includes("admin") ? "all" : "shop_1");
+  const isShopLocked = me.isShopLocked !== undefined ? Boolean(me.isShopLocked) : (assignedShop !== "all");
+  const activeShop = me.shopId || (isShopLocked ? assignedShop : "all");
+  return {
+    ...me,
+    id: me.id,
+    email: me.email,
+    displayName: me.displayName || me.display_name || me.user_metadata?.display_name || me.email?.split("@")[0] || "User",
+    shopId: activeShop,
+    assignedShopId: assignedShop,
+    isShopLocked,
+    roles,
+    role: primaryRole,
+    user_metadata: {
+      ...(me.user_metadata || {}),
+      displayName: me.displayName || me.display_name,
+      shopId: activeShop,
+      assignedShopId: assignedShop,
+      isShopLocked,
+      roles,
+      role: primaryRole,
+    },
+    app_metadata: {
+      ...(me.app_metadata || {}),
+      roles,
+      role: primaryRole,
+    },
+  };
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -26,8 +64,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .then((r) => (r.ok ? r.json() : null))
         .then((me) => {
           if (me) {
-            setUser({ id: me.id, email: me.email } as any);
-            setSession({ user: { id: me.id, email: me.email } } as any);
+            const formatted = formatUser(me);
+            setUser(formatted as any);
+            setSession({ user: formatted } as any);
           }
         })
         .catch(() => { /* not logged in yet */ });
@@ -38,13 +77,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
-        setUser(session?.user ?? null);
+        setUser(session?.user ? (formatUser(session.user) as any) : null);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(session?.user ? (formatUser(session.user) as any) : null);
     });
 
     return () => subscription.unsubscribe();
@@ -71,8 +110,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (meRes.ok) {
           const me = await meRes.json().catch(() => null);
           if (me) {
-            setUser({ id: me.id, email: me.email } as any);
-            setSession({ user: { id: me.id, email: me.email } } as any);
+            const formatted = formatUser(me);
+            setUser(formatted as any);
+            setSession({ user: formatted } as any);
           }
         }
         return { error: null };

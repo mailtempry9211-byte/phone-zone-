@@ -18,6 +18,12 @@ interface UserItem {
   created_at: string;
 }
 
+interface Shop {
+  id: string;
+  name: string;
+  shop_code?: string | null;
+}
+
 interface AuditLog {
   id: string;
   user_id?: string;
@@ -29,6 +35,7 @@ interface AuditLog {
 
 export default function UsersTab() {
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState<"users" | "logs">("users");
@@ -38,6 +45,7 @@ export default function UsersTab() {
   const [newPassword, setNewPassword] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newRole, setNewRole] = useState("staff");
+  const [newShopId, setNewShopId] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit user state
@@ -45,6 +53,7 @@ export default function UsersTab() {
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState("staff");
+  const [editShopId, setEditShopId] = useState("all");
   const [editIsActive, setEditIsActive] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -59,8 +68,21 @@ export default function UsersTab() {
 
   useEffect(() => {
     fetchUsers();
+    fetchShops();
     fetchAuditLogs();
   }, []);
+
+  const fetchShops = async () => {
+    try {
+      const res = await fetch("/api/shops", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setShops(data || []);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -110,6 +132,7 @@ export default function UsersTab() {
           password: newPassword,
           displayName: newDisplayName.trim() || newEmail.trim(),
           role: newRole,
+          shopId: newShopId,
         }),
       });
 
@@ -118,11 +141,12 @@ export default function UsersTab() {
         throw new Error(body.error || "Failed to create user");
       }
 
-      toast.success(`User "${newEmail}" created successfully with role ${newRole}`);
+      toast.success(`User "${newEmail}" created successfully`);
       setNewEmail("");
       setNewPassword("");
       setNewDisplayName("");
       setNewRole("staff");
+      setNewShopId("all");
       fetchUsers();
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
@@ -136,6 +160,7 @@ export default function UsersTab() {
     setEditDisplayName(u.display_name || "");
     setEditEmail(u.email);
     setEditRole(u.roles?.[0] || "staff");
+    setEditShopId(u.shop_id || "all");
     setEditIsActive(Boolean(u.is_active));
   };
 
@@ -152,6 +177,7 @@ export default function UsersTab() {
           displayName: editDisplayName.trim(),
           email: editEmail.trim().toLowerCase(),
           role: editRole,
+          shopId: editShopId,
           isActive: editIsActive,
         }),
       });
@@ -238,6 +264,23 @@ export default function UsersTab() {
     }
   };
 
+  const getShopBadge = (shopId?: string) => {
+    if (!shopId || shopId === "all") {
+      return (
+        <Badge variant="outline" className="border-indigo-400 text-indigo-700 bg-indigo-50/70 font-semibold text-[11px]">
+          🌐 All Branches (Global)
+        </Badge>
+      );
+    }
+    const matched = shops.find((s) => s.id === shopId);
+    const label = matched ? `${matched.name} (${matched.shop_code || matched.id})` : shopId;
+    return (
+      <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50/80 font-semibold text-[11px]">
+        📍 {label} (Locked)
+      </Badge>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Sub-tab navigation */}
@@ -318,6 +361,27 @@ export default function UsersTab() {
                     <option value="master_admin">Master Admin (Full System Control)</option>
                   </select>
                 </div>
+                <div>
+                  <Label htmlFor="newShopId">Assigned Store / Branch Access *</Label>
+                  <select
+                    id="newShopId"
+                    className="w-full h-10 px-3 py-2 border rounded-md text-sm bg-background font-medium"
+                    value={newShopId}
+                    onChange={(e) => setNewShopId(e.target.value)}
+                  >
+                    <option value="all">🌐 All Branches / Both Shops (Global Access)</option>
+                    {shops.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        📍 {s.name} ({s.shop_code || s.id}) - Locked to this branch
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {newShopId === "all"
+                      ? "User can view, switch, and operate across all store branches."
+                      : "User is strictly locked to this branch. Other branch data is completely hidden."}
+                  </p>
+                </div>
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? "Creating..." : "Create Account"}
                 </Button>
@@ -345,9 +409,10 @@ export default function UsersTab() {
                   {users.map((u) => (
                     <div key={u.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50">
                       <div>
-                        <div className="font-semibold text-sm flex items-center gap-2">
+                        <div className="font-semibold text-sm flex flex-wrap items-center gap-2">
                           {u.display_name || u.email}
                           {roleBadge(u.roles?.[0])}
+                          {getShopBadge(u.shop_id)}
                           {u.is_active ? (
                             <span className="text-[11px] text-green-700 flex items-center gap-0.5 font-medium bg-green-50 px-1.5 py-0.2 rounded border border-green-200">
                               <CheckCircle2 className="h-3 w-3" /> Active
@@ -445,6 +510,27 @@ export default function UsersTab() {
                   <option value="viewer">Viewer (Read-Only)</option>
                   <option value="master_admin">Master Admin (Full System Control)</option>
                 </select>
+              </div>
+              <div>
+                <Label htmlFor="editShopId">Assigned Store / Branch Access</Label>
+                <select
+                  id="editShopId"
+                  className="w-full h-10 px-3 py-2 border rounded-md text-sm bg-background mt-1 font-medium"
+                  value={editShopId}
+                  onChange={(e) => setEditShopId(e.target.value)}
+                >
+                  <option value="all">🌐 All Branches / Both Shops (Global Access)</option>
+                  {shops.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      📍 {s.name} ({s.shop_code || s.id}) - Locked to this branch
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {editShopId === "all"
+                    ? "User can view, switch, and operate across all store branches."
+                    : "User is strictly locked to this branch. Other branch data is completely hidden."}
+                </p>
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <input

@@ -29,7 +29,7 @@ import {
 import QRCode from "qrcode";
 import { LOCAL_API_BASE } from "@/lib/data/config";
 
-export const NgrokUniversalControl: React.FC = () => {
+export const NgrokUniversalControl: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [open, setOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -132,10 +132,10 @@ export const NgrokUniversalControl: React.FC = () => {
         type="button"
         variant="outline"
         size="sm"
-        className={`h-9 px-3 text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+        className={className || `h-8 px-2.5 text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm ${
           isRunning
-            ? "border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100"
-            : "border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            ? "border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20"
+            : "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800"
         }`}
         onClick={() => setOpen(true)}
       >

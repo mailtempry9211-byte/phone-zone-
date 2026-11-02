@@ -43,6 +43,16 @@ export function getDealer(id) {
   return { ...dealer, phones, batches };
 }
 
+function ensurePhotoIsPublic(db, url) {
+  if (!url || typeof url !== "string") return;
+  const match = url.match(/\/public\/files\/([0-9a-f-]{36})/i);
+  if (match) {
+    try {
+      db.prepare("UPDATE files SET is_public = 1 WHERE id = ?").run(match[1]);
+    } catch {}
+  }
+}
+
 export function createDealer(data, userId) {
   if (!data.shop_name?.trim()) throw badRequest("Shop / Firm Name is required.");
   if (!data.proprietor_name?.trim()) throw badRequest("Proprietor Name is required.");
@@ -99,6 +109,7 @@ export function createDealer(data, userId) {
   } catch {}
 
   audit(userId, "dealer.created", "dealer", id, { shop_name: data.shop_name });
+  if (data.photo_url) ensurePhotoIsPublic(db, data.photo_url);
   return getDealer(id);
 }
 
@@ -154,6 +165,7 @@ export function updateDealer(id, data, userId) {
     audit(userId, "dealer.updated", "dealer", id, { fields: Object.keys(data) });
   }
 
+  if (data.photo_url) ensurePhotoIsPublic(db, data.photo_url);
   return getDealer(id);
 }
 
@@ -183,7 +195,13 @@ export function createBatchPurchase(data, userId) {
     const fy = activeFyLabel();
     const invoiceNumber = `PUR-B2B-${Date.now().toString().slice(-6)}`;
     const effectiveDate = purchase_date || new Date().toISOString().split("T")[0];
+    const isCredit = (() => {
+      const s = String(payment_method || "").toLowerCase().trim();
+      return s.includes("credit") || s.includes("khata") || s.includes("udhar") || s.includes("due");
+    })();
+
     const normalizedPaymentMethod = (() => {
+      if (isCredit) return "credit";
       const s = String(payment_method || "cash").toLowerCase().trim();
       if (s.includes("upi")) return "upi";
       if (s.includes("card")) return "card";
@@ -312,11 +330,12 @@ export function createBatchPurchase(data, userId) {
     }
 
     // Insert batch record
+    const paymentStatus = isCredit ? 'unpaid' : 'completed';
     db.prepare(`
       INSERT INTO dealer_batches (
         id, dealer_id, invoice_number, purchase_date, total_phones,
         total_amount, payment_method, payment_status, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       batchId,
       dealer.id,
@@ -325,8 +344,48 @@ export function createBatchPurchase(data, userId) {
       phones.length,
       totalAmount,
       normalizedPaymentMethod,
+      paymentStatus,
       notes?.trim() || null
     );
+
+    // Record in dealer_ledger so B2B statement and balance are accurate
+    const currentBalance = Number(dealer.balance || 0);
+    const debitBalanceAfter = currentBalance - totalAmount;
+    const debitLedgerId = newId();
+    db.prepare(`
+      INSERT INTO dealer_ledger (
+        id, dealer_id, type, amount, balance_after, payment_mode, description, reference_id, created_at, created_by, shop_id
+      ) VALUES (?, ?, 'debit', ?, ?, ?, ?, ?, datetime('now'), ?, 'shop_1')
+    `).run(
+      debitLedgerId,
+      dealer.id,
+      totalAmount,
+      debitBalanceAfter,
+      normalizedPaymentMethod,
+      `B2B Batch Purchase: ${invoiceNumber} (${phones.length} phones)`,
+      batchId,
+      userId || null
+    );
+
+    if (isCredit) {
+      db.prepare("UPDATE dealers SET balance = ?, updated_at = datetime('now') WHERE id = ?").run(debitBalanceAfter, dealer.id);
+    } else {
+      const creditLedgerId = newId();
+      db.prepare(`
+        INSERT INTO dealer_ledger (
+          id, dealer_id, type, amount, balance_after, payment_mode, description, reference_id, created_at, created_by, shop_id
+        ) VALUES (?, ?, 'credit', ?, ?, ?, ?, ?, datetime('now'), ?, 'shop_1')
+      `).run(
+        creditLedgerId,
+        dealer.id,
+        totalAmount,
+        currentBalance,
+        normalizedPaymentMethod,
+        `Payment Settled: ${invoiceNumber} via ${payment_method || "Cash"}`,
+        batchId,
+        userId || null
+      );
+    }
 
     audit(userId, "dealer.batch_purchase", "dealer_batch", batchId, {
       dealer_id: dealer.id,
@@ -387,4 +446,99 @@ export function getBatchPurchase(idOrInvoice) {
       };
     }),
   };
+}
+
+export function getDealerLedger(dealerId) {
+  const db = getDb();
+  const dealer = db.prepare("SELECT id, shop_name, proprietor_name, phone, balance FROM dealers WHERE id = ?").get(dealerId);
+  if (!dealer) throw notFound("Dealer not found.");
+
+  // Auto-sync any existing batches missing from dealer_ledger
+  const existingBatches = db.prepare("SELECT * FROM dealer_batches WHERE dealer_id = ? ORDER BY created_at ASC").all(dealerId);
+  for (const b of existingBatches) {
+    const hasEntry = db.prepare("SELECT id FROM dealer_ledger WHERE reference_id = ?").get(b.id);
+    if (!hasEntry) {
+      const curBal = Number(dealer.balance || 0);
+      const balAfter = curBal - Number(b.total_amount || 0);
+      const entryId = newId();
+      db.prepare(`
+        INSERT INTO dealer_ledger (
+          id, dealer_id, type, amount, balance_after, payment_mode, description, reference_id, created_at, created_by, shop_id
+        ) VALUES (?, ?, 'debit', ?, ?, ?, ?, ?, ?, 'system', 'shop_1')
+      `).run(
+        entryId,
+        dealerId,
+        Number(b.total_amount || 0),
+        balAfter,
+        b.payment_method || 'credit',
+        `B2B Batch Purchase: ${b.invoice_number} (${b.total_phones || 1} phones)`,
+        b.id,
+        b.created_at || new Date().toISOString()
+      );
+      db.prepare("UPDATE dealers SET balance = ?, updated_at = datetime('now') WHERE id = ?").run(balAfter, dealerId);
+      dealer.balance = balAfter;
+    }
+  }
+
+  const entries = db.prepare("SELECT * FROM dealer_ledger WHERE dealer_id = ? ORDER BY created_at DESC").all(dealerId);
+  return {
+    dealer,
+    balance: Number(dealer.balance || 0),
+    entries,
+  };
+}
+
+export function addDealerLedgerEntry(dealerId, { type, amount, payment_mode, description, reference_id }, userId) {
+  const db = getDb();
+  const dealer = db.prepare("SELECT * FROM dealers WHERE id = ?").get(dealerId);
+  if (!dealer) throw notFound("Dealer not found.");
+  if (!["debit", "credit"].includes(type)) throw badRequest("Type must be 'debit' or 'credit'.");
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) throw badRequest("Amount must be greater than 0.");
+
+  return transaction(() => {
+    // Current balance: positive = dealer owes us / we paid advance, negative = we owe dealer
+    // type 'credit' = Payment made to dealer (reduces what we owe or adds to credit)
+    // type 'debit' = Purchases from dealer (increases what we owe)
+    const currentBalance = Number(dealer.balance || 0);
+    const balanceAfter = type === "credit" ? currentBalance + numAmount : currentBalance - numAmount;
+
+    const id = newId();
+    db.prepare(`
+      INSERT INTO dealer_ledger (
+        id, dealer_id, type, amount, balance_after, payment_mode, description, reference_id, created_at, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+    `).run(
+      id,
+      dealerId,
+      type,
+      numAmount,
+      balanceAfter,
+      payment_mode || "cash",
+      description || "",
+      reference_id || null,
+      userId || null
+    );
+
+    db.prepare("UPDATE dealers SET balance = ?, updated_at = datetime('now') WHERE id = ?").run(balanceAfter, dealerId);
+
+    audit(userId, "dealer_ledger.entry_added", "dealer", dealerId, {
+      type,
+      amount: numAmount,
+      balanceAfter,
+      payment_mode,
+    });
+
+    return {
+      id,
+      dealer_id: dealerId,
+      type,
+      amount: numAmount,
+      balance_after: balanceAfter,
+      payment_mode: payment_mode || "cash",
+      description: description || "",
+      reference_id: reference_id || null,
+      created_at: new Date().toISOString(),
+    };
+  });
 }

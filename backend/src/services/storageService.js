@@ -52,14 +52,24 @@ const LAYOUT = {
   bucket: (id, category) => `buckets/${id}/${path.dirname(category || "misc")}`,
 };
 
-const PUBLIC_CATEGORIES = new Set(["images", "logo", "signature", "seller-photos", "seller-signatures"]); // product photos + public business assets
+const PUBLIC_CATEGORIES = new Set([
+  "images",
+  "logo",
+  "signature",
+  "seller-photos",
+  "seller-signatures",
+  "dealer-photos",
+  "dealer-signatures",
+  "sale-documents",
+  "sales-documents",
+]);
 
 /**
  * Top-level folders of the compatibility bucket that are PUBLIC.
  *
  * Product photos are shown on the customer homepage (and on invoices), so they
  * must stay readable while nobody is signed in. Invoices and Sapath Patra also
- * embed purchase documents, seller photos and signatures so customers and sellers
+ * embed purchase documents, sale documents, seller photos and signatures so customers and sellers
  * can view their receipts.
  */
 const PUBLIC_BUCKET_FOLDERS = new Set([
@@ -68,9 +78,13 @@ const PUBLIC_BUCKET_FOLDERS = new Set([
   "logo",
   "signature",
   "purchase-documents",
+  "sale-documents",
+  "sales-documents",
   "payment-proof",
   "seller-photos",
   "seller-signatures",
+  "dealer-photos",
+  "dealer-signatures",
   "documents",
 ]);
 

@@ -45,6 +45,7 @@ const hydrate = (row) =>
     product_photos: fromJsonArray(row.product_photos),
     payment_proof_photos: fromJsonArray(row.payment_proof_photos),
     purchase_documents: fromJsonArray(row.purchase_documents),
+    sale_documents: fromJsonArray(row.sale_documents),
     bill_available: !!row.bill_available,
     box_available: !!row.box_available,
     charger_available: !!row.charger_available,
@@ -176,6 +177,9 @@ export function createPurchase(data, userId) {
       }
     }
 
+    const hasExtra = Array.isArray(data.additional_phones) && data.additional_phones.length > 0;
+    const batchPurchaseId = hasExtra ? (data.batch_purchase_id || `batch_pur_${Date.now()}`) : (data.batch_purchase_id || null);
+
     const row = {
       id: newId(),
       phone_name: data.phone_name,
@@ -201,16 +205,17 @@ export function createPurchase(data, userId) {
       sapath_patra_language: data.sapath_patra_language || 'both',
       seller_id: sellerId,
       shop_id: data.shop_id || 'shop_1',
+      batch_purchase_id: batchPurchaseId,
     };
     db.prepare(
       `INSERT INTO phones (id, phone_name, model, imei_number, condition, purchase_price, selling_price,
         purchase_date, rating, bill_available, box_available, charger_available, features, product_photos,
         payment_proof_photos, purchase_documents, payment_method, variant, colour, seller_photo_url, seller_signature_url,
-        sapath_patra_language, seller_id, financial_year, shop_id)
+        sapath_patra_language, seller_id, financial_year, shop_id, batch_purchase_id)
        VALUES (@id, @phone_name, @model, @imei_number, @condition, @purchase_price, @selling_price,
         @purchase_date, @rating, @bill_available, @box_available, @charger_available, @features, @product_photos,
         @payment_proof_photos, @purchase_documents, @payment_method, @variant, @colour, @seller_photo_url, @seller_signature_url,
-        @sapath_patra_language, @seller_id, @financial_year, @shop_id)`,
+        @sapath_patra_language, @seller_id, @financial_year, @shop_id, @batch_purchase_id)`,
     ).run({ ...row, financial_year: activeFyLabel(), shop_id: data.shop_id || 'shop_1' });
 
     const invoice = createInvoice({
@@ -222,6 +227,62 @@ export function createPurchase(data, userId) {
     });
     audit(userId, "purchase.created", "phone", row.id, { invoice: invoice.invoice_number });
 
+    const extraCreated = [];
+    if (hasExtra) {
+      for (const extra of data.additional_phones) {
+        if (!extra.imei_number || !extra.phone_name) continue;
+        const extraImei = String(extra.imei_number).trim();
+        assertImei(extraImei);
+        const extraRow = {
+          id: newId(),
+          phone_name: extra.phone_name,
+          model: extra.model || extra.phone_name,
+          imei_number: extraImei,
+          condition: extra.condition || 'good',
+          purchase_price: Number(extra.purchase_price || 0),
+          selling_price: Number(extra.selling_price || 0),
+          purchase_date: data.purchase_date,
+          rating: extra.rating ?? null,
+          bill_available: toBool(extra.bill_available),
+          box_available: toBool(extra.box_available),
+          charger_available: toBool(extra.charger_available),
+          features: toJsonArray(extra.features),
+          product_photos: toJsonArray(extra.product_photos || data.product_photos),
+          payment_proof_photos: toJsonArray(data.payment_proof_photos),
+          purchase_documents: toJsonArray(data.purchase_documents),
+          payment_method: data.payment_method,
+          variant: extra.variant ?? null,
+          colour: extra.colour ?? null,
+          seller_photo_url: row.seller_photo_url,
+          seller_signature_url: row.seller_signature_url,
+          sapath_patra_language: row.sapath_patra_language,
+          seller_id: sellerId,
+          shop_id: row.shop_id,
+          batch_purchase_id: batchPurchaseId,
+        };
+        db.prepare(
+          `INSERT INTO phones (id, phone_name, model, imei_number, condition, purchase_price, selling_price,
+            purchase_date, rating, bill_available, box_available, charger_available, features, product_photos,
+            payment_proof_photos, purchase_documents, payment_method, variant, colour, seller_photo_url, seller_signature_url,
+            sapath_patra_language, seller_id, financial_year, shop_id, batch_purchase_id)
+           VALUES (@id, @phone_name, @model, @imei_number, @condition, @purchase_price, @selling_price,
+            @purchase_date, @rating, @bill_available, @box_available, @charger_available, @features, @product_photos,
+            @payment_proof_photos, @purchase_documents, @payment_method, @variant, @colour, @seller_photo_url, @seller_signature_url,
+            @sapath_patra_language, @seller_id, @financial_year, @shop_id, @batch_purchase_id)`,
+        ).run({ ...extraRow, financial_year: activeFyLabel(), shop_id: data.shop_id || 'shop_1' });
+
+        const extraInv = createInvoice({
+          type: "purchase",
+          phoneId: extraRow.id,
+          sellerId,
+          amount: extraRow.purchase_price,
+          html: null,
+        });
+        audit(userId, "purchase.created", "phone", extraRow.id, { invoice: extraInv.invoice_number });
+        extraCreated.push(getPhone(extraRow.id));
+      }
+    }
+
     // Auto-learn TAC if not already known
     try {
       autoLearnTac({
@@ -232,7 +293,7 @@ export function createPurchase(data, userId) {
       });
     } catch {}
 
-    return { phone: getPhone(row.id), invoice };
+    return { phone: getPhone(row.id), invoice, additional_phones: extraCreated, batch_purchase_id: batchPurchaseId };
   });
 }
 
@@ -243,7 +304,7 @@ export function updatePhone(id, data, userId) {
     "rating", "payment_method", "seller_id",
   ];
   const sets = columns.filter((c) => data[c] !== undefined);
-  const jsonCols = ["features", "product_photos", "payment_proof_photos", "purchase_documents"];
+  const jsonCols = ["features", "product_photos", "payment_proof_photos", "purchase_documents", "sale_documents"];
   const boolCols = ["bill_available", "box_available", "charger_available"];
   const values = sets.map((c) => data[c]);
   for (const c of jsonCols) if (data[c] !== undefined) { sets.push(c); values.push(toJsonArray(data[c])); }
@@ -258,7 +319,7 @@ export function updatePhone(id, data, userId) {
 /**
  * SALE WORKFLOW: mark sold + attach customer + generate sale invoice, atomically.
  */
-export function sellPhone(phoneId, { customer_id, sale_price, sold_date, invoice_html }, userId) {
+export function sellPhone(phoneId, { customer_id, sale_price, sold_date, invoice_html, sale_documents, batch_sale_id }, userId) {
   const phone = getPhone(phoneId);
   if (phone.is_sold) throw badRequest("This phone has already been sold.");
   if (phone.return_status === "purchase_returned") {
@@ -276,9 +337,11 @@ export function sellPhone(phoneId, { customer_id, sale_price, sold_date, invoice
   return transaction(() => {
     const db = getDb();
     const soldAt = sold_date || new Date().toISOString();
+    const docsJson = toJsonArray(sale_documents || []);
+    const batchSaleId = batch_sale_id || null;
     db.prepare(
-      "UPDATE phones SET is_sold = 1, sold_date = ?, customer_id = ?, selling_price = ?, shop_id = ? WHERE id = ?",
-    ).run(soldAt, customer_id, Number(sale_price), phone.shop_id, phoneId);
+      "UPDATE phones SET is_sold = 1, sold_date = ?, customer_id = ?, selling_price = ?, sale_documents = ?, batch_sale_id = ?, shop_id = ? WHERE id = ?",
+    ).run(soldAt, customer_id, Number(sale_price), docsJson, batchSaleId, phone.shop_id, phoneId);
 
     const invoice = createInvoice({
       type: "sale",

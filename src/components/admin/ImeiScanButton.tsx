@@ -60,6 +60,102 @@ const luhnOk = (digits: string): boolean => {
   return sum % 10 === 0;
 };
 
+const computeLuhnCheckDigit = (d14: string): string | null => {
+  if (!d14 || d14.length !== 14) return null;
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    let d = parseInt(d14[i], 10);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return String((10 - (sum % 10)) % 10);
+};
+
+export const repairImeiClient = (rawCandidate: string): string | null => {
+  if (!rawCandidate) return null;
+  const digits = String(rawCandidate).replace(/\D/g, "");
+  if (digits.length === 15 && luhnOk(digits)) return digits;
+
+  const CONFUSIONS: Record<string, string[]> = {
+    "0": ["8", "6", "9"],
+    "1": ["7", "4"],
+    "2": ["7", "3"],
+    "3": ["8", "5", "9"],
+    "4": ["9", "1"],
+    "5": ["6", "3", "8"],
+    "6": ["8", "0", "5"],
+    "7": ["1", "2"],
+    "8": ["0", "6", "3", "9", "5"],
+    "9": ["8", "4", "0"],
+  };
+
+  const scored: Array<{ imei: string; score: number }> = [];
+
+  const add = (cand: string, edits: number) => {
+    if (cand.length === 15 && luhnOk(cand)) {
+      const isStd = /^(?:35|86|01|99)/.test(cand);
+      scored.push({ imei: cand, score: (isStd ? 800 : 500) - edits * 50 });
+    }
+  };
+
+  if (digits.length === 14) {
+    if (digits.startsWith("5")) add("3" + digits, 1);
+    if (digits.startsWith("6")) add("8" + digits, 1);
+    const check = computeLuhnCheckDigit(digits);
+    if (check !== null) add(digits + check, 1);
+  }
+
+  if (digits.length === 16) {
+    add(digits.slice(1), 1);
+    add(digits.slice(0, 15), 1);
+  }
+
+  if (digits.length === 15) {
+    if (digits[1] === "5" && digits[0] !== "3") add("3" + digits.slice(1), 1);
+    if (digits[1] === "6" && digits[0] !== "8") add("8" + digits.slice(1), 1);
+
+    for (let i = 0; i < 15; i++) {
+      const cur = digits[i];
+      for (const alt of (CONFUSIONS[cur] || [])) {
+        add(digits.slice(0, i) + alt + digits.slice(i + 1), 1);
+      }
+    }
+
+    const HIGH_CONFUSION: Record<string, string[]> = {
+      "0": ["8", "6"],
+      "8": ["0", "6", "3"],
+      "6": ["8", "0"],
+      "3": ["8"],
+      "5": ["6"],
+      "1": ["7"],
+      "7": ["1"],
+      "9": ["8"],
+    };
+    const ambig: number[] = [];
+    for (let i = 0; i < 15; i++) if (HIGH_CONFUSION[digits[i]]) ambig.push(i);
+    for (let a = 0; a < ambig.length; a++) {
+      const i = ambig[a];
+      for (let b = a + 1; b < ambig.length; b++) {
+        const j = ambig[b];
+        for (const a1 of HIGH_CONFUSION[digits[i]]) {
+          for (const a2 of HIGH_CONFUSION[digits[j]]) {
+            const arr = digits.split("");
+            arr[i] = a1; arr[j] = a2;
+            add(arr.join(""), 2);
+          }
+        }
+      }
+    }
+  }
+
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].imei;
+};
+
 /**
  * Pull the most plausible IMEI out of a text read. The printed value is often
  * broken up by spaces ("35 693803 564380 9") or sits next to other codes, so we
@@ -86,7 +182,12 @@ const pickImeiFromText = (raw: string): string | null => {
   }
   if (candidates.length === 0) return null;
   const best = candidates.find((c) => luhnOk(c));
-  return best ?? candidates[0];
+  if (best) return best;
+  for (const c of candidates) {
+    const rep = repairImeiClient(c);
+    if (rep) return rep;
+  }
+  return candidates[0];
 };
 
 /**
@@ -117,6 +218,9 @@ const pickImeiByKeyword = (raw: string): { imei: string; keyword: string } | nul
     for (const m of raw.matchAll(re)) {
       const digits = (m[1] || "").replace(/\D/g, "");
       if (digits.length >= 14 && digits.length <= 16) {
+        if (digits.length === 15 && luhnOk(digits)) return { imei: digits, keyword };
+        const rep = repairImeiClient(digits);
+        if (rep) return { imei: rep, keyword };
         const best = pickImeiFromText(digits) || digits;
         if (best) return { imei: best, keyword };
       }
@@ -423,121 +527,9 @@ export const decodeBarcode = async (file: File | Blob): Promise<{ text: string; 
   }
 };
 
-let cachedImeiWorker: any = null;
-let cachedImeiWorkerPromise: Promise<any> | null = null;
-
-async function getImeiWorker() {
-  if (cachedImeiWorker) return cachedImeiWorker;
-  if (cachedImeiWorkerPromise) return cachedImeiWorkerPromise;
-  const { createWorker } = await import("tesseract.js");
-  cachedImeiWorkerPromise = createWorker("eng", 1, {
-    workerPath: "/ocr/worker.min.js",
-    corePath: "/ocr",
-    langPath: "/ocr",
-    workerBlobURL: false,
-    gzip: true,
-  }).then((w) => {
-    cachedImeiWorker = w;
-    return w;
-  });
-  return cachedImeiWorkerPromise;
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, msg: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(msg)), ms)),
-  ]);
-}
-
-/** OCR pass: read the printed label, then keep ONLY the IMEI keyword's digits. */
-const ocrImei = async (file: File | Blob): Promise<string | null> => {
-  const { createWorker, PSM } = await import("tesseract.js");
-  const bitmap = await createImageBitmap(file);
-  const MAX_LONG = 1800;
-  const long = Math.max(bitmap.width, bitmap.height);
-  const scale = long > MAX_LONG ? MAX_LONG / long : Math.min(3, 1400 / long);
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-
-  const img = ctx.getImageData(0, 0, w, h);
-  const px = img.data;
-  const total = (px.length / 4) | 0;
-
-  // 1) grayscale, keeping the mean so we can spot a dark-mode screenshot
-  let lumSum = 0;
-  for (let i = 0; i < px.length; i += 4) {
-    const g = Math.round((px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000);
-    px[i] = px[i + 1] = px[i + 2] = g;
-    lumSum += g;
-  }
-  // 2) dark background (dark-mode "About" screens) → invert so tesseract sees
-  //    black text on white like it expects.
-  if (total && lumSum / total < 118) {
-    for (let i = 0; i < px.length; i += 4) {
-      const v = 255 - px[i];
-      px[i] = px[i + 1] = px[i + 2] = v;
-    }
-  }
-  // 3) contrast stretch (2nd / 98th percentile) like the Aadhaar scans
-  const hist = new Uint32Array(256);
-  for (let i = 0; i < px.length; i += 4) hist[px[i]]++;
-  let lo = 0;
-  let hi = 255;
-  let acc = 0;
-  for (let v = 0; v < 256; v++) {
-    acc += hist[v];
-    if (acc >= total * 0.02) {
-      lo = v;
-      break;
-    }
-  }
-  acc = 0;
-  for (let v = 255; v >= 0; v--) {
-    acc += hist[v];
-    if (acc >= total * 0.02) {
-      hi = v;
-      break;
-    }
-  }
-  const range = Math.max(1, hi - lo);
-  for (let i = 0; i < px.length; i += 4) {
-    const v = Math.max(0, Math.min(255, Math.round(((px[i] - lo) * 255) / range)));
-    px[i] = px[i + 1] = px[i + 2] = v;
-  }
-  ctx.putImageData(img, 0, 0);
-  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.95));
-  if (!blob) return null;
-
-  const worker = await getImeiWorker();
-  // ONE keyword-first pass: SINGLE_BLOCK (6) keeps whole sticker lines; if the
-  // keyword is missed (tiny / tilted digits) retry with SPARSE_TEXT (11).
-  for (const psm of [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT]) {
-    await worker.setParameters({ tessedit_pageseg_mode: psm });
-    const { data } = await worker.recognize(blob);
-    const text = data?.text || "";
-    const byKeyword = pickImeiByKeyword(text);
-    if (byKeyword) return byKeyword.imei;
-    const loose = pickImeiFromText(text);
-    if (loose && luhnOk(loose)) return loose;
-    if (loose && /^\d{14,16}$/.test(loose)) return loose;
-  }
-  return null;
-};
-
 const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<ScanMode | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [lastScan, setLastScan] = useState<string | null>(null);
@@ -547,133 +539,53 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
     (target === "camera" ? cameraInputRef : uploadInputRef).current?.click();
   };
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, chosen: ScanMode) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !chosen) return;
+    if (!file) return;
     setBusy(true);
     setError("");
     setLastScan(null);
+    setStatusMsg("Reading barcode...");
     try {
-      if (chosen === "barcode") {
-        // Barcode ONLY - no silent OCR fallback; the user picked this on purpose.
-        setStatusMsg("Reading the barcode...");
-        const bar = await decodeBarcode(file);
-        if (!bar) {
-          setError(
-            "No barcode found in this photo. Try a sharper, straight-on picture of the barcode - or go back and choose \"Read IMEI (OCR)\" instead.",
-          );
-          return;
-        }
-        const digits = bar.text.replace(/\D/g, "");
-        const candidate =
-          (/^\d{15}$/.test(digits) && digits) ||
-          pickImeiByKeyword(bar.text)?.imei ||
-          pickImeiFromText(bar.text) ||
-          (digits.length >= 14 && digits.length <= 16 ? digits : null);
-        if (candidate) {
-          onResult({ imei: candidate, via: "barcode", checksumOk: true });
-          setLastScan(candidate);
-          toast.success(`IMEI read from ${bar.format} barcode - filled in`);
-          return;
-        }
-        setError(`Barcode found (${bar.format}) but there is no IMEI inside it - use the OCR option instead.`);
+      const bar = await decodeBarcode(file);
+      if (!bar) {
+        setError("No barcode found. Keep the barcode straight, sharp and well-lit.");
+        toast.error("No barcode detected. Please hold the camera closer to the barcode.");
         return;
       }
+      const digits = bar.text.replace(/\D/g, "");
+      const candidate =
+        (/^\d{15}$/.test(digits) && digits) ||
+        pickImeiByKeyword(bar.text)?.imei ||
+        pickImeiFromText(bar.text) ||
+        (digits.length >= 14 && digits.length <= 16 ? digits : null);
 
-      // OCR mode - keyword-first, so it only needs the IMEI text to be legible.
-      setStatusMsg("Reading the label with OCR...");
-
-      // Fast-path: try Backend Native OCR first
-      try {
-        const form = new FormData();
-        form.append("image", file);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const resp = await fetch("/api/ocr/imei", {
-          method: "POST",
-          body: form,
-          signal: controller.signal,
-          credentials: "include",
-        });
-        clearTimeout(timeoutId);
-        if (resp.ok) {
-          const res = await resp.json();
-          if (res.success && res.imei) {
-            onResult({ imei: res.imei, via: res.via || "ocr", checksumOk: !!res.checksumOk });
-            setLastScan(res.imei);
-            if (res.checksumOk) toast.success("IMEI read from the label - filled in");
-            else toast.success("IMEI read from the label - please double-check the number");
-            return;
-          }
-        }
-      } catch (_e) {
-        // Fall through to in-browser recognition below
-      }
-
-      const viaOcr = await withTimeout(ocrImei(file), 25000, "Reading the IMEI took too long. Try a closer, well-lit photo or enter it manually.");
-      if (!viaOcr) {
-        setError(
-          "Could not find an IMEI in this photo. Move closer to the line that says IMEI / IMEI NO, keep it straight and well lit - or type the number manually.",
-        );
+      if (candidate) {
+        onResult({ imei: candidate, via: "barcode", checksumOk: true });
+        setLastScan(candidate);
+        toast.success(`IMEI (${candidate}) read from ${bar.format} barcode!`);
         return;
       }
-      const checksumOk = luhnOk(viaOcr);
-      onResult({ imei: viaOcr, via: "ocr", checksumOk });
-      setLastScan(viaOcr);
-      if (checksumOk) toast.success("IMEI read from the label - filled in");
-      else toast.success("IMEI read from the label - please double-check the number");
+      setError(`Barcode read (${bar.format}) but no 15-digit IMEI found inside it.`);
+      toast.error(`Barcode read (${bar.format}), but it does not contain a 15-digit IMEI.`);
     } catch (err: any) {
-      console.error("[imei-scan] failed:", err);
-      setError(err?.message ? `Scan failed: ${err.message}` : "Scan failed. Try another photo of the sticker.");
+      console.error("[imei-barcode-scan] error:", err);
+      setError(err?.message ? `Scan error: ${err.message}` : "Scan failed. Try another photo of the barcode.");
     } finally {
       setBusy(false);
       setStatusMsg("");
     }
   };
 
-  const reset = () => {
-    if (busy) return;
-    setMode(null);
-    setError("");
-    setLastScan(null);
-  };
-
-  const sourceButtons = (
-    <div className="grid grid-cols-2 gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={busy}
-        onClick={() => pickFile("upload")}
-        title={`Upload a photo of the ${mode === "barcode" ? "barcode" : "IMEI label"}`}
-      >
-        <Upload className="h-4 w-4 mr-1" />
-        Upload photo
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={busy}
-        onClick={() => pickFile("camera")}
-        title={`Take a photo of the ${mode === "barcode" ? "barcode" : "IMEI label"}`}
-      >
-        <Camera className="h-4 w-4 mr-1" />
-        Take photo
-      </Button>
-    </div>
-  );
-
   return (
-    <div className="flex flex-col gap-1 min-w-[240px]">
+    <div className="flex flex-col gap-1 min-w-[200px]">
       <input
         ref={uploadInputRef}
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => handleFile(e, mode ?? "barcode")}
+        onChange={handleFile}
       />
       <input
         ref={cameraInputRef}
@@ -681,107 +593,54 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
         accept="image/*"
         capture="environment"
         className="hidden"
-        onChange={(e) => handleFile(e, mode ?? "barcode")}
+        onChange={handleFile}
       />
 
-      {!open ? (
+      <div className="flex items-center gap-1.5">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="w-full"
           disabled={disabled || busy}
-          onClick={() => setOpen(true)}
+          onClick={() => pickFile("camera")}
+          className="h-8 px-2.5 text-xs font-semibold border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 shadow-xs flex items-center gap-1.5"
+          title="Scan IMEI Barcode with Camera"
         >
-          <ScanLine className="h-4 w-4 mr-2" />
-          Scan IMEI
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" /> : <Camera className="h-3.5 w-3.5 text-blue-600" />}
+          <span>{busy ? "Scanning..." : "Scan Barcode"}</span>
         </Button>
-      ) : (
-        <div className="rounded-lg border p-2 space-y-2 bg-gray-50">
-          {!mode ? (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => { setError(""); setMode("barcode"); }}
-                >
-                  <QrCode className="h-4 w-4 mr-1" />
-                  Scan Barcode
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => { setError(""); setMode("ocr"); }}
-                >
-                  <FileText className="h-4 w-4 mr-1" />
-                  Read IMEI (OCR)
-                </Button>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                disabled={busy}
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between text-xs font-medium text-gray-600">
-                <span className="flex items-center gap-1">
-                  <ChevronRight className="h-3 w-3" />
-                  {mode === "barcode" ? "Barcode mode (exact, fast)" : "OCR mode (reads printed digits)"}
-                </span>
-                <button
-                  type="button"
-                  className="underline flex items-center gap-1 hover:text-gray-900"
-                  disabled={busy}
-                  onClick={reset}
-                >
-                  <ArrowLeft className="h-3 w-3" /> Change
-                </button>
-              </div>
-              {busy ? (
-                <p className="text-xs text-gray-600 flex items-center gap-1" role="status">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  {statusMsg || "Scanning..."}
-                </p>
-              ) : (
-                sourceButtons
-              )}
-            </>
-          )}
-        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled || busy}
+          onClick={() => pickFile("upload")}
+          className="h-8 px-2 text-xs border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+          title="Upload Barcode Photo"
+        >
+          <Upload className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {busy && statusMsg && (
+        <p className="text-[11px] text-blue-600 dark:text-blue-400 flex items-center gap-1 font-medium">
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+          {statusMsg}
+        </p>
       )}
 
-      {error && (
-        <p className="text-xs text-red-500 flex items-center gap-1" role="alert">
+      {error && !busy && (
+        <p className="text-[11px] text-rose-500 flex items-center gap-1 font-medium" role="alert">
           <AlertTriangle className="h-3 w-3 shrink-0" /> {error}
         </p>
       )}
+
       {lastScan && !busy && (
-        <p className="text-xs text-gray-500">
-          Scanned: <span className="font-mono">{lastScan}</span>
+        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+          <CheckCircle2 className="h-3 w-3 shrink-0" />
+          Scanned: <span className="font-mono font-bold">{lastScan}</span>
         </p>
-      )}
-      {lastScan && !busy && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="justify-start h-7"
-          onClick={() => { setLastScan(null); setError(""); }}
-        >
-          <CheckCircle2 className="h-3 w-3 mr-1" /> Scan again
-        </Button>
       )}
     </div>
   );

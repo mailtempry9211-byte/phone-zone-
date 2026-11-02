@@ -452,7 +452,7 @@ export const useAadhaarOcr = () => {
         workerPath: "/ocr/worker.min.js",
         corePath: "/ocr",
         langPath: "/ocr",
-        workerBlobURL: false,
+        workerBlobURL: true,
         gzip: true,
         logger: (m: any) => {
           if (m.status === "recognizing text") {
@@ -538,7 +538,7 @@ export const useAadhaarOcr = () => {
         setState((s) => ({ ...s, status: "reading", error: msg }));
       });
 
-      const worker = await workerP;
+      let worker = await workerP;
 
       // ---- QR path: exact fields from the QR, printed number from tesseract
       if (qr) {
@@ -578,7 +578,40 @@ export const useAadhaarOcr = () => {
 
       // ---- OCR path: score every rotation, keep the most complete read -----
       if (!worker) {
-        throw new Error("OCR engine failed to initialize. Please check WebWorker support or reload.");
+        worker = await ensureWorker().catch(() => null);
+      }
+      if (!worker) {
+        // Fallback to backend OCR
+        try {
+          const form = new FormData();
+          form.append("image", file);
+          if (side) form.append("side", side);
+          const resp = await fetch("/api/ocr/aadhaar", { method: "POST", body: form });
+          if (resp.ok) {
+            const res = await resp.json();
+            if (res.success && res.data) {
+              const d = res.data;
+              const idNumber = d.idNumber || "";
+              setState({
+                status: "done",
+                progress: 1,
+                data: {
+                  idNumber,
+                  name: side === "back" ? undefined : d.name,
+                  dob: side === "back" ? undefined : d.dob,
+                  gender: side === "back" ? undefined : d.gender,
+                  address: side === "front" ? undefined : d.address,
+                  checksumOk: idNumber ? verhoeffValidate(idNumber) : false,
+                },
+                raw: res.raw || "",
+                error: "",
+                viaQr: !!res.viaQr,
+              });
+              return;
+            }
+          }
+        } catch (_) {}
+        throw new Error("Could not initialize OCR worker. Please verify card image quality or enter details manually.");
       }
       // A card photo is often a quarter-turn off portrait, and a sideways frame
       // can still hand back a checksum-valid number while losing the name - so we

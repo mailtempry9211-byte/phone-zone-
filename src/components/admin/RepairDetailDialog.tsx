@@ -31,6 +31,7 @@ import { printHtml } from "@/lib/printHtml";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import RepairShareModal, { type RepairShareMode } from "./RepairShareModal";
 import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
+import { RepairPaymentCollectionDialog } from "./RepairPaymentCollectionDialog";
 
 interface RepairDetailDialogProps {
   job: any;
@@ -82,6 +83,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [docModalType, setDocModalType] = useState<RepairDocType>("invoice");
   const [pendingStatusPrompt, setPendingStatusPrompt] = useState<"ready" | "delivered" | null>(null);
+  const [paymentCollectionOpen, setPaymentCollectionOpen] = useState(false);
 
   // Warranty inline edit
   const [isEditingWarranty, setIsEditingWarranty] = useState(false);
@@ -145,6 +147,17 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    // If marking delivered and there is a pending balance, prompt payment collection first!
+    if (newStatus === "delivered") {
+      const finalPrice = Number(job.final_price || job.estimate || 0);
+      const paid = Number(job.advance_paid || 0);
+      const balance = Math.max(0, finalPrice - paid);
+      if (balance > 0) {
+        setPaymentCollectionOpen(true);
+        return;
+      }
+    }
+
     setUpdatingStatus(true);
     try {
       const res = await fetch(`/api/repair/jobs/${job.id}/status`, {
@@ -690,6 +703,21 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
         job={job}
         defaultDocType={docModalType}
         onSuccess={() => onRefresh()}
+      />
+
+      {/* Payment Collection & Handover Modal (Item 8) */}
+      <RepairPaymentCollectionDialog
+        job={job}
+        open={paymentCollectionOpen}
+        onOpenChange={setPaymentCollectionOpen}
+        isDelivering={true}
+        onSuccess={(updatedJob) => {
+          setJob(updatedJob);
+          onRefresh(updatedJob);
+          setPendingStatusPrompt("delivered");
+          setDocModalType("delivered");
+          setDocModalOpen(true);
+        }}
       />
     </Dialog>
   );

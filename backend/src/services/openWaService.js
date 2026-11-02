@@ -20,12 +20,14 @@ let openWaChildProcess = null;
  * Auto-detect OpenWA API key from known filesystem paths if not explicitly configured in DB
  */
 function autoDetectOpenWaApiKey() {
+  const dir = findOpenWaDirectory();
   const candidatePaths = [
     process.env.OPENWA_API_KEY_PATH,
-    "C:/Users/Kohinoor/Desktop/OpenWA/data/.api-key",
+    dir ? path.join(dir, "data", ".api-key") : null,
+    path.resolve(process.env.APPDATA || "", "PhoneZone", "openwa", "data", ".api-key"),
+    path.resolve(process.env.USERPROFILE || "", "Desktop/OpenWA/data/.api-key"),
     path.resolve(process.cwd(), "../OpenWA/data/.api-key"),
     path.resolve(process.cwd(), "./OpenWA/data/.api-key"),
-    path.resolve(process.env.USERPROFILE || "", "Desktop/OpenWA/data/.api-key"),
   ].filter(Boolean);
 
   for (const p of candidatePaths) {
@@ -365,12 +367,31 @@ export async function sendDocumentMessage({ phone, pdfBuffer, filename, caption 
   });
 }
 
+export function findNodeExecutable() {
+  const candidates = [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files (x86)\\nodejs\\node.exe",
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "nodejs", "node.exe"),
+    path.join(process.env.APPDATA || "", "npm", "node.exe"),
+  ];
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return { exe: c, isElectron: false };
+    } catch {}
+  }
+
+  return { exe: process.execPath, isElectron: true };
+}
+
 export function findOpenWaDirectory() {
   const candidates = [
-    "C:/Users/Kohinoor/Desktop/OpenWA",
+    process.env.OPENWA_DIR,
     path.resolve(process.env.USERPROFILE || "", "Desktop/OpenWA"),
     path.resolve(process.cwd(), "../OpenWA"),
     path.resolve(process.cwd(), "./OpenWA"),
+    process.resourcesPath ? path.resolve(process.resourcesPath, "openwa") : null,
+    path.resolve(process.env.APPDATA || "", "PhoneZone", "openwa"),
   ].filter(Boolean);
 
   for (const c of candidates) {
@@ -509,11 +530,35 @@ export async function startOpenWaServer() {
     }
   } catch {}
 
-  const child = spawn(process.execPath, [mainJs], {
+  const { exe: nodeExe, isElectron } = findNodeExecutable();
+  const userOpenWaData = path.resolve(process.env.APPDATA || "", "PhoneZone", "openwa", "data");
+  try {
+    if (!fs.existsSync(userOpenWaData)) {
+      fs.mkdirSync(userOpenWaData, { recursive: true });
+    }
+  } catch {}
+
+  const spawnEnv = {
+    ...process.env,
+    PORT: "2785",
+    WAHA_DATA_DIR: userOpenWaData,
+    WHATSAPP_DATA_DIR: userOpenWaData,
+  };
+
+  // If using PhoneZone.exe / Electron, ELECTRON_RUN_AS_NODE must be enabled
+  // so it runs OpenWA as pure Node.js CLI instead of launching a GUI desktop window!
+  if (isElectron || nodeExe.toLowerCase().endsWith("phonezone.exe") || nodeExe.toLowerCase().endsWith("electron.exe")) {
+    spawnEnv.ELECTRON_RUN_AS_NODE = "1";
+  }
+
+  logger.info(`[OpenWA] Starting OpenWA server via: ${nodeExe} (isElectron: ${isElectron})`);
+
+  const child = spawn(nodeExe, [mainJs], {
     cwd: dir,
-    env: { ...process.env, PORT: "2785" },
+    env: spawnEnv,
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
   });
   child.unref();
   openWaChildProcess = child;

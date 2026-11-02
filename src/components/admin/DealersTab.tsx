@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Building2,
   Plus,
@@ -30,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/utils/imageCompression";
+import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import SignaturePadModal from "./SignaturePadModal";
 import DealerBatchPurchaseDialog from "./DealerBatchPurchaseDialog";
 import DealerBatchInvoiceDialog from "./DealerBatchInvoiceDialog";
@@ -51,6 +53,23 @@ export const DealersTab: React.FC = () => {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Photo full-size preview
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const [previewPhotoTitle, setPreviewPhotoTitle] = useState<string>("");
+
+  // B2B Dealer Ledger state
+  const [showLedgerDialog, setShowLedgerDialog] = useState(false);
+  const [ledgerDealer, setLedgerDealer] = useState<any | null>(null);
+  const [ledgerData, setLedgerData] = useState<{ balance: number; entries: any[] }>({ balance: 0, entries: [] });
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [savingLedger, setSavingLedger] = useState(false);
+  const [ledgerForm, setLedgerForm] = useState({
+    type: "credit" as "credit" | "debit",
+    amount: "",
+    payment_mode: "UPI",
+    description: "",
+  });
+
   const [formData, setFormData] = useState({
     shop_name: "",
     proprietor_name: "",
@@ -69,7 +88,7 @@ export const DealersTab: React.FC = () => {
   });
 
   // Fetch dealers
-  const { data: dealers = [], isLoading } = useQuery({
+  const { data: dealers = [], isLoading, refetch: refetchDealers } = useQuery({
     queryKey: ["dealers", searchTerm],
     queryFn: async () => {
       const q = searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : "";
@@ -152,16 +171,80 @@ export const DealersTab: React.FC = () => {
       const compressed = await compressImage(file, 300);
       const fileExt = compressed.name.split(".").pop() || "jpg";
       const filePath = `dealer-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const { error: uploadErr } = await supabase.storage.from("phonezone-uploads").upload(filePath, compressed);
+      const { data: uploadRes, error: uploadErr } = await supabase.storage.from("phonezone-uploads").upload(filePath, compressed);
       if (uploadErr) throw uploadErr;
       const { data } = supabase.storage.from("phonezone-uploads").getPublicUrl(filePath);
-      setFormData((prev) => ({ ...prev, photo_url: data.publicUrl }));
+      const publicUrl = (uploadRes as any)?.id ? `/api/public/files/${(uploadRes as any).id}` : data.publicUrl;
+      setFormData((prev) => ({ ...prev, photo_url: publicUrl }));
       toast.success("Dealer photo uploaded successfully!");
     } catch (err: any) {
       toast.error(err.message || "Failed to upload dealer photo");
     } finally {
       setIsUploadingPhoto(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const handleOpenLedger = async (dealer: any) => {
+    setLedgerDealer(dealer);
+    setShowLedgerDialog(true);
+    setLoadingLedger(true);
+    try {
+      const res = await fetch(`/api/dealers/${dealer.id}/ledger`);
+      if (res.ok) {
+        const d = await res.json();
+        setLedgerData({ balance: d.balance || 0, entries: d.entries || [] });
+      }
+    } catch {
+      toast.error("Failed to load dealer ledger");
+    } finally {
+      setLoadingLedger(false);
+    }
+  };
+
+  const handleSaveLedgerEntry = async () => {
+    if (!ledgerDealer) return;
+    const numAmount = Number(ledgerForm.amount);
+    if (!numAmount || numAmount <= 0) {
+      toast.error("Please enter a valid transaction amount");
+      return;
+    }
+    setSavingLedger(true);
+    try {
+      const res = await fetch(`/api/dealers/${ledgerDealer.id}/ledger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: ledgerForm.type,
+          amount: numAmount,
+          payment_mode: ledgerForm.payment_mode,
+          description: ledgerForm.description,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to record ledger entry");
+      }
+      toast.success("Ledger entry recorded successfully!");
+      setLedgerForm({ type: "credit", amount: "", payment_mode: "UPI", description: "" });
+      
+      const ledgerRes = await fetch(`/api/dealers/${ledgerDealer.id}/ledger`);
+      let newBalance = 0;
+      if (ledgerRes.ok) {
+        const updated = await ledgerRes.json();
+        newBalance = updated.balance || 0;
+        setLedgerData({ balance: newBalance, entries: updated.entries || [] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["dealers"] });
+
+      if (window.confirm(`Do you want to send this ledger update to ${ledgerDealer.shop_name} (${ledgerDealer.phone}) on WhatsApp?`)) {
+        const msg = `Namaste ${ledgerDealer.proprietor_name || ledgerDealer.shop_name} ji,\n\nPayment / Ledger Update recorded at PhoneZone:\nAmount: ₹${numAmount.toLocaleString("en-IN")} (${ledgerForm.type === "credit" ? "Payment Received / Disbursed" : "Debit / Goods"})\nMode: ${ledgerForm.payment_mode}\nDescription: ${ledgerForm.description || "B2B Settlement"}\nCurrent Balance: ₹${newBalance.toLocaleString("en-IN")}\n\nThank you,\nPhoneZone ERP`;
+        dispatchWhatsApp({ phone: ledgerDealer.phone, message: msg });
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to record transaction");
+    } finally {
+      setSavingLedger(false);
     }
   };
 
@@ -189,6 +272,7 @@ export const DealersTab: React.FC = () => {
       setShowAddDialog(false);
       setShowEditDialog(false);
       queryClient.invalidateQueries({ queryKey: ["dealers"] });
+      refetchDealers();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to save dealer");
@@ -242,67 +326,67 @@ export const DealersTab: React.FC = () => {
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-sky-100 bg-sky-50/30">
+        <Card className="border-sky-200 bg-sky-50/50 dark:bg-sky-950/30 dark:border-sky-500/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-semibold text-sky-800 uppercase tracking-wider">
+            <CardTitle className="text-xs font-bold text-sky-800 dark:text-sky-300 uppercase tracking-wider">
               Total Registered Dealers
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-sky-900">{totalDealers}</div>
-            <p className="text-[11px] text-sky-700">Active commercial partners</p>
+            <div className="text-2xl font-black text-sky-950 dark:text-sky-100">{totalDealers}</div>
+            <p className="text-[11px] font-medium text-sky-700 dark:text-sky-400">Active commercial partners</p>
           </CardContent>
         </Card>
 
-        <Card className="border-emerald-100 bg-emerald-50/30">
+        <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/30 dark:border-emerald-500/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+            <CardTitle className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
               Phones Supplied (B2B)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-900">{totalPhonesSupplied} Units</div>
-            <p className="text-[11px] text-emerald-700">Acquired from dealer batches</p>
+            <div className="text-2xl font-black text-emerald-950 dark:text-emerald-100">{totalPhonesSupplied} Units</div>
+            <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Acquired from dealer batches</p>
           </CardContent>
         </Card>
 
-        <Card className="border-indigo-100 bg-indigo-50/30">
+        <Card className="border-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/30 dark:border-indigo-500/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-semibold text-indigo-800 uppercase tracking-wider">
+            <CardTitle className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
               Total B2B Purchase Value
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-indigo-900">₹{totalPaidToDealers.toLocaleString("en-IN")}</div>
-            <p className="text-[11px] text-indigo-700">Disbursed to dealers</p>
+            <div className="text-2xl font-black text-indigo-950 dark:text-indigo-100">₹{totalPaidToDealers.toLocaleString("en-IN")}</div>
+            <p className="text-[11px] font-medium text-indigo-700 dark:text-indigo-400">Disbursed to dealers</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search Input */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         <Input
           placeholder="Search by shop name, proprietor, phone, GST..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9 bg-white"
+          className="pl-9 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-900 dark:text-slate-100"
         />
       </div>
 
       {/* Dealers Table */}
-      <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+      <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
         <Table>
-          <TableHeader className="bg-slate-50">
-            <TableRow>
-              <TableHead className="w-12 text-center text-xs">#</TableHead>
-              <TableHead className="text-xs">Shop / Firm</TableHead>
-              <TableHead className="text-xs">Proprietor &amp; Phone</TableHead>
-              <TableHead className="text-xs">GST / Tax ID</TableHead>
-              <TableHead className="text-center text-xs">Phones Supplied</TableHead>
-              <TableHead className="text-right text-xs">Total Amount</TableHead>
-              <TableHead className="text-center text-xs">Permanent Sign</TableHead>
-              <TableHead className="text-right text-xs">Actions</TableHead>
+          <TableHeader className="bg-slate-50 dark:bg-slate-800/80">
+            <TableRow className="border-b border-slate-200 dark:border-slate-800">
+              <TableHead className="w-12 text-center text-xs font-bold text-slate-700 dark:text-slate-300">#</TableHead>
+              <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-300">Shop / Firm</TableHead>
+              <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-300">Proprietor &amp; Phone</TableHead>
+              <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-300">GST / Tax ID</TableHead>
+              <TableHead className="text-center text-xs font-bold text-slate-700 dark:text-slate-300">Phones Supplied</TableHead>
+              <TableHead className="text-right text-xs font-bold text-slate-700 dark:text-slate-300">Total Amount</TableHead>
+              <TableHead className="text-center text-xs font-bold text-slate-700 dark:text-slate-300">Permanent Sign</TableHead>
+              <TableHead className="text-right text-xs font-bold text-slate-700 dark:text-slate-300">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -320,47 +404,64 @@ export const DealersTab: React.FC = () => {
               </TableRow>
             ) : (
               dealers.map((dealer: any, idx: number) => (
-                <TableRow key={dealer.id} className="hover:bg-slate-50/80">
-                  <TableCell className="text-center font-semibold text-gray-500 text-xs">
+                <TableRow key={dealer.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800/60">
+                  <TableCell className="text-center font-semibold text-slate-500 dark:text-slate-400 text-xs">
                     {idx + 1}
                   </TableCell>
                   <TableCell>
-                    <div className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <div
+                      className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+                      onClick={() => {
+                        if (dealer.photo_url) {
+                          setPreviewPhotoUrl(dealer.photo_url);
+                          setPreviewPhotoTitle(dealer.shop_name);
+                        }
+                      }}
+                      title={dealer.photo_url ? "Click to view full-size photo" : undefined}
+                    >
                       {dealer.photo_url ? (
                         <img
                           src={dealer.photo_url}
-                          alt="Dealer"
-                          className="w-7 h-7 rounded-full object-cover border border-sky-300 shrink-0"
+                          alt={dealer.shop_name}
+                          className="w-7 h-7 rounded-full object-cover border border-sky-300 dark:border-sky-500/40 shrink-0 hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            img.onerror = null;
+                            img.src =
+                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7'/%3E%3Cpath d='M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8'/%3E%3Cpath d='M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4'/%3E%3Cpath d='M2 7h20'/%3E%3C/svg%3E";
+                          }}
                         />
                       ) : (
-                        <Store className="h-4 w-4 text-sky-600 shrink-0" />
+                        <div className="w-7 h-7 rounded-full bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 flex items-center justify-center shrink-0">
+                          <Store className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                        </div>
                       )}
                       <span>{dealer.shop_name}</span>
                     </div>
-                    <div className="text-[11px] text-gray-500 line-clamp-1">{dealer.address || "Sitapur"}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">{dealer.address || "Sitapur"}</div>
                   </TableCell>
                   <TableCell>
-                    <div className="font-semibold text-gray-800 text-xs">{dealer.proprietor_name}</div>
-                    <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono">
-                      <Phone className="h-3 w-3 text-emerald-600" />
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 text-xs">{dealer.proprietor_name}</div>
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                      <Phone className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                       {dealer.phone}
                     </div>
                   </TableCell>
                   <TableCell>
                     {dealer.gst_number ? (
-                      <Badge variant="outline" className="font-mono text-[10px] bg-slate-50 text-slate-700">
+                      <Badge variant="outline" className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700">
                         {dealer.gst_number}
                       </Badge>
                     ) : (
-                      <span className="text-gray-400 text-xs">Unregistered</span>
+                      <span className="text-slate-400 text-xs">Unregistered</span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100 text-xs px-2 py-0.5">
+                    <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-500/40 hover:bg-sky-100 text-xs px-2 py-0.5 font-bold">
                       {dealer.phones_supplied || 0} phones
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right font-bold text-gray-900 text-xs">
+                  <TableCell className="text-right font-bold text-slate-900 dark:text-slate-100 text-xs">
                     ₹{Number(dealer.total_amount_paid || 0).toLocaleString("en-IN")}
                   </TableCell>
                   <TableCell className="text-center">
@@ -374,6 +475,15 @@ export const DealersTab: React.FC = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleOpenLedger(dealer)}
+                        className="h-8 px-2 text-xs text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/50 font-bold"
+                        title="View / Record B2B Ledger"
+                      >
+                        <Receipt className="h-3.5 w-3.5 mr-1 text-emerald-600 dark:text-emerald-400" /> Ledger
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -558,6 +668,10 @@ export const DealersTab: React.FC = () => {
                       src={formData.photo_url}
                       alt="Dealer"
                       className="w-12 h-12 rounded-full object-cover border-2 border-sky-400 shadow-sm"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7'/%3E%3Cpath d='M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8'/%3E%3Cpath d='M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4'/%3E%3Cpath d='M2 7h20'/%3E%3C/svg%3E";
+                      }}
                     />
                     <div>
                       <div className="text-xs font-semibold text-gray-800">Photo Attached</div>
@@ -837,6 +951,249 @@ export const DealersTab: React.FC = () => {
         onOpenChange={setShowBatchInvoiceModal}
         batchId={activeBatchId}
       />
+
+      {/* Dealer Full-Size Photo Preview Dialog */}
+      <Dialog open={!!previewPhotoUrl} onOpenChange={() => setPreviewPhotoUrl(null)}>
+        <DialogContent className="max-w-md p-4 bg-slate-900 text-white border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-100 flex items-center justify-between">
+              <span>{previewPhotoTitle || "Dealer Photo"}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-3">
+            {previewPhotoUrl && (
+              <img
+                src={previewPhotoUrl}
+                alt={previewPhotoTitle}
+                className="max-h-[65vh] max-w-full rounded-xl object-contain border border-slate-700 shadow-xl"
+              />
+            )}
+          </div>
+          <DialogFooter className="flex justify-between items-center sm:justify-between pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+              onClick={() => {
+                if (!previewPhotoUrl) return;
+                const a = document.createElement("a");
+                a.href = previewPhotoUrl;
+                a.download = `${(previewPhotoTitle || "dealer").replace(/[^a-zA-Z0-9]/g, "_")}_photo.jpg`;
+                a.click();
+              }}
+            >
+              Download Photo
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPreviewPhotoUrl(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* B2B Dealer Ledger & WhatsApp Statement Modal */}
+      <Dialog open={showLedgerDialog} onOpenChange={setShowLedgerDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <span>B2B Dealer Ledger: {ledgerDealer?.shop_name}</span>
+              </div>
+              <Badge variant="outline" className="text-xs font-mono">
+                {ledgerDealer?.phone}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Ledger Balance & Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-2">
+            <Card className="border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3">
+              <div className="text-xs text-slate-500 dark:text-slate-400">Proprietor</div>
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">{ledgerDealer?.proprietor_name}</div>
+              <div className="text-[11px] text-slate-400 font-mono mt-0.5">GST: {ledgerDealer?.gst_number || "Unregistered"}</div>
+            </Card>
+
+            <Card className={`p-3 border ${
+              ledgerData.balance > 0
+                ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300"
+                : ledgerData.balance < 0
+                ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-500/40 text-amber-800 dark:text-amber-300"
+                : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+            }`}>
+              <div className="text-xs font-semibold uppercase tracking-wider">Current Running Balance</div>
+              <div className="text-2xl font-black mt-1">
+                ₹{Math.abs(ledgerData.balance).toLocaleString("en-IN")}
+              </div>
+              <div className="text-[11px] font-bold mt-0.5">
+                {ledgerData.balance > 0
+                  ? "✓ Advance / Dealer owes us"
+                  : ledgerData.balance < 0
+                  ? "⚠ Payable to Dealer"
+                  : "✓ Settled / All Clear"}
+              </div>
+            </Card>
+
+            <Card className="border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3 flex flex-col justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs font-bold border-emerald-500 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:border-emerald-500/40"
+                onClick={() => {
+                  if (!ledgerDealer) return;
+                  const statement = `PhoneZone B2B Ledger Statement\nDealer: ${ledgerDealer.shop_name}\nProprietor: ${ledgerDealer.proprietor_name}\nTotal Recorded Transactions: ${ledgerData.entries.length}\nCurrent Running Balance: ₹${ledgerData.balance.toLocaleString("en-IN")}\n\nGenerated on: ${new Date().toLocaleDateString("en-IN")}`;
+                  dispatchWhatsApp({ phone: ledgerDealer.phone, message: statement });
+                }}
+              >
+                <MessageSquare className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                Send Statement on WhatsApp
+              </Button>
+            </Card>
+          </div>
+
+          {/* Record New Transaction Form */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900/90 shadow-xs my-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
+              Record New Payment / Adjustment
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <div>
+                <Label className="text-[11px]">Type</Label>
+                <Select
+                  value={ledgerForm.type}
+                  onValueChange={(v: "credit" | "debit") => setLedgerForm({ ...ledgerForm, type: v })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit">Payment Made (Credit)</SelectItem>
+                    <SelectItem value="debit">Goods / Charge (Debit)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Amount (₹) *</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 5000"
+                  value={ledgerForm.amount}
+                  onChange={(e) => setLedgerForm({ ...ledgerForm, amount: e.target.value })}
+                  className="h-8 text-xs font-bold"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Mode</Label>
+                <Select
+                  value={ledgerForm.payment_mode}
+                  onValueChange={(v) => setLedgerForm({ ...ledgerForm, payment_mode: v })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UPI">UPI / GPay / PhonePe</SelectItem>
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Bank Transfer">Bank Transfer / IMPS</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-[11px]">Description / Note</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    placeholder="e.g. Part payment for batch"
+                    value={ledgerForm.description}
+                    onChange={(e) => setLedgerForm({ ...ledgerForm, description: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
+                    onClick={handleSaveLedgerEntry}
+                    disabled={savingLedger}
+                  >
+                    {savingLedger ? "Saving..." : "Record"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ledger History Table */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden mt-2">
+            <Table>
+              <TableHeader className="bg-slate-50 dark:bg-slate-800/80">
+                <TableRow>
+                  <TableHead className="text-xs">Date</TableHead>
+                  <TableHead className="text-xs">Type</TableHead>
+                  <TableHead className="text-right text-xs">Amount</TableHead>
+                  <TableHead className="text-xs">Mode</TableHead>
+                  <TableHead className="text-xs">Description</TableHead>
+                  <TableHead className="text-right text-xs">Running Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingLedger ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-6 text-xs text-slate-400">
+                      Loading ledger entries...
+                    </TableCell>
+                  </TableRow>
+                ) : ledgerData.entries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-6 text-xs text-slate-400">
+                      No ledger transactions recorded yet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ledgerData.entries.map((entry) => (
+                    <TableRow key={entry.id} className="text-xs">
+                      <TableCell className="text-slate-500 font-mono">
+                        {entry.created_at ? new Date(entry.created_at).toLocaleDateString("en-IN") : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            entry.type === "credit"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-500/40"
+                              : "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/40"
+                          }
+                        >
+                          {entry.type === "credit" ? "Credit / Payment" : "Debit / Supply"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-slate-900 dark:text-slate-100">
+                        ₹{Number(entry.amount || 0).toLocaleString("en-IN")}
+                      </TableCell>
+                      <TableCell className="text-slate-600 dark:text-slate-400 font-medium">
+                        {entry.payment_mode || "cash"}
+                      </TableCell>
+                      <TableCell className="text-slate-600 dark:text-slate-400 truncate max-w-xs">
+                        {entry.description || "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-slate-800 dark:text-slate-200">
+                        ₹{Number(entry.balance_after || 0).toLocaleString("en-IN")}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <DialogFooter className="mt-3">
+            <Button variant="outline" onClick={() => setShowLedgerDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

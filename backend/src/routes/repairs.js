@@ -95,19 +95,19 @@ export function buildRepairsRouter() {
 
   // Jobs routes
   r.get("/jobs", wrap((req, res) => {
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
+    const isGlobal = userShopId === "all";
     const query = { ...req.query };
-    if (!isAdmin) {
+    if (!isGlobal) {
       query.shop = userShopId;
     }
     res.json(listRepairJobs(query));
   }));
 
   r.post("/jobs", wrap((req, res) => {
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    const shop_id = !isAdmin ? userShopId : (req.body?.shop_id || userShopId);
+    const isGlobal = userShopId === "all";
+    const shop_id = !isGlobal ? userShopId : (req.body?.shop_id || (userShopId === "all" ? "shop_1" : userShopId));
     const job = createRepairJob({
       ...req.body,
       shop_id,
@@ -119,9 +119,9 @@ export function buildRepairsRouter() {
 
   r.get("/jobs/:id", wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     res.json(job);
@@ -129,9 +129,9 @@ export function buildRepairsRouter() {
 
   const handleJobUpdate = wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     const updated = updateRepairJob(req.params.id, req.body || {});
@@ -144,9 +144,9 @@ export function buildRepairsRouter() {
 
   r.post("/jobs/:id/status", wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     const updated = updateRepairJobStatus(req.params.id, {
@@ -163,9 +163,9 @@ export function buildRepairsRouter() {
 
   r.post("/jobs/:id/payment", wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     const updated = recordRepairPayment(req.params.id, {
@@ -180,9 +180,9 @@ export function buildRepairsRouter() {
 
   r.post("/jobs/:id/items", wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     res.json(addRepairJobItems(req.params.id, req.body.items || []));
@@ -190,9 +190,9 @@ export function buildRepairsRouter() {
 
   r.delete("/jobs/:id", wrap((req, res) => {
     const job = getRepairJob(req.params.id);
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
-    if (!isAdmin && job.shop_id && job.shop_id !== userShopId) {
+    const isGlobal = userShopId === "all";
+    if (!isGlobal && job.shop_id && job.shop_id !== userShopId) {
       return res.status(403).json({ error: "Access denied to other shop's repair job." });
     }
     const deleted = deleteRepairJob(req.params.id);

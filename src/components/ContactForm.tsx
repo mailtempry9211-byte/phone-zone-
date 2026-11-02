@@ -10,7 +10,12 @@ import { toast } from "sonner";
 import { data as dataDriver } from "@/lib/data";
 import { ContactInfo } from "@/lib/data/types";
 
-const ContactForm = () => {
+interface ContactFormProps {
+  theme?: string;
+  formOnly?: boolean;
+}
+
+const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = false }) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -33,8 +38,11 @@ const ContactForm = () => {
     fetchContact();
   }, []);
 
-  const waNumber = contact?.whatsapp_number || contact?.phone_primary || "";
-  const instagramHandle = contact?.instagram || "";
+  const rawWa = contact?.whatsapp_number || contact?.phone_primary || "";
+  const cleanWa = rawWa.replace(/\D/g, "");
+  const targetWa = cleanWa ? (cleanWa.length === 10 ? `91${cleanWa}` : cleanWa) : "";
+  const rawInstagram = contact?.instagram || "";
+  const instagramHandle = rawInstagram.replace(/^@+/, "").trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,8 +86,91 @@ const ContactForm = () => {
     }));
   };
 
+  if (formOnly) {
+    return (
+      <Card className="shadow-sm border border-slate-200">
+        <CardHeader>
+          <CardTitle>Send us a Message</CardTitle>
+          <CardDescription>
+            Fill out the form below and we'll get back to you as soon as possible.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="Your full name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="your.email@example.com"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  placeholder="+91 12345 67890"
+                />
+              </div>
+              <div>
+                <Label htmlFor="subject">Subject *</Label>
+                <Input
+                  id="subject"
+                  name="subject"
+                  value={formData.subject}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="What's this about?"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="message">Message *</Label>
+              <Textarea
+                id="message"
+                name="message"
+                value={formData.message}
+                onChange={handleInputChange}
+                required
+                placeholder="Tell us how we can help you..."
+                rows={6}
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send Message"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <section id="contact" className="py-20 bg-gray-50">
+    <section id="contact" className={`py-20 ${theme === "neon" ? "bg-[#090c14] text-slate-100" : theme === "luxury" ? "bg-[#0a0b0f] text-amber-50" : theme === "brutalist" ? "bg-[#fefce8] text-black" : theme === "glassmorphism" ? "bg-white/40 backdrop-blur-md" : "bg-gray-50"} transition-colors duration-500`}>
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-3xl font-bold mb-4">Get in Touch</h2>
@@ -162,9 +253,9 @@ const ContactForm = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button 
-                  onClick={() => waNumber && window.open(`https://wa.me/${waNumber}`, '_blank')}
+                  onClick={() => targetWa && window.open(`https://wa.me/${targetWa}`, '_blank')}
                   className="w-full bg-green-500 hover:bg-green-600 text-white"
-                  disabled={!waNumber}
+                  disabled={!targetWa}
                 >
                   <MessageSquare className="h-4 w-4 mr-2" />
                   WhatsApp

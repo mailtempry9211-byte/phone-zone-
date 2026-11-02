@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import JSZip from 'jszip';
 import StorageManagementCard from "./StorageManagementCard";
+import { GoogleDriveBackupCard } from "./GoogleDriveBackupCard";
 
 interface Message {
   id: string;
@@ -63,6 +64,7 @@ const DatabaseTab = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
 
@@ -1386,19 +1388,24 @@ section h2 {
               <Download className="h-4 w-4 mr-2" />
               {backupBusy ? 'Creating backup...' : 'Create Full Backup (ZIP)'}
             </Button>
-            <label className="w-full cursor-pointer">
-              <Button type="button" variant="outline" className="w-full pointer-events-none" disabled={restoreBusy}>
-                <Upload className="h-4 w-4 mr-2" />
-                {restoreBusy ? 'Restoring...' : 'Restore Backup (ZIP / TAR.GZ)'}
-              </Button>
-              <input
-                type="file"
-                accept=".zip,.tar.gz,.tar,.json"
-                onChange={restoreFromBackup}
-                className="hidden"
-                disabled={restoreBusy}
-              />
-            </label>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={restoreBusy}
+              onClick={() => restoreFileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {restoreBusy ? 'Restoring...' : 'Restore Backup (ZIP / TAR.GZ)'}
+            </Button>
+            <input
+              ref={restoreFileInputRef}
+              type="file"
+              accept=".zip,.tar.gz,.tar,.json"
+              onChange={restoreFromBackup}
+              className="hidden"
+              disabled={restoreBusy}
+            />
           </div>
           <p className="text-sm text-gray-600">
             <strong>Full backup (recommended):</strong> downloads a single ZIP containing all your business data
@@ -1407,6 +1414,9 @@ section h2 {
           </p>
         </CardContent>
       </Card>
+
+      {/* Google Drive Cloud Backup */}
+      <GoogleDriveBackupCard />
 
       {/* Export Controls */}
       <Card>

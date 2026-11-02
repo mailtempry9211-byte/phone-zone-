@@ -154,8 +154,12 @@ const MessagesTab = () => {
   };
 
   const replyToMessage = (message) => {
-    const subject = `Re: Your inquiry to PhoneZone`;
-    const body = `Hello ${message.name},\n\nThank you for contacting PhoneZone. We have received your message:\n\n"${message.message}"\n\nBest regards,\nPhoneZone Team\n\nPhone: ${adminSettings?.phone_primary || '8418944572'} | ${adminSettings?.phone_secondary || '9125790119'}\nEmail: ${adminSettings?.email || 'phonezone7753@gmail.com'}`;
+    const bName = adminSettings?.business_name || "our store";
+    const subject = `Re: Your inquiry to ${bName}`;
+    const phones = [adminSettings?.phone_primary, adminSettings?.phone_secondary].filter(Boolean).join(" | ");
+    const email = adminSettings?.email ? `\nEmail: ${adminSettings.email}` : "";
+    const phoneLine = phones ? `\nPhone: ${phones}` : "";
+    const body = `Hello ${message.name},\n\nThank you for contacting ${bName}. We have received your message:\n\n"${message.message}"\n\nBest regards,\n${bName} Team${phoneLine}${email}`;
     
     window.open(`mailto:${message.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };

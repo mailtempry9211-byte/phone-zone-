@@ -29,6 +29,15 @@ export function initDatabase() {
   )`);
 
   runMigrations();
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN active_shop_id TEXT").run();
+  } catch {}
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN security_question TEXT").run();
+  } catch {}
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN security_answer_hash TEXT").run();
+  } catch {}
   runSeed();
   db.pragma("foreign_keys = ON");    // Enforce for runtime operations
   logger.info("Database ready", { file: PATHS.databaseFile });
@@ -46,7 +55,13 @@ function runMigrations() {
     if (applied.has(version)) continue;
     const sql = fs.readFileSync(path.join(dir, file), "utf8");
     const tx = db.transaction(() => {
-      db.exec(sql);
+      try {
+        db.exec(sql);
+      } catch (err) {
+        if (!err.message.includes("duplicate column name")) {
+          throw err;
+        }
+      }
       db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(version);
     });
     try {

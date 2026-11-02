@@ -288,14 +288,14 @@ export function buildCompatRouter(staff, canRead = staff) {
       filters.push({ op: "is", col: "deleted_at", val: null });
     }
 
-    // Multi-shop scoping: non-admin users only see rows belonging to their shop.
-    // Admin users can inspect all shops or filter by ?shop=<id>.
+    // Multi-shop scoping: non-global users only see rows belonging to their shop.
+    // Global users (shopId === "all") can inspect all shops or filter by ?shop=<id>.
     const hasShopId = columnsOf(t).includes("shop_id");
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
+    const isGlobal = userShopId === "all";
 
     if (hasShopId) {
-      if (!isAdmin) {
+      if (!isGlobal) {
         filters.push({ op: "eq", col: "shop_id", val: userShopId });
       } else if (req.query?.shop && req.query.shop !== "all") {
         filters.push({ op: "eq", col: "shop_id", val: req.query.shop });
@@ -315,8 +315,8 @@ export function buildCompatRouter(staff, canRead = staff) {
     // `*, sellers(...), customers(...)` selects) gets `phone.sellers` /
     // `phone.customers` objects instead of undefined -> "N/A".
     if (t === "phones") {
-      const sellerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number FROM sellers WHERE id = ? AND deleted_at IS NULL");
-      const customerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number FROM customers WHERE id = ? AND deleted_at IS NULL");
+      const sellerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number, seller_photo_url FROM sellers WHERE id = ? AND deleted_at IS NULL");
+      const customerOf = db.prepare("SELECT id, name, phone, address, id_proof_type, id_number, customer_photo_url FROM customers WHERE id = ? AND deleted_at IS NULL");
       const dealerOf = db.prepare("SELECT id, shop_name, proprietor_name, phone, address, gst_number, signature_url, photo_url FROM dealers WHERE id = ?");
       res.json(rows.map((p) => ({
         ...p,
@@ -391,12 +391,12 @@ export function buildCompatRouter(staff, canRead = staff) {
               : /INT|REAL|NUM|DEC/i.test(c.type) ? 0 : "";
         }
 
-        // Multi-shop scoping for inserts: non-admin gets their shop_id
+        // Multi-shop scoping for inserts: non-global gets their shop_id
         if (cols.includes("shop_id")) {
-          const isAdmin = req.user?.roles?.includes("admin");
           const userShopId = req.user?.shopId || "shop_1";
-          if (!isAdmin || !row.shop_id) {
-            row.shop_id = userShopId;
+          const isGlobal = userShopId === "all";
+          if (!isGlobal || !row.shop_id) {
+            row.shop_id = userShopId === "all" ? "shop_1" : userShopId;
             if (!keys.includes("shop_id")) keys.push("shop_id");
           }
         }
@@ -452,12 +452,12 @@ export function buildCompatRouter(staff, canRead = staff) {
     const sql = `UPDATE ${t} SET ${keys.map((k) => `"${k}" = ?`).join(", ")}${where.sql}`;
     const db = getDb();
 
-    // Multi-shop check: non-admin users cannot update rows belonging to another shop
+    // Multi-shop check: non-global users cannot update rows belonging to another shop
     const hasShopId = cols.includes("shop_id");
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
+    const isGlobal = userShopId === "all";
 
-    if (hasShopId && !isAdmin) {
+    if (hasShopId && !isGlobal) {
       const targetRows = db.prepare(`SELECT id, shop_id FROM ${t}${where.sql}`).all(...where.params);
       if (targetRows.length > 0 && targetRows.some((r) => r.shop_id && r.shop_id !== userShopId)) {
         throw forbidden("You do not have permission to modify records belonging to another shop.");
@@ -496,12 +496,12 @@ export function buildCompatRouter(staff, canRead = staff) {
     }
     const db = getDb();
 
-    // Multi-shop check: non-admin users cannot delete rows belonging to another shop
+    // Multi-shop check: non-global users cannot delete rows belonging to another shop
     const hasShopId = cols.includes("shop_id");
-    const isAdmin = req.user?.roles?.includes("admin");
     const userShopId = req.user?.shopId || "shop_1";
+    const isGlobal = userShopId === "all";
 
-    if (hasShopId && !isAdmin) {
+    if (hasShopId && !isGlobal) {
       const targetRows = db.prepare(`SELECT id, shop_id FROM ${t}${where.sql}`).all(...where.params);
       if (targetRows.length > 0 && targetRows.some((r) => r.shop_id && r.shop_id !== userShopId)) {
         throw forbidden("You do not have permission to delete records belonging to another shop.");

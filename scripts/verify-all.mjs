@@ -1357,6 +1357,7 @@ say("--- backend regression suites ---");
 for (const [id, suite] of [
   ["SUITE1", "test/offline-suite.mjs"],
   ["SUITE2", "test/first-setup-suite.mjs"],
+  ["SUITE3", "test/dashboard-suite.mjs"],
 ]) {
   let text = "";
   let code = 0;

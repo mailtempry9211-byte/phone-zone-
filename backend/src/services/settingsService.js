@@ -27,6 +27,7 @@ const WRITABLE_COLUMNS = [
   "bank_name", "account_holder_name", "account_number", "ifsc_code",
   "udyam_verified", "google_business_verified", "show_google_business",
   "tac_fetch_mode", "whatsapp_channel",
+  "homepage_theme", "homepage_config", "repair_services_catalog",
 ];
 
 const TAC_FETCH_MODES = new Set(["ask", "auto", "off"]);
@@ -87,7 +88,22 @@ export function getSettings() {
     // IMEI / TAC engine: what to do when a TAC is not in the local database.
     tacFetchMode: TAC_FETCH_MODES.has(row?.tac_fetch_mode) ? row.tac_fetch_mode : "ask",
     whatsappChannel: WHATSAPP_CHANNELS.has(row?.whatsapp_channel) ? row.whatsapp_channel : "click_to_chat",
-    repairServices: shipped.repairServices || [],
+    repairServices: (() => {
+      try {
+        if (row?.repair_services_catalog) {
+          const parsed = JSON.parse(row.repair_services_catalog);
+          if (Array.isArray(parsed) && parsed.length) return parsed;
+        }
+      } catch (_e) {}
+      return shipped.repairServices || [];
+    })(),
+    homepageTheme: row?.homepage_theme || "modern",
+    homepageConfig: (() => {
+      try {
+        if (row?.homepage_config) return JSON.parse(row.homepage_config);
+      } catch (_e) {}
+      return null;
+    })(),
     messageTemplates: shipped.messageTemplates || {},
   };
 }
@@ -108,6 +124,21 @@ export function saveSettings(updates, userId) {
   }
   if (updates.whatsapp_channel !== undefined && !WHATSAPP_CHANNELS.has(updates.whatsapp_channel)) {
     throw badRequest("whatsapp_channel must be click_to_chat or openwa.");
+  }
+  if (updates.instagram !== undefined) {
+    updates.instagram = empty(updates.instagram).trim();
+  }
+  if (updates.phone_primary !== undefined && (!updates.whatsapp_number || !String(updates.whatsapp_number).trim())) {
+    updates.whatsapp_number = updates.phone_primary;
+  }
+  if (updates.homepageTheme !== undefined && updates.homepage_theme === undefined) {
+    updates.homepage_theme = updates.homepageTheme;
+  }
+  if (updates.homepageConfig !== undefined && updates.homepage_config === undefined) {
+    updates.homepage_config = typeof updates.homepageConfig === "object" ? JSON.stringify(updates.homepageConfig) : String(updates.homepageConfig);
+  }
+  if (updates.repairServices !== undefined && updates.repair_services_catalog === undefined) {
+    updates.repair_services_catalog = typeof updates.repairServices === "object" ? JSON.stringify(updates.repairServices) : String(updates.repairServices);
   }
   const cols = WRITABLE_COLUMNS.filter((c) => updates[c] !== undefined);
   if (!cols.length) return getSettings();
@@ -159,6 +190,19 @@ export function completeSetup(profile) {
     ifsc_code: profile.ifscCode || "",
   };
   saveSettings(updates, null);
+
+  // Sync main shop identity with business profile
+  try {
+    const db = getDb();
+    db.prepare(`UPDATE shops SET name = ?, address = ?, phone = ?, email = ? WHERE id = 'shop_1'`)
+      .run(
+        profile.businessName || "Main Store",
+        profile.address || "",
+        profile.primaryPhone || "",
+        profile.email || ""
+      );
+  } catch {}
+
   return getSettings();
 }
 

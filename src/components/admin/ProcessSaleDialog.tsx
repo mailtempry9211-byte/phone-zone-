@@ -19,19 +19,25 @@ import { fillPersonFields, type AadhaarData } from "@/lib/aadhaarParser";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import PostTransactionShareDialog, { type PostTransactionPhone, type PostTransactionParty } from "./PostTransactionShareDialog";
-import { buildInvoiceHtml, DEFAULT_SALE_TERMS } from "@/lib/invoiceTemplates";
+import { buildInvoiceHtml, buildCombinedSaleInvoiceHtml, DEFAULT_SALE_TERMS } from "@/lib/invoiceTemplates";
 
 interface ProcessSaleDialogProps {
-  phone: any;
+  phone?: any;
+  phones?: any[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
-const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps) => {
+const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: ProcessSaleDialogProps) => {
+  const phoneList: any[] = phones && phones.length > 0 ? phones : phone ? [phone] : [];
+  const isBatchMode = phoneList.length > 1;
+
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [partyPickerOpen, setPartyPickerOpen] = useState(false);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [sellingPrice, setSellingPrice] = useState("");
+  const [phonePrices, setPhonePrices] = useState<Record<string, string>>({});
   const [saleDate, setSaleDate] = useState<Date>();
   const [saleDocuments, setSaleDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -65,6 +71,24 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
       .then((d) => setAdminSettings(d))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      if (isBatchMode) {
+        const prices: Record<string, string> = {};
+        phoneList.forEach((p) => {
+          prices[p.id] = String(p.selling_price || Math.round(Number(p.purchase_price || 0) * 1.15));
+        });
+        setPhonePrices(prices);
+      } else if (phone) {
+        setSellingPrice(String(phone.selling_price || ""));
+      }
+    }
+  }, [open, phone, phones]);
+
+  const totalSaleAmount = isBatchMode
+    ? phoneList.reduce((sum, p) => sum + (parseFloat(phonePrices[p.id]) || 0), 0)
+    : parseFloat(sellingPrice) || 0;
 
   // Cross-check: customer phone -> repair customers
   useEffect(() => {
@@ -212,9 +236,18 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
   };
 
   const handleProcessSale = async () => {
-    if (!sellingPrice) {
-      toast.error("Please enter selling price");
-      return;
+    if (isBatchMode) {
+      for (const p of phoneList) {
+        if (!phonePrices[p.id] || parseFloat(phonePrices[p.id]) <= 0) {
+          toast.error(`Please enter selling price for ${p.phone_name} (${p.model})`);
+          return;
+        }
+      }
+    } else {
+      if (!sellingPrice) {
+        toast.error("Please enter selling price");
+        return;
+      }
     }
     
     if (!saleDate) {
@@ -240,12 +273,110 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
       return;
     }
 
+    let customerObj: {
+      name: string;
+      phone: string;
+      address?: string;
+      id_proof_type?: string;
+      id_number?: string;
+    } = { name: "Customer", phone: "", address: "", id_proof_type: "", id_number: "" };
+
+    if (showNewCustomerForm) {
+      customerObj = {
+        name: newCustomer.name,
+        phone: newCustomer.phone,
+        address: newCustomer.address,
+        id_proof_type: newCustomer.id_proof_type,
+        id_number: newCustomer.id_number,
+      };
+    } else {
+      const found = customers?.find((c: any) => c.id === customerId);
+      if (found) {
+        customerObj = {
+          name: found.name || "",
+          phone: found.phone || "",
+          address: found.address || "",
+          id_proof_type: found.id_proof_type || "",
+          id_number: found.id_number || "",
+        };
+      }
+    }
+
     setLoading(true);
     try {
-      // Route through the backend /api/sales endpoint so the sale is atomic:
-      // phone marked sold + customer attached + sale invoice created, all in one
-      // transaction. The direct supabase.update() path bypassed invoice creation
-      // and audit logging.
+      if (isBatchMode) {
+        const batchSaleId = `batch_sale_${Date.now()}`;
+        for (const p of phoneList) {
+          const itemPrice = parseFloat(phonePrices[p.id]);
+          const res = await fetch("/api/sales", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              phone_id: p.id,
+              customer_id: customerId,
+              sale_price: itemPrice,
+              sold_date: saleDate.toISOString(),
+              sale_documents: saleDocuments,
+              batch_sale_id: batchSaleId,
+              invoice_html: null,
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Failed to process sale for ${p.phone_name}`);
+          }
+        }
+
+        const combinedInvoiceHtml = buildCombinedSaleInvoiceHtml({
+          settings: adminSettings,
+          customer: customerObj,
+          phones: phoneList.map((p) => ({
+            phone_name: p.phone_name,
+            model: p.model,
+            imei_number: p.imei_number,
+            imei2_number: p.imei2_number,
+            variant: p.variant,
+            colour: p.colour,
+            condition: p.condition,
+            selling_price: parseFloat(phonePrices[p.id]),
+            product_photos: p.product_photos || [],
+          })),
+          totalAmount: totalSaleAmount,
+          invoiceNumber: `COMBINED-${Date.now().toString().slice(-6)}`,
+          saleDate: format(saleDate, "dd/MM/yyyy"),
+          paymentMethod: "UPI / Cash",
+          productPhotos: phoneList.flatMap((p) => p.product_photos || []),
+          saleDocuments: saleDocuments,
+        });
+
+        toast.success(`Batch sale completed for ${phoneList.length} phones!`);
+        queryClient.invalidateQueries({ queryKey: ['phones'] });
+        queryClient.invalidateQueries({ queryKey: ['sold-phones'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+
+        setPostShareData({
+          phone: {
+            phone_name: `Batch Sale (${phoneList.length} Phones)`,
+            model: phoneList.map((p) => `${p.phone_name} ${p.model}`).join(", "),
+            imei_number: phoneList.map((p) => p.imei_number).join(", "),
+            amount: totalSaleAmount,
+          },
+          party: {
+            name: customerObj.name,
+            phone: customerObj.phone,
+            address: customerObj.address || "",
+            role: "customer",
+          },
+          invoiceHtml: combinedInvoiceHtml,
+        });
+        setPostShareOpen(true);
+        onOpenChange(false);
+        if (onSuccess) onSuccess();
+        return;
+      }
+
+      // Single phone sale
       const res = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -255,19 +386,12 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
           customer_id: customerId,
           sale_price: parseFloat(sellingPrice),
           sold_date: saleDate.toISOString(),
+          sale_documents: saleDocuments,
           invoice_html: null,
         }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to process sale.");
-
-      let customerObj: {
-        name: string;
-        phone: string;
-        address?: string;
-        id_proof_type?: string;
-        id_number?: string;
-      } = { name: "Customer", phone: "", address: "", id_proof_type: "", id_number: "" };
 
       if (showNewCustomerForm) {
         customerObj = {
@@ -362,41 +486,85 @@ const ProcessSaleDialog = ({ phone, open, onOpenChange }: ProcessSaleDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Process Sale - {phone?.phone_name}</DialogTitle>
+          <DialogTitle>
+            {isBatchMode ? `Batch Multi-Phone Sale (${phoneList.length} Phones)` : `Process Sale - ${phone?.phone_name}`}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Phone Details */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-semibold mb-2">Phone Details</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><strong>Model:</strong> {phone?.model}</div>
-              <div><strong>IMEI:</strong> {phone?.imei_number}</div>
-              <div><strong>Condition:</strong> {phone?.condition}</div>
-              <div><strong>Purchase Price:</strong> ₹{phone?.purchase_price}</div>
-              {repairImeiJobs.length > 0 && (
-                <div className="col-span-2 mt-1">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
-                    <Wrench className="w-3.5 h-3.5 text-amber-700" />
-                    Repaired previously at our shop ({repairImeiJobs[0]?.job_no} on {new Date(repairImeiJobs[0]?.received_at || Date.now()).toLocaleDateString("en-IN")})
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Phone Details / Batch Phone List */}
+          {isBatchMode ? (
+            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <span>Selected Phones for Sale ({phoneList.length})</span>
+                </h3>
+                <span className="px-2.5 py-1 rounded-md text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  Total: ₹{totalSaleAmount.toLocaleString("en-IN")}
+                </span>
+              </div>
 
-          {/* Selling Price */}
-          <div>
-            <Label htmlFor="selling_price">Selling Price *</Label>
-            <Input
-              id="selling_price"
-              type="number"
-              value={sellingPrice}
-              onChange={(e) => setSellingPrice(e.target.value)}
-              placeholder="Enter selling price"
-              required
-            />
-          </div>
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {phoneList.map((p, idx) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/60 shadow-xs"
+                  >
+                    <div className="text-xs">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                        {idx + 1}. {p.phone_name} {p.model}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        IMEI: {p.imei_number} | Bought @ ₹{Number(p.purchase_price || 0).toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Sale ₹</span>
+                      <Input
+                        type="number"
+                        className="w-28 h-8 text-xs font-bold bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        value={phonePrices[p.id] || ""}
+                        onChange={(e) => setPhonePrices({ ...phonePrices, [p.id]: e.target.value })}
+                        placeholder="Price"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="bg-gray-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">Phone Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><strong>Model:</strong> {phone?.model}</div>
+                  <div><strong>IMEI:</strong> {phone?.imei_number}</div>
+                  <div><strong>Condition:</strong> {phone?.condition}</div>
+                  <div><strong>Purchase Price:</strong> ₹{phone?.purchase_price}</div>
+                  {repairImeiJobs.length > 0 && (
+                    <div className="col-span-2 mt-1">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+                        <Wrench className="w-3.5 h-3.5 text-amber-700" />
+                        Repaired previously at our shop ({repairImeiJobs[0]?.job_no} on {new Date(repairImeiJobs[0]?.received_at || Date.now()).toLocaleDateString("en-IN")})
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="selling_price">Selling Price *</Label>
+                <Input
+                  id="selling_price"
+                  type="number"
+                  value={sellingPrice}
+                  onChange={(e) => setSellingPrice(e.target.value)}
+                  placeholder="Enter selling price"
+                  required
+                />
+              </div>
+            </>
+          )}
 
           {/* Sale Date */}
           <div>

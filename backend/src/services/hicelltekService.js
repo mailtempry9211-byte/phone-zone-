@@ -71,10 +71,22 @@ export function mapResponse(json) {
     (json.tac && typeof json.tac === "object" ? json.tac : null) ||
     json;
 
-  const brand = root.brand || root.make || root.manufacturer || root.vendor || json.brand;
-  const phoneName =
+  const rawBrand = root.brand || root.make || root.manufacturer || root.vendor || json.brand;
+  const brand = (rawBrand && typeof rawBrand === "object")
+    ? (rawBrand.name || rawBrand.title || rawBrand.slug || rawBrand.brand || "")
+    : (rawBrand ? String(rawBrand) : "");
+
+  const rawPhoneName =
     root.phone_name || root.phoneName || root.marketing_name || root.device || root.name;
-  const model = root.model || root.model_code || root.modelCode || root.model_number;
+  const phoneName = (rawPhoneName && typeof rawPhoneName === "object")
+    ? (rawPhoneName.name || rawPhoneName.marketing_name || rawPhoneName.title || "")
+    : (rawPhoneName ? String(rawPhoneName) : "");
+
+  const rawModel = root.model || root.model_code || root.modelCode || root.model_number;
+  const model = (rawModel && typeof rawModel === "object")
+    ? (rawModel.name || rawModel.code || rawModel.model || "")
+    : (rawModel ? String(rawModel) : "");
+
   const combined =
     root.specs || root.specification || root.specifications || root.description || root.details;
 
@@ -83,12 +95,18 @@ export function mapResponse(json) {
     return { brand: parsed.brand, phoneName: parsed.phoneName, model: parsed.model, specs: parsed.extra || null };
   }
 
-  const outBrand = brand ? normalizeBrand(brand) : "";
+  let outBrand = brand ? normalizeBrand(brand) : "";
   const outName = phoneName ? String(phoneName).trim() : "";
   const outModel = model ? String(model).trim() : "";
+
+  if ((!outBrand || outBrand.toLowerCase().includes("object")) && outName) {
+    const firstWord = outName.split(/\s+/)[0];
+    outBrand = firstWord ? normalizeBrand(firstWord) : "";
+  }
+
   if (!outBrand && !outName) return null;
   return {
-    brand: outBrand || (outName.split(/\s+/)[0] ? normalizeBrand(outName.split(/\s+/)[0]) : "Unknown"),
+    brand: outBrand || "Unknown",
     phoneName: outName || outModel || outBrand,
     model: outModel || outName || "Unknown",
     specs: root.year ? String(root.year) : null,

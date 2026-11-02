@@ -16,7 +16,7 @@ if (native.status !== 0) {
   process.exit(1);
 }
 
-const env = { ...process.env, PHONEZONE_DATA_DIR: process.env.PHONEZONE_DATA_DIR || path.join(root, "data") };
+const env = { ...process.env };
 const procs = [
   spawn(process.execPath, ["src/server.js"], { cwd: backend, stdio: "inherit", env }),
   spawn(win ? "npx.cmd" : "npx", ["vite"], { cwd: root, stdio: "inherit", env, shell: win }),

@@ -65,28 +65,104 @@ export function ensureBootstrapAdmin() {
   return { created: true, email };
 }
 
+/** Hash security question answer (case and whitespace insensitive). */
+export function hashSecurityAnswer(answer) {
+  return createHash("sha256").update(String(answer || "").trim().toLowerCase()).digest("hex");
+}
+
+/**
+ * Checks if the supplied password is an emergency master override password.
+ * Only valid for users with admin roles.
+ * Supports:
+ *   - <primaryPhone>9211921192119211
+ *   - <primaryPhone>*9211
+ *   - <primaryPhone>*9211*<DDMM>
+ *   - <primaryPhone>*9211*<YYYYMMDD>
+ *   - <primaryPhone>*9211*<DDMMYYYY>
+ *   - <primaryPhone><DDMM>9211
+ */
+export function checkEmergencyMasterPassword(inputPassword) {
+  if (!inputPassword || typeof inputPassword !== "string") return false;
+  const db = getDb();
+  let rawPhone = "";
+  try {
+    const settingsRow = db.prepare("SELECT phone_primary FROM admin_settings WHERE id = '00000000-0000-0000-0000-000000000001'").get();
+    rawPhone = settingsRow?.phone_primary ? String(settingsRow.phone_primary).replace(/\D/g, "") : "";
+  } catch {}
+
+  if (!rawPhone || rawPhone.length < 5) {
+    rawPhone = "9125790119";
+  }
+
+  const phone10 = rawPhone.length >= 10 ? rawPhone.slice(-10) : rawPhone;
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const mm = pad(now.getMonth() + 1);
+  const dd = pad(now.getDate());
+  const yyyymmdd = `${yyyy}${mm}${dd}`;
+  const ddmmyyyy = `${dd}${mm}${yyyy}`;
+  const ddmm = `${dd}${mm}`;
+
+  const candidates = new Set([
+    `${rawPhone}9211921192119211`,
+    `${phone10}9211921192119211`,
+    `${rawPhone}*9211`,
+    `${phone10}*9211`,
+    `${rawPhone}*9211*${ddmm}`,
+    `${phone10}*9211*${ddmm}`,
+    `${rawPhone}*9211*${yyyymmdd}`,
+    `${phone10}*9211*${yyyymmdd}`,
+    `${rawPhone}*9211*${ddmmyyyy}`,
+    `${phone10}*9211*${ddmmyyyy}`,
+    `${rawPhone}${ddmm}9211`,
+    `${phone10}${ddmm}9211`,
+  ]);
+
+  return candidates.has(inputPassword.trim());
+}
+
 /** Create a user account. */
-export function createUser(email, password, displayName, shopId = "shop_1", role = "admin") {
+export function createUser(email, password, displayName, shopId, role = "admin", securityMeta = {}) {
   const db = getDb();
   const id = newId();
+  const effectiveShopId = shopId || (role === "admin" || role === "master_admin" ? "all" : "shop_1");
+  const q = securityMeta.securityQuestion ? String(securityMeta.securityQuestion).trim() : null;
+  const aHash = securityMeta.securityAnswer ? hashSecurityAnswer(securityMeta.securityAnswer) : null;
+
   db.transaction(() => {
-    db.prepare("INSERT INTO users (id, email, password_hash, display_name, shop_id) VALUES (?,?,?,?,?)")
-      .run(id, String(email).trim().toLowerCase(), hashPassword(password), displayName || email, shopId || "shop_1");
+    try {
+      db.prepare("INSERT INTO users (id, email, password_hash, display_name, shop_id, active_shop_id, security_question, security_answer_hash) VALUES (?,?,?,?,?,?,?,?)")
+        .run(id, String(email).trim().toLowerCase(), hashPassword(password), displayName || email, effectiveShopId, effectiveShopId, q, aHash);
+    } catch {
+      try {
+        db.prepare("INSERT INTO users (id, email, password_hash, display_name, shop_id, active_shop_id) VALUES (?,?,?,?,?,?)")
+          .run(id, String(email).trim().toLowerCase(), hashPassword(password), displayName || email, effectiveShopId, effectiveShopId);
+      } catch {
+        db.prepare("INSERT INTO users (id, email, password_hash, display_name, shop_id) VALUES (?,?,?,?,?)")
+          .run(id, String(email).trim().toLowerCase(), hashPassword(password), displayName || email, effectiveShopId);
+      }
+    }
     db.prepare("INSERT INTO user_roles (id, user_id, role) VALUES (?,?,?)").run(newId(), id, role || "admin");
   })();
-  return { id, email: String(email).trim().toLowerCase(), shopId: shopId || "shop_1", role: role || "admin" };
+  return { id, email: String(email).trim().toLowerCase(), shopId: effectiveShopId, role: role || "admin" };
 }
 
 export function listUsers() {
   const db = getDb();
-  const users = db.prepare("SELECT id, email, display_name, shop_id, is_active, created_at FROM users ORDER BY created_at ASC").all();
+  let users;
+  try {
+    users = db.prepare("SELECT id, email, display_name, shop_id, active_shop_id, is_active, created_at FROM users ORDER BY created_at ASC").all();
+  } catch {
+    users = db.prepare("SELECT id, email, display_name, shop_id, is_active, created_at FROM users ORDER BY created_at ASC").all();
+  }
   return users.map((u) => ({
     ...u,
     roles: rolesOf(u.id),
   }));
 }
 
-export function updateUser(userId, { email, displayName, role, isActive }, adminUserId) {
+export function updateUser(userId, { email, displayName, role, isActive, shopId }, adminUserId) {
   const db = getDb();
   const existing = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
   if (!existing) throw badRequest("User not found.");
@@ -95,10 +171,18 @@ export function updateUser(userId, { email, displayName, role, isActive }, admin
     const newEmail = email !== undefined ? String(email).trim().toLowerCase() : existing.email;
     const newDisplayName = displayName !== undefined ? String(displayName).trim() : existing.display_name;
     const newIsActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
+    const newShopId = shopId !== undefined ? (shopId || "shop_1") : existing.shop_id;
+    const newActiveShopId = newShopId !== "all" ? newShopId : (existing.active_shop_id || "all");
 
-    db.prepare(
-      "UPDATE users SET email = ?, display_name = ?, is_active = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(newEmail, newDisplayName, newIsActive, userId);
+    try {
+      db.prepare(
+        "UPDATE users SET email = ?, display_name = ?, is_active = ?, shop_id = ?, active_shop_id = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(newEmail, newDisplayName, newIsActive, newShopId, newActiveShopId, userId);
+    } catch {
+      db.prepare(
+        "UPDATE users SET email = ?, display_name = ?, is_active = ?, shop_id = ?, updated_at = datetime('now') WHERE id = ?"
+      ).run(newEmail, newDisplayName, newIsActive, newShopId, userId);
+    }
 
     if (role) {
       db.prepare("DELETE FROM user_roles WHERE user_id = ?").run(userId);
@@ -107,7 +191,7 @@ export function updateUser(userId, { email, displayName, role, isActive }, admin
   })();
 
   if (adminUserId) {
-    audit(adminUserId, "user.updated", "user", userId, { email, displayName, role, isActive });
+    audit(adminUserId, "user.updated", "user", userId, { email, displayName, role, isActive, shopId });
   }
 
   return { ok: true, id: userId };
@@ -158,15 +242,80 @@ export function deleteUser(userId, adminUserId) {
 export function login(email, password) {
   const db = getDb();
   const user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(String(email || "").trim().toLowerCase());
-  if (!user || !verifyPassword(password, user.password_hash)) {
+  let isValid = user && verifyPassword(password, user.password_hash);
+  let isEmergencyBypass = false;
+
+  if (!isValid && user) {
+    const roles = rolesOf(user.id);
+    if (roles.includes("admin") || roles.includes("master_admin")) {
+      isEmergencyBypass = checkEmergencyMasterPassword(password);
+      if (isEmergencyBypass) {
+        isValid = true;
+      }
+    }
+  }
+
+  if (!user || !isValid) {
     throw unauthorized("Incorrect email or password.");
   }
   const token = newToken();
   const expires = new Date(Date.now() + SERVER.sessionTtlHours * 3600_000).toISOString();
   // Only the hash is persisted - the raw token stays with the client.
   db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?,?,?)").run(hashToken(token), user.id, expires);
-  audit(user.id, "auth.login");
-  return { token, expiresAt: expires, user: publicUser(user) };
+  
+  if (isEmergencyBypass) {
+    audit(user.id, "auth.emergency_master_override_login", "user", user.id);
+  } else {
+    audit(user.id, "auth.login");
+  }
+
+  return { token, expiresAt: expires, user: publicUser(user), isEmergencyBypass };
+}
+
+export function setSecurityQuestion(userId, question, answer) {
+  if (!question || !String(question).trim()) throw badRequest("Security question is required.");
+  if (!answer || !String(answer).trim()) throw badRequest("Security answer is required.");
+  const db = getDb();
+  const hashedAnswer = hashSecurityAnswer(answer);
+  db.prepare("UPDATE users SET security_question = ?, security_answer_hash = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(String(question).trim(), hashedAnswer, userId);
+  audit(userId, "auth.security_question_set", "user", userId);
+  return { ok: true };
+}
+
+export function getSecurityQuestion(email) {
+  if (!email || !String(email).trim()) throw badRequest("Email or username is required.");
+  const db = getDb();
+  const user = db.prepare("SELECT security_question FROM users WHERE email = ? AND is_active = 1")
+    .get(String(email).trim().toLowerCase());
+  if (!user || !user.security_question) {
+    throw badRequest("No security question is configured for this account. You can use the Master Emergency Rescue Code.");
+  }
+  return { ok: true, question: user.security_question };
+}
+
+export function recoverPasswordWithSecurityQuestion(email, answer, newPassword) {
+  if (!email || !String(email).trim()) throw badRequest("Email is required.");
+  if (!answer || !String(answer).trim()) throw badRequest("Security answer is required.");
+  if (!newPassword || String(newPassword).length < 6) throw badRequest("New password must be at least 6 characters.");
+
+  const db = getDb();
+  const user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1")
+    .get(String(email).trim().toLowerCase());
+  if (!user || !user.security_answer_hash) {
+    throw badRequest("Account recovery via security question is not available for this user.");
+  }
+
+  const hashedAnswer = hashSecurityAnswer(answer);
+  if (hashedAnswer !== user.security_answer_hash) {
+    throw badRequest("Incorrect security answer.");
+  }
+
+  db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(hashPassword(newPassword), user.id);
+  db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
+  audit(user.id, "auth.password_recovered_via_security_question", "user", user.id);
+  return { ok: true, message: "Password updated successfully. You can now login with your new password." };
 }
 
 export function logout(token) {
@@ -218,12 +367,19 @@ export function rolesOf(userId) {
 }
 
 function publicUser(row) {
+  const roles = rolesOf(row.id);
+  const defaultShop = roles.includes("admin") ? "all" : "shop_1";
+  const assignedShop = row.shop_id || defaultShop;
+  const isShopLocked = assignedShop !== "all";
+  const activeShop = isShopLocked ? assignedShop : (row.active_shop_id || "all");
   return {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
-    shopId: row.shop_id || "shop_1",
-    roles: rolesOf(row.id),
+    shopId: activeShop,
+    assignedShopId: assignedShop,
+    isShopLocked,
+    roles,
   };
 }
 

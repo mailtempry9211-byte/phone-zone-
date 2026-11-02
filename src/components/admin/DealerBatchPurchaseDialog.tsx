@@ -60,7 +60,7 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
   const [phoneRows, setPhoneRows] = useState<BatchPhoneItem[]>([
     {
       id: "row_1",
-      brand: "Apple",
+      brand: "",
       model: "",
       variant: "",
       colour: "",
@@ -149,7 +149,7 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
       ...prev,
       {
         id: `row_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-        brand: prev.length > 0 ? prev[prev.length - 1].brand : "Apple",
+        brand: "",
         model: "",
         variant: "",
         colour: "",
@@ -197,9 +197,8 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
             setPhoneRows((prev) => {
               const updated = [...prev];
               const r = { ...updated[index] };
-              if (tacData.brand && (!r.brand || r.brand === "Apple")) r.brand = tacData.brand;
-              if (tacData.model && !r.model) r.model = tacData.model;
-              else if (tacData.phoneName && !r.model) r.model = tacData.phoneName;
+              if (tacData.brand) r.brand = tacData.brand;
+              if (tacData.phoneName || tacData.model) r.model = tacData.phoneName || tacData.model;
               if (tacData.variant && !r.variant) r.variant = tacData.variant;
               if (tacData.colour && !r.colour) r.colour = tacData.colour;
               r.tacInfo = tacData;

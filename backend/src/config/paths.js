@@ -39,15 +39,7 @@ export function defaultDataDir() {
 
 function resolveAppDataDir() {
   if (process.env.PHONEZONE_DATA_DIR) {
-    const candidate = path.resolve(process.env.PHONEZONE_DATA_DIR);
-    if (fs.existsSync(path.join(candidate, "database", "phonezone.db"))) {
-      return candidate;
-    }
-    const def = defaultDataDir();
-    if (fs.existsSync(path.join(def, "database", "phonezone.db")) && !process.env.PHONEZONE_FORCE_EMPTY_DIR) {
-      return def;
-    }
-    return candidate;
+    return path.resolve(process.env.PHONEZONE_DATA_DIR);
   }
   return defaultDataDir();
 }

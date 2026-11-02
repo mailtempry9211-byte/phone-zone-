@@ -43,7 +43,13 @@ const BRAND_MAP = {
 };
 
 export function normalizeBrand(raw) {
-  const s = String(raw ?? "").trim();
+  if (raw && typeof raw === "object") {
+    raw = raw.name || raw.title || raw.slug || raw.label || raw.brand || "";
+  }
+  let s = String(raw ?? "").trim();
+  if (s.toLowerCase().includes("[object") || s.toLowerCase().includes("object]")) {
+    return "";
+  }
   if (!s) return "";
   const mapped = BRAND_MAP[s.toLowerCase()];
   if (mapped) return mapped;
@@ -139,44 +145,59 @@ function isTechnicalCode(str, brand) {
 export function parseSpecs(brandRaw, specsRaw) {
   const brand = normalizeBrand(brandRaw);
   const raw = String(specsRaw ?? "").trim();
-  const parts = raw ? raw.split(/\s*,\s*/).map((p) => p.trim()).filter(Boolean) : [];
+  const parts = raw ? raw.split(/\s*,\s*/) : [];
 
   if (!parts.length) {
     return { brand, phoneName: brand || "Unknown", model: brand || "Unknown", extra: "" };
   }
 
-  const usableParts = parts.filter((p) => !isMetaOrYear(p));
-  if (!usableParts.length) {
-    usableParts.push(parts[0]);
+  let nameRaw = "";
+  let codePart = null;
+  const firstIsBrand = parts.length > 0 && !!brand && parts[0].trim().toLowerCase() === brand.toLowerCase();
+  if (firstIsBrand && parts.length > 1) {
+    // format C: brand repeated as its own column
+    nameRaw = parts[1];
+    codePart = null;
+  } else {
+    nameRaw = parts[0] ?? "";
+    codePart = parts[1] ?? null;
   }
+  const extra = parts.slice(2).filter(notNa).join(", ");
 
-  let bestMarketingName = "";
-  let bestModelCode = "";
+  // Prepend the normalized brand only when it is not already inside the name.
+  const brandInName = !!brand && nameRaw.toLowerCase().includes(brand.toLowerCase());
+  const nameCased = smartTitleCase(nameRaw);
+  const phoneName = (brandInName ? nameCased : brand ? `${brand} ${nameCased}` : nameCased).trim() || brand || "Unknown";
 
-  for (const part of usableParts) {
-    if (isTechnicalCode(part, brand)) {
-      if (!bestModelCode) bestModelCode = part;
-    } else {
-      if (!bestMarketingName) {
-        bestMarketingName = part;
-      } else {
-        const richPattern = /\b(Pro|Max|Ultra|Plus|Note|Galaxy|Edge|Fold|Flip|Prime|Lite|Air|Neo|Turbo|Poco|Redmi)\b/i;
-        if (richPattern.test(part) && !richPattern.test(bestMarketingName)) {
-          bestMarketingName = part;
-        }
-      }
+  // ---- model code ----
+  let model = "";
+  const code = codePart && notNa(codePart.trim()) ? codePart.trim() : null;
+  if (code) {
+    let cleaned = code;
+    // strip a glued year: trailing 4-digit 2005..2027 attached to a letter/digit,
+    // only when at least 3 characters would remain ('V2033'/'CPH1921' are NOT years).
+    const ym = cleaned.match(/^(.*[A-Za-z0-9])((?:200[5-9]|201\d|202[0-7]))$/);
+    if (ym && ym[1].length >= 3) cleaned = ym[1];
+
+    const tokens = cleaned.split(/\s+/);
+    const candidate = tokens[tokens.length - 1] || "";
+    const codeWords = stripWords(cleaned);
+    const nameWords = stripWords(nameRaw);
+    const sameWords =
+      codeWords === nameWords ||
+      (tokens.length > 1 && stripWords(tokens.slice(1).join(" ")) === stripWords(nameRaw.replace(/^\s*\S+\s*/, "")));
+
+    if (candidate && digitsOf(candidate) >= 1 && !sameWords) {
+      model = candidate;
     }
   }
 
-  if (!bestMarketingName) {
-    bestMarketingName = usableParts[0] || parts[0];
+  if (!model) {
+    // fallback: phone name without the brand prefix (the model field is required)
+    let base = phoneName;
+    if (brand && base.toLowerCase().startsWith(brand.toLowerCase() + " ")) base = base.slice(brand.length).trim();
+    model = base || phoneName || "Unknown";
   }
-
-  let nameCased = smartTitleCase(bestMarketingName).replace(/\?+$/, "").trim();
-  const brandInName = !!brand && nameCased.toLowerCase().includes(brand.toLowerCase());
-  const phoneName = (brandInName ? nameCased : brand ? `${brand} ${nameCased}` : nameCased).trim() || brand || "Unknown";
-  const model = phoneName;
-  const extra = parts.slice(1).filter((p) => notNa(p) && p !== bestMarketingName).join(", ");
 
   return { brand, phoneName, model, extra };
 }
@@ -186,10 +207,18 @@ export function parseSpecs(brandRaw, specsRaw) {
 function rowToApi(row) {
   if (!row) return { found: false };
   const parsed = row.specs_raw ? parseSpecs(row.brand, row.specs_raw) : null;
+  let brand = parsed?.brand || row.brand;
+  let phoneName = parsed?.phoneName || row.phone_name;
+  let model = parsed?.model || row.model;
+
+  if (!brand || String(brand).toLowerCase().includes("object")) {
+    const firstWord = (phoneName || "").trim().split(/\s+/)[0];
+    brand = firstWord ? normalizeBrand(firstWord) : "Unknown";
+  }
   return {
     found: true,
     tac: row.tac,
-    brand: parsed?.brand || row.brand,
+    brand,
     phoneName: parsed?.phoneName || row.phone_name,
     model: parsed?.model || row.model,
     specs: parsed?.extra || row.specs || "",
@@ -237,7 +266,15 @@ export function learnTac({ tac, imei, brand, phoneName, model, specs }) {
 export function storeApiResult({ tac, brand, phoneName, model, specs }) {
   const code = normalizeTac(tac);
   if (!code) throw badRequest("A TAC (8 digits) or IMEI (15 digits) is required.");
-  if (!brand || !phoneName || !model) throw badRequest("brand, phoneName and model are required.");
+  let cleanBrand = normalizeBrand(brand);
+  const cleanPhoneName = phoneName ? String(phoneName).trim() : "";
+  const cleanModel = model ? String(model).trim() : "";
+
+  if (!cleanBrand && cleanPhoneName) {
+    const firstWord = cleanPhoneName.split(/\s+/)[0];
+    cleanBrand = firstWord ? normalizeBrand(firstWord) : "Unknown";
+  }
+  if (!cleanBrand || !cleanPhoneName) throw badRequest("brand and phoneName are required.");
   getDb()
     .prepare(
       `INSERT INTO tac_codes (tac, brand, phone_name, model, specs, source)
@@ -247,7 +284,7 @@ export function storeApiResult({ tac, brand, phoneName, model, specs }) {
          specs = excluded.specs, source = 'api', updated_at = datetime('now')
        WHERE tac_codes.source = 'api'`
     )
-    .run(code, String(brand), String(phoneName), String(model), specs ? String(specs) : null);
+    .run(code, cleanBrand, cleanPhoneName, cleanModel || cleanPhoneName, specs ? String(specs) : null);
   return lookupTac(code);
 }
 

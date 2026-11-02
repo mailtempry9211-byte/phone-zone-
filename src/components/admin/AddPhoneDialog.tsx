@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, X, Camera, FileText, Receipt, Wifi, WifiOff, Loader2, Globe, Search, AlertTriangle, History, ShieldCheck, PenTool, CheckCircle, ArrowRight, ArrowLeft, User, Eye } from "lucide-react";
+import { Upload, X, Camera, FileText, Receipt, Wifi, WifiOff, Loader2, Globe, Search, AlertTriangle, History, ShieldCheck, PenTool, CheckCircle, ArrowRight, ArrowLeft, User, Eye, Plus, Trash2 } from "lucide-react";
 import { compressImage } from "@/utils/imageCompression";
 import { useTacLookup } from "@/hooks/useTacLookup";
 import AadhaarScanButton from "./AadhaarScanButton";
@@ -37,7 +37,7 @@ const getChoiceText = (c: Choice) =>
 import RepairMatchDialog from "./RepairMatchDialog";
 import RepairHistoryPanel from "./RepairHistoryPanel";
 import PostTransactionShareDialog, { type PostTransactionPhone, type PostTransactionParty } from "./PostTransactionShareDialog";
-import { buildInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates";
+import { buildInvoiceHtml, buildCombinedPurchaseInvoiceHtml, DEFAULT_PURCHASE_TERMS } from "@/lib/invoiceTemplates";
 
 interface AddPhoneDialogProps {
   open: boolean;
@@ -129,6 +129,115 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
   const [repairImeiJobs, setRepairImeiJobs] = useState<any[]>([]);
   const [repairHistoryModalOpen, setRepairHistoryModalOpen] = useState(false);
   const [boardAcknowledged, setBoardAcknowledged] = useState(false);
+
+  interface ExtraPhoneItem {
+    id: string;
+    phone_name: string;
+    model: string;
+    imei_number: string;
+    imei2_number: string;
+    condition: string;
+    purchase_price: string;
+    selling_price: string;
+    variant: string;
+    colour: string;
+    bill_available: boolean;
+    box_available: boolean;
+    charger_available: boolean;
+    product_photos: string[];
+  }
+  const [extraPhones, setExtraPhones] = useState<ExtraPhoneItem[]>([]);
+  const [uploadingExtraIndex, setUploadingExtraIndex] = useState<number | null>(null);
+
+  const handleExtraPhonePhotosUpload = async (idx: number, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const currentPhotos = extraPhones[idx]?.product_photos || [];
+    if (currentPhotos.length + files.length > 4) {
+      toast.error("Maximum 4 photos allowed per device");
+      return;
+    }
+
+    setUploadingExtraIndex(idx);
+    const uploadedUrls: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        const publicUrl = await uploadFile(file, "product-photos");
+        uploadedUrls.push(publicUrl);
+      }
+      setExtraPhones((prev) => {
+        const next = [...prev];
+        if (next[idx]) {
+          next[idx] = {
+            ...next[idx],
+            product_photos: [...(next[idx].product_photos || []), ...uploadedUrls],
+          };
+        }
+        return next;
+      });
+      toast.success("Device photos uploaded and compressed!");
+    } catch (error) {
+      console.error("Error uploading extra phone photos:", error);
+      toast.error("Failed to upload device photos");
+    } finally {
+      setUploadingExtraIndex(null);
+    }
+  };
+
+  const removeExtraPhonePhoto = (phoneIdx: number, photoIdx: number) => {
+    setExtraPhones((prev) => {
+      const next = [...prev];
+      if (next[phoneIdx]) {
+        next[phoneIdx] = {
+          ...next[phoneIdx],
+          product_photos: (next[phoneIdx].product_photos || []).filter((_, i) => i !== photoIdx),
+        };
+      }
+      return next;
+    });
+  };
+
+  const lookupExtraImei = async (idx: number, imeiVal: string) => {
+    const digits = imeiVal.replace(/\D/g, "");
+    if (digits.length >= 8) {
+      try {
+        let res = await fetch(`/api/tac/${digits}`, { credentials: "include" });
+        let data = await res.json().catch(() => ({}));
+        if (!data || !data.found) {
+          const fetchRes = await fetch("/api/tac/fetch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ imei: digits }),
+          });
+          if (fetchRes.ok) {
+            const fetched = await fetchRes.json().catch(() => ({}));
+            if (fetched && fetched.found) {
+              data = fetched;
+            }
+          }
+        }
+
+        if (data && data.found) {
+          const brand = typeof data.brand === "object" ? (data.brand?.name || data.brand?.title || "") : (data.brand || "");
+          const model = typeof data.model === "object" ? (data.model?.name || data.model?.title || "") : (data.model || "");
+          const phoneName = data.phoneName || `${brand} ${model}`.trim() || model || brand;
+          setExtraPhones((prev) => {
+            const next = [...prev];
+            if (next[idx]) {
+              next[idx] = {
+                ...next[idx],
+                phone_name: next[idx].phone_name || phoneName,
+                model: next[idx].model || model,
+              };
+            }
+            return next;
+          });
+        }
+      } catch (err) {
+        console.warn("lookupExtraImei error:", err);
+      }
+    }
+  };
 
   // Cross-check: seller phone entered -> probe repair customers
   useEffect(() => {
@@ -469,6 +578,26 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
       toast.error(colour.error);
       return false;
     }
+    for (let i = 0; i < extraPhones.length; i++) {
+      const ep = extraPhones[i];
+      if (!ep.phone_name.trim()) {
+        toast.error(`Additional Phone #${i + 2}: Please enter Phone Name`);
+        return false;
+      }
+      const cleanEpImei = ep.imei_number.replace(/\D/g, "");
+      if (cleanEpImei.length < 14) {
+        toast.error(`Additional Phone #${i + 2}: Please enter a valid 15-digit IMEI`);
+        return false;
+      }
+      if (!ep.purchase_price || parseFloat(ep.purchase_price) <= 0) {
+        toast.error(`Additional Phone #${i + 2}: Please enter Purchase Price`);
+        return false;
+      }
+      if (!ep.selling_price || parseFloat(ep.selling_price) <= 0) {
+        toast.error(`Additional Phone #${i + 2}: Please enter Selling Price`);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -566,6 +695,21 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
             seller_id: useExistingSeller && formData.seller_id ? formData.seller_id : undefined,
             seller: newSeller || undefined,
             shop_id: selectedShop,
+            additional_phones: extraPhones.map((ep) => ({
+              phone_name: ep.phone_name,
+              model: ep.model,
+              imei_number: ep.imei_number,
+              imei2_number: ep.imei2_number || undefined,
+              condition: ep.condition,
+              purchase_price: parseFloat(ep.purchase_price) || 0,
+              selling_price: parseFloat(ep.selling_price) || 0,
+              variant: ep.variant || null,
+              colour: ep.colour || null,
+              bill_available: ep.bill_available,
+              box_available: ep.box_available,
+              charger_available: ep.charger_available,
+              product_photos: ep.product_photos || [],
+            })),
           }),
         });
         const body = await res.json().catch(() => ({}));
@@ -697,6 +841,52 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
             terms: purchaseTerms,
             fallbackTerms: DEFAULT_PURCHASE_TERMS,
           });
+
+          if (extraPhones.length > 0) {
+            const allPhonesForInvoice = [
+              {
+                phone_name: formData.phone_name,
+                model: formData.model,
+                imei_number: formData.imei_number,
+                imei2_number: formData.imei2_number,
+                variant: variant.value,
+                colour: colour.value,
+                condition: formData.condition,
+                purchase_price: parseFloat(formData.purchase_price) || 0,
+              },
+              ...extraPhones.map((ep) => ({
+                phone_name: ep.phone_name,
+                model: ep.model,
+                imei_number: ep.imei_number,
+                imei2_number: ep.imei2_number,
+                variant: ep.variant,
+                colour: ep.colour,
+                condition: ep.condition,
+                purchase_price: parseFloat(ep.purchase_price) || 0,
+              })),
+            ];
+            const combinedTotal = allPhonesForInvoice.reduce((sum, p) => sum + p.purchase_price, 0);
+            invoiceHtml = buildCombinedPurchaseInvoiceHtml({
+              settings: adminSettings,
+              seller: {
+                name: formData.seller_name,
+                phone: formData.seller_phone,
+                address: formData.seller_address,
+                id_proof_type: formData.id_proof_type,
+                id_number: formData.id_number,
+                seller_photo_url: formData.seller_photo_url,
+                seller_signature_url: formData.seller_signature_url,
+              },
+              phones: allPhonesForInvoice,
+              totalAmount: combinedTotal,
+              purchaseDate: formData.purchase_date || new Date().toLocaleDateString("en-IN"),
+              paymentMethod: formData.payment_method || "Cash",
+              terms: purchaseTerms,
+              documentPhotos: formData.purchase_documents || [],
+              paymentProofPhotos: formData.payment_proof_photos || [],
+              productPhotos: formData.product_photos || [],
+            });
+          }
         }
       } catch (e) {
         console.warn("Failed to generate purchase invoice HTML for post-share", e);
@@ -704,10 +894,10 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
 
       setPostShareData({
         phone: {
-          phone_name: formData.phone_name,
-          model: formData.model,
+          phone_name: extraPhones.length > 0 ? `${formData.phone_name} (+${extraPhones.length} phones)` : formData.phone_name,
+          model: extraPhones.length > 0 ? "Multi-Phone Purchase Batch" : formData.model,
           imei_number: formData.imei_number,
-          amount: parseFloat(formData.purchase_price) || 0,
+          amount: (parseFloat(formData.purchase_price) || 0) + extraPhones.reduce((sum, ep) => sum + (parseFloat(ep.purchase_price) || 0), 0),
           condition: formData.condition,
           variant: variant.value,
           colour: colour.value,
@@ -723,11 +913,12 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
         invoiceHtml,
       });
 
-      toast.success("Phone added successfully!");
+      toast.success(extraPhones.length > 0 ? `Purchased ${extraPhones.length + 1} phones successfully!` : "Phone added successfully!");
       onOpenChange(false);
       setPostShareOpen(true);
       
       // Reset form
+      setExtraPhones([]);
       setFormData({
         phone_name: "",
         model: "",
@@ -1327,6 +1518,328 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
               </div>
             </div>
 
+            {/* Multi-Phone Intake from Same Seller */}
+            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Additional Phones from this Seller (एक ही विक्रेता से अतिरिक्त फ़ोन)
+                  </h4>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    If this seller brought 2 or 3 phones, add them here. Same seller photo, Aadhaar KYC, signature &amp; Shapath Patra will cover all phones in a single combined voucher.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setExtraPhones((prev) => [
+                      ...prev,
+                      {
+                        id: 'extra_' + Date.now(),
+                        phone_name: '',
+                        model: '',
+                        imei_number: '',
+                        imei2_number: '',
+                        condition: 'good',
+                        purchase_price: '',
+                        selling_price: '',
+                        variant: '',
+                        colour: '',
+                        bill_available: false,
+                        box_available: false,
+                        charger_available: false,
+                        product_photos: [],
+                      },
+                    ]);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-0 shrink-0 shadow-sm text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  + Add Another Phone
+                </Button>
+              </div>
+
+              {extraPhones.length > 0 && (
+                <div className="space-y-4">
+                  {extraPhones.map((ep, idx) => (
+                    <div
+                      key={ep.id}
+                      className="p-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 space-y-3 relative"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Additional Device #{idx + 2}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setExtraPhones((prev) => prev.filter((_, i) => i !== idx))}
+                          className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <div>
+                          <Label className="text-xs font-semibold">IMEI Number *</Label>
+                          <Input
+                            placeholder="15-digit IMEI"
+                            value={ep.imei_number}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], imei_number: val };
+                                return next;
+                              });
+                              lookupExtraImei(idx, val);
+                            }}
+                            className="font-mono text-xs mt-1"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Phone Name *</Label>
+                          <Input
+                            placeholder="e.g. Vivo V29"
+                            value={ep.phone_name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], phone_name: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Model *</Label>
+                          <Input
+                            placeholder="e.g. V2250"
+                            value={ep.model}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], model: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Condition *</Label>
+                          <Select
+                            value={ep.condition}
+                            onValueChange={(val) => {
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], condition: val };
+                                return next;
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="text-xs mt-1 h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="excellent">Excellent</SelectItem>
+                              <SelectItem value="good">Good</SelectItem>
+                              <SelectItem value="fair">Fair</SelectItem>
+                              <SelectItem value="poor">Poor</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Purchase Price (₹) *</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={ep.purchase_price}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], purchase_price: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1 font-semibold"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Selling Price (₹) *</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={ep.selling_price}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], selling_price: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1 font-semibold"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Variant (RAM/Storage)</Label>
+                          <Input
+                            placeholder="e.g. 8/128"
+                            value={ep.variant}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], variant: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs font-semibold">Colour</Label>
+                          <Input
+                            placeholder="e.g. Black"
+                            value={ep.colour}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], colour: val };
+                                return next;
+                              });
+                            }}
+                            className="text-xs mt-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4 pt-1 text-xs">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox
+                            checked={ep.bill_available}
+                            onCheckedChange={(c) => {
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], bill_available: !!c };
+                                return next;
+                              });
+                            }}
+                          />
+                          Bill
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox
+                            checked={ep.box_available}
+                            onCheckedChange={(c) => {
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], box_available: !!c };
+                                return next;
+                              });
+                            }}
+                          />
+                          Box
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox
+                            checked={ep.charger_available}
+                            onCheckedChange={(c) => {
+                              setExtraPhones((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], charger_available: !!c };
+                                return next;
+                              });
+                            }}
+                          />
+                          Charger
+                        </label>
+                      </div>
+
+                      {/* Device Photos Section (Max 4 Photos) */}
+                      <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <Camera className="h-3.5 w-3.5 text-blue-500" />
+                            Device Photos (Max 4 फ़ोटो - Storefront &amp; Stock)
+                          </Label>
+                          <div>
+                            <input
+                              type="file"
+                              id={`extra_photos_${ep.id}`}
+                              multiple
+                              accept="image/*"
+                              onChange={(e) => {
+                                handleExtraPhonePhotosUpload(idx, e.target.files);
+                                e.target.value = "";
+                              }}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => document.getElementById(`extra_photos_${ep.id}`)?.click()}
+                              disabled={uploadingExtraIndex === idx || (ep.product_photos?.length || 0) >= 4}
+                              className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              {uploadingExtraIndex === idx ? "Uploading..." : "+ Upload Device Photos"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {ep.product_photos && ep.product_photos.length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                            {ep.product_photos.map((photo, pIdx) => (
+                              <div key={pIdx} className="relative aspect-[4/3] rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-xs">
+                                <img
+                                  src={photo}
+                                  alt={`Device #${idx + 2} Photo ${pIdx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeExtraPhonePhoto(idx, pIdx)}
+                                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-700 transition-colors"
+                                  title="Remove photo"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                            No photos uploaded for this device yet. Photos will be automatically compressed to under 300KB.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Step 1 Actions */}
             <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-3 pt-6 border-t mt-6">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -1354,16 +1867,18 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
               <div>
                 <span className="font-semibold text-blue-950 text-sm">
                   {formData.phone_name} {formData.model}
+                  {extraPhones.length > 0 && ` (+${extraPhones.length} more device${extraPhones.length > 1 ? "s" : ""})`}
                 </span>
                 <div className="text-blue-800 mt-0.5">
                   IMEI: <span className="font-mono font-medium">{formData.imei_number}</span>
                   {getChoiceText(variantChoice) ? ` • ${getChoiceText(variantChoice)}` : ""}
                   {getChoiceText(colourChoice) ? ` • ${getChoiceText(colourChoice)}` : ""}
+                  {extraPhones.length > 0 && ` • Total ${extraPhones.length + 1} devices in this intake`}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="bg-white px-2.5 py-1 rounded border border-blue-200 font-bold text-blue-900 text-sm">
-                  ₹{Number(formData.purchase_price || 0).toLocaleString()}
+                <span className="bg-white px-2.5 py-1 rounded border border-blue-200 font-bold text-blue-900 text-sm" title="Total Purchase Payout">
+                  ₹{(Number(formData.purchase_price || 0) + extraPhones.reduce((s, p) => s + (Number(p.purchase_price) || 0), 0)).toLocaleString()}
                 </span>
                 <Button
                   type="button"
@@ -1372,7 +1887,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                   onClick={() => setStep(1)}
                   className="h-7 text-xs text-blue-700 hover:bg-blue-100"
                 >
-                  Edit Phone
+                  Edit Phones
                 </Button>
               </div>
             </div>

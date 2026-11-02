@@ -23,7 +23,7 @@ import {
  *   password (verified again on the backend).
  * - Switching only changes which book is shown; no data is moved or deleted.
  */
-const FinancialYearSwitcher = () => {
+const FinancialYearSwitcher: React.FC<{ className?: string }> = ({ className = "" }) => {
   const { enabled, active, years, isPreviousYear, latestYear, refresh } = useFinancialYear();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -114,9 +114,14 @@ const FinancialYearSwitcher = () => {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} title="Change financial year">
-        <CalendarRange className="h-4 w-4 mr-2" />
-        FY {active?.label || "-"}
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        title="Change financial year"
+        className={className || "h-8 px-2.5 text-xs font-semibold bg-slate-900 border border-slate-700 text-slate-100 hover:bg-slate-800 hover:text-white transition-all shadow-sm"}
+      >
+        <CalendarRange className="h-3.5 w-3.5 mr-1.5 text-teal-400 shrink-0" />
+        <span className="font-bold">FY {active?.label || "-"}</span>
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPassword(""); }}>

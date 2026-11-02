@@ -42,7 +42,7 @@ export function createPerson(kind, data, userId) {
     address: String(data.address).trim(),
     id_proof_type: data.id_proof_type,
     id_number: String(data.id_number).trim(),
-    photo: data.photo_url || null,
+    photo: data.seller_photo_url || data.customer_photo_url || data.photo_url || null,
     aadhaar: data.aadhaar_photo_url || null,
   };
   getDb()

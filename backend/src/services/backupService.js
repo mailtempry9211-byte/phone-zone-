@@ -6,7 +6,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import tar from "tar";
+import { execFileSync } from "node:child_process";
+import * as tar from "tar";
 import { PATHS } from "../config/paths.js";
 import { getDb, initDatabase, closeDatabase } from "../db/index.js";
 import { logger } from "../lib/logger.js";

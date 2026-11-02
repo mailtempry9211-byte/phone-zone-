@@ -42,6 +42,28 @@
 - [x] T-053: Security audit and system optimization (A68).
 
 ## Stage 6: Final Verification & Web Ready
-- [x] T-060: Run full test suite verify-all.mjs with all cumulative assertions green (61/61 PASSED).
+- [x] T-060: Run full test suite verify-all.mjs with all cumulative assertions green (62/62 PASSED).
 - [x] T-061: Verify local web execution (`npm run dev:all` / Express port 47713 + Vite port 8080).
 - [x] T-062: Comprehensive documentation and handover for owner browser testing.
+
+## Stage 7: User-Reported Production Fixes (7 Core Issues)
+- [x] T-071: TAC IMEI lookup for Additional Phone in Purchase Form (auto-fill brand/model via /api/tac).
+- [x] T-072: Retail Combined Purchase Voucher button vs B2B Dealer Bill in InventoryTab.
+- [x] T-073: Sale document upload whitelisted in public storage with zero 404 broken thumbnails.
+- [x] T-074: Extra phones inherit seller KYC documents and payment proof in batch purchase.
+- [x] T-075: Admin header Back button navigates admin tabs history without kicking user out to storefront.
+- [x] T-076: B2B Dealer Credit Ledger auto-updates balance and records all batch purchases.
+- [x] T-077: Combined Sales Invoice with images regenerated in Sold Tab via batch_sale_id and multi-select.
+
+## Stage D: Admin Dashboard & Storefront Mobile Refinements
+- [x] T-D00: Hide DesignComparisonBar from public visitors; allow preview only for logged-in admin or ?admin_preview=1.
+- [x] T-D01: Audit and optimize mobile layout (390px) across all 5 themes; eliminate text overlaps and horizontal overflow.
+- [x] T-D02: Feature prominent Repairing showcase with instant booking on all 5 themes.
+- [x] T-D03: Backend service `backend/src/services/dashboardService.js` and endpoint `GET /api/dashboard/overview` (IST timezone, SQL calculations, caching, A75-A81).
+- [x] T-D04: Dashboard shell, style switch (Glass vs Dark Teal), and formatting helpers.
+- [x] T-D05: Greeting, StatCards with count-up, sparklines, and percentage changes.
+- [x] T-D06: Sales chart (area/gradient), Brand donut, and Stock aging bars.
+- [x] T-D07: Repair pipeline kanban and animated RepairStageTrack.
+- [x] T-D08: Recent invoices, Alerts panel, and Quick actions.
+- [x] T-D09: Wire DashboardTab as first/default tab in `AdminDashboard.tsx`.
+- [x] T-D10: Add test assertions A75-A85 in `scripts/verify-all.mjs` and execute tests.

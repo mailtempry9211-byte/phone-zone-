@@ -3,7 +3,7 @@ import express from "express";
 import path from "node:path";
 import multer from "multer";
 import { SERVER, businessConfig } from "../config/business.js";
-import { login, logout, logoutAll, sessionUser, changePassword, createUser, listUsers, updateUser, adminSetUserPassword, deleteUser, listUserSessions, revokeSession, hashToken } from "../services/authService.js";
+import { login, logout, logoutAll, sessionUser, changePassword, createUser, listUsers, updateUser, adminSetUserPassword, deleteUser, listUserSessions, revokeSession, hashToken, getSecurityQuestion, recoverPasswordWithSecurityQuestion, setSecurityQuestion } from "../services/authService.js";
 import { unauthorized, forbidden, badRequest, AppError } from "../lib/errors.js";
 import * as people from "../services/peopleService.js";
 import * as inventory from "../services/inventoryService.js";
@@ -15,7 +15,9 @@ import * as storage from "../services/storageService.js";
 import * as settings from "../services/settingsService.js";
 import * as dealers from "../services/dealerService.js";
 import * as financialYears from "../services/financialYearService.js";
+import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
+import * as googleDrive from "../services/googleDriveService.js";
 import { getDb } from "../db/index.js";
 import { newId } from "../lib/errors.js";
 import { listAuditLogs, audit } from "../services/auditService.js";
@@ -86,7 +88,7 @@ const PUBLIC_CONFIG_KEYS = [
   "logoUrl", "signatureUrl", "businessHours", "invoicePrefixes",
   "currency", "currencySymbol", "showUdyam", "udyamNumber",
   "termsAndConditions", "termsAndConditionsSale", "termsAndConditionsPurchase",
-  "repairServices", "setupCompleted",
+  "repairServices", "setupCompleted", "homepageTheme", "homepageConfig",
 ];
 
 /** Public projection of the business settings - never leaks private fields. */
@@ -267,7 +269,10 @@ export function buildRouter() {
     let result;
     try {
       result = getDb().transaction(() => {
-        createUser(profile.email, profile.password, profile.ownerName || profile.businessName);
+        createUser(profile.email, profile.password, profile.ownerName || profile.businessName, "all", "admin", {
+          securityQuestion: profile.securityQuestion,
+          securityAnswer: profile.securityAnswer,
+        });
         return settings.completeSetup(profile);
       })();
     } catch (err) {
@@ -279,11 +284,45 @@ export function buildRouter() {
     res.json({ setupCompleted: result.setupCompleted });
   }));
 
-  // Restore from backup file (public, pre-login, only when setup not complete)
+  // Reset setup flag so user can re-run first-time setup or setup a new company (protected with Master Admin Password)
+  r.post("/setup/reset", wrap(async (req, res) => {
+    const { masterPassword } = req.body || {};
+    const db = getDb();
+    
+    // Check if master password is provided and verify it
+    if (masterPassword) {
+      const { verifyPassword } = await import("../services/authService.js");
+      const adminUsers = db.prepare(`
+        SELECT u.* FROM users u
+        WHERE u.is_active = 1 AND (
+          EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role IN ('admin', 'owner'))
+          OR u.email LIKE '%admin%'
+        )
+      `).all();
+
+      let matched = false;
+      for (const admin of adminUsers) {
+        if (verifyPassword(String(masterPassword), admin.password_hash)) {
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched && adminUsers.length > 0) {
+        throw unauthorized("Master Admin Password verification failed. Incorrect password.");
+      }
+    } else {
+      requireLocalSetup(req);
+    }
+
+    db.prepare("UPDATE admin_settings SET setup_completed = 0 WHERE id = (SELECT id FROM admin_settings LIMIT 1)").run();
+    res.json({ ok: true, message: "Setup reset successfully. You can now launch the Setup Wizard to configure a new company." });
+  }));
+
+  // Restore from backup file (public, pre-login)
   r.post("/setup/restore", restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
     requireLocalSetup(req);
-    if (settings.isSetupComplete()) throw badRequest("Setup is already complete.");
     if (!req.file) throw badRequest("Please upload a backup file.");
     const { restoreBackup } = await import("../services/backupService.js");
     const { PATHS } = await import("../config/paths.js");
@@ -388,6 +427,19 @@ export function buildRouter() {
     res.json(revokeSession(req.params.id, req.user.id));
   }));
 
+  // ---------------- password recovery & security question ----------------
+  r.post("/auth/recovery/question", wrap((req, res) => {
+    res.json(getSecurityQuestion(req.body?.email));
+  }));
+  r.post("/auth/recovery/reset", wrap((req, res) => {
+    const { email, answer, newPassword } = req.body || {};
+    res.json(recoverPasswordWithSecurityQuestion(email, answer, newPassword));
+  }));
+  r.post("/auth/security-question", requireAuth, wrap((req, res) => {
+    const { question, answer } = req.body || {};
+    res.json(setSecurityQuestion(req.user.id, question, answer));
+  }));
+
   // ---------------- sellers / customers ----------------
   for (const kind of ["seller", "customer"]) {
     const base = `/${kind}s`;
@@ -413,6 +465,8 @@ export function buildRouter() {
   r.get("/dealers", staff, wrap((req, res) => res.json(dealers.listDealers({ search: req.query.search }))));
   r.get("/dealers/batches/:batchId", staff, wrap((req, res) => res.json(dealers.getBatchPurchase(req.params.batchId))));
   r.get("/dealers/:id", staff, wrap((req, res) => res.json(dealers.getDealer(req.params.id))));
+  r.get("/dealers/:id/ledger", staff, wrap((req, res) => res.json(dealers.getDealerLedger(req.params.id))));
+  r.post("/dealers/:id/ledger", staff, wrap((req, res) => res.status(201).json(dealers.addDealerLedgerEntry(req.params.id, req.body, req.user.id))));
   r.post("/dealers", staff, wrap((req, res) => res.status(201).json(dealers.createDealer(req.body, req.user.id))));
   r.put("/dealers/:id", staff, wrap((req, res) => res.json(dealers.updateDealer(req.params.id, req.body, req.user.id))));
   r.delete("/dealers/:id", staff, wrap((req, res) => res.json(dealers.deleteDealer(req.params.id, req.user.id))));
@@ -421,6 +475,7 @@ export function buildRouter() {
   // ---------------- settings (Admin > Settings, editable anytime) ----------------
   r.get("/settings", staff, wrap((_req, res) => res.json(settings.getSettings())));
   r.put("/settings", staff, upload.none(), wrap((req, res) => res.json(settings.saveSettings(req.body || {}, req.user.id))));
+  r.post("/settings", staff, upload.none(), wrap((req, res) => res.json(settings.saveSettings(req.body || {}, req.user.id))));
   r.post("/settings/upload", staff, upload.single("file"), wrap((req, res) => {
     const { category } = req.body || {};
     if (!["logo", "signature"].includes(category)) throw badRequest("category must be logo or signature.");
@@ -437,6 +492,42 @@ export function buildRouter() {
 
   // ---------------- shops ----------------
   r.get("/shops", staff, wrap((_req, res) => res.json(getDb().prepare("SELECT id, name, address, phone, email, logo_url, created_at, updated_at FROM shops ORDER BY name").all())));
+  r.get("/shops/active", staff, wrap((req, res) => {
+    const userShopId = req.user?.shopId;
+    if (!userShopId || userShopId === "all") {
+      return res.json({ id: "all", name: "All Branches (Consolidated)", isAll: true });
+    }
+    const shop = getDb().prepare("SELECT id, name, address, phone, email, logo_url FROM shops WHERE id = ?").get(userShopId);
+    res.json(shop || { id: userShopId, name: "Main Store" });
+  }));
+  r.post("/shops/switch", staff, wrap((req, res) => {
+    const { shopId } = req.body || {};
+    const db = getDb();
+    const userRow = db.prepare("SELECT shop_id FROM users WHERE id = ?").get(req.user.id);
+    const assignedShop = userRow?.shop_id || "shop_1";
+
+    if (assignedShop !== "all" && shopId !== assignedShop) {
+      throw forbidden("Your account is locked to your assigned branch. You cannot switch branches.");
+    }
+
+    if (shopId && shopId !== "all") {
+      const exists = db.prepare("SELECT id, name, address, phone FROM shops WHERE id = ?").get(shopId);
+      if (!exists) throw badRequest("Shop not found");
+      try {
+        db.prepare("UPDATE users SET active_shop_id = ? WHERE id = ?").run(shopId, req.user.id);
+      } catch {
+        db.prepare("UPDATE users SET shop_id = ? WHERE id = ?").run(shopId, req.user.id);
+      }
+      res.json({ ok: true, activeShop: exists });
+    } else {
+      try {
+        db.prepare("UPDATE users SET active_shop_id = 'all' WHERE id = ?").run(req.user.id);
+      } catch {
+        db.prepare("UPDATE users SET shop_id = 'all' WHERE id = ?").run(req.user.id);
+      }
+      res.json({ ok: true, activeShop: { id: "all", name: "All Branches" } });
+    }
+  }));
   r.post("/shops", staff, wrap((req, res) => {
     const { name, address, phone, email, logo_url } = req.body || {};
     if (!name || !phone) throw badRequest("Shop name and phone are required.");
@@ -557,7 +648,12 @@ export function buildRouter() {
 
   // ---------------- invoices ----------------
   r.get("/invoices", staff, wrap((req, res) => res.json(invoices.listInvoices(req.query.type))));
-  r.post("/invoices", staff, wrap((req, res) => res.status(201).json(invoices.createInvoice({ ...req.body, shopId: req.body?.shopId || req.user?.shopId }))));
+  r.post("/invoices", staff, wrap((req, res) => {
+    const userShopId = req.user?.shopId || "shop_1";
+    const isGlobal = userShopId === "all";
+    const targetShopId = !isGlobal ? userShopId : (req.body?.shopId || (userShopId === "all" ? "shop_1" : userShopId));
+    res.status(201).json(invoices.createInvoice({ ...req.body, shopId: targetShopId }));
+  }));
   r.post("/invoices/render-pdf", staff, wrap((req, res) => {
     const { html } = req.body || {};
     if (!html) throw badRequest("html is required.");
@@ -573,8 +669,16 @@ export function buildRouter() {
   r.post("/invoices/:id/pdf", staff, upload.single("file"), wrap((req, res) =>
     res.json(invoices.attachPdf(req.params.id, req.file.buffer))));
 
-  // ---------------- reports / exports ----------------
-  r.get("/dashboard", staff, wrap((req, res) => res.json(reports.dashboard(req.query))));
+  // ---------------- reports / exports / dashboard ----------------
+  r.get("/dashboard/overview", admin, wrap((req, res) => {
+    const range = req.query.range || "week";
+    const shop = req.query.shop || (req.user?.shopId ? String(req.user.shopId) : "");
+    const fy = req.query.fy || "";
+    const nocache = req.query.nocache === "1" || req.query.nocache === "true";
+    const role = req.user?.roles?.includes("admin") ? "admin" : (req.user?.role || "staff");
+    res.json(dashboardService.getDashboardOverview({ range, shop, fy, role, nocache }));
+  }));
+  r.get("/dashboard", admin, wrap((req, res) => res.json(reports.dashboard(req.query))));
   r.get("/exports/:entity.csv", staff, wrap((req, res) => {
     const csv = reports.exportCsv(req.params.entity);
     if (csv === null) return res.status(404).json({ error: "Unknown export." });
@@ -620,6 +724,18 @@ export function buildRouter() {
     const target = pathMod.join(PATHS.backupsDir, name);
     fsMod.writeFileSync(target, req.file.buffer);
     res.json(backups.restoreBackup(pathMod.basename(target)));
+  }));
+
+  // ---------------- google drive / cloud backup ----------------
+  r.get("/google-drive/status", requireAuth, wrap((_req, res) => {
+    res.json(googleDrive.getCloudBackupStatus());
+  }));
+  r.post("/google-drive/config", requireAuth, requireRole("admin"), wrap((req, res) => {
+    res.json(googleDrive.configureCloudBackup(req.body || {}));
+  }));
+  r.post("/google-drive/sync", requireAuth, wrap((req, res) => {
+    enforce(backupLimiter, req);
+    res.json(googleDrive.syncToGoogleDrive());
   }));
 
   // ---------------- database maintenance (admin) ----------------

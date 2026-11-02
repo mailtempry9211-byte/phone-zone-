@@ -8,7 +8,7 @@ import { Settings, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
-const PasswordChangeDialog = () => {
+const PasswordChangeDialog: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -61,9 +61,13 @@ const PasswordChangeDialog = () => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={!session}>
-          <Settings className="h-4 w-4 mr-2" />
-          Change Password
+        <Button
+          variant="outline"
+          size="sm"
+          className={className || "h-8 px-2.5 text-xs font-semibold bg-slate-900 border border-slate-700 text-slate-100 hover:bg-slate-800 hover:text-white transition-all shadow-sm flex items-center gap-1.5"}
+        >
+          <Settings className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+          <span>Change Password</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">

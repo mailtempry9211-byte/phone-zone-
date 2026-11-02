@@ -19,23 +19,6 @@ import { AppError } from "./lib/errors.js";
 export function createServer() {
   ensureDirs();
 
-  // Migrate data from old %APPDATA%\PhoneZone location if needed.
-  // Only ever applies to the stock data directory: when the caller pointed
-  // PHONEZONE_DATA_DIR somewhere else (a test run, a second profile) it wants a
-  // directory of its own, not a copy of the live business data poured into it.
-  const oldDataDir = defaultDataDir();
-  const oldDbPath = path.join(oldDataDir, "database", "phonezone.db");
-  const isStockDataDir = path.resolve(PATHS.dataDir) === path.resolve(oldDataDir);
-  if (isStockDataDir && !fs.existsSync(PATHS.databaseFile) && fs.existsSync(oldDbPath)) {
-    try {
-      console.log(`[phonezone] Migrating data from ${oldDataDir} to ${PATHS.dataDir}`);
-      fs.cpSync(oldDataDir, PATHS.dataDir, { recursive: true });
-      console.log(`[phonezone] Migration completed successfully`);
-    } catch (err) {
-      console.error(`[phonezone] Migration failed:`, err.message);
-    }
-  }
-
   initDatabase();
   const bootstrap = ensureBootstrapAdmin();
   purgeExpiredSessions();
@@ -81,11 +64,30 @@ export function createServer() {
 
   app.use("/api", buildRouter());
 
-  // Static frontend (built Vite output). Storage root is NEVER served statically.
+  // Static frontend (built Vite output or Vite dev server fallback)
   const dist = path.join(APP_ROOT, "dist");
-  if (fs.existsSync(dist)) {
+  const distIndex = path.join(dist, "index.html");
+  if (fs.existsSync(distIndex)) {
     app.use(express.static(dist));
-    app.get("*", (_req, res) => res.sendFile(path.join(dist, "index.html")));
+    app.get("*", (_req, res) => res.sendFile(distIndex));
+  } else {
+    app.use(async (req, res, next) => {
+      if (req.path.startsWith("/api")) return next();
+      try {
+        const viteUrl = `http://127.0.0.1:8080${req.originalUrl}`;
+        const viteRes = await fetch(viteUrl);
+        res.status(viteRes.status);
+        viteRes.headers.forEach((val, key) => {
+          if (!["content-encoding", "content-length", "transfer-encoding"].includes(key.toLowerCase())) {
+            res.setHeader(key, val);
+          }
+        });
+        const buf = Buffer.from(await viteRes.arrayBuffer());
+        res.send(buf);
+      } catch (_err) {
+        res.status(502).send("Vite server on port 8080 is loading... Please refresh in 5 seconds.");
+      }
+    });
   }
 
   // Friendly errors out, technical detail to the log file.

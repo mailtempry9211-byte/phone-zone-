@@ -16,25 +16,7 @@ let currentUrl = null;
 let lastError = null;
 
 function getSystemNgrokDefaults() {
-  const possiblePaths = [
-    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "ngrok", "ngrok.yml"),
-    path.join(os.homedir(), ".config", "ngrok", "ngrok.yml"),
-    path.join(os.homedir(), ".ngrok2", "ngrok.yml"),
-  ].filter(Boolean);
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      try {
-        const content = fs.readFileSync(p, "utf8");
-        const tokenMatch = content.match(/authtoken:\s*([^\s\r\n]+)/);
-        const urlMatch = content.match(/url:\s*(https?:\/\/[^\s\r\n]+|[^\s\r\n]+ngrok[^\s\r\n]+)/);
-        return {
-          authtoken: tokenMatch ? tokenMatch[1].trim() : "",
-          claimedDomain: urlMatch ? urlMatch[1].trim() : "",
-        };
-      } catch (_e) {}
-    }
-  }
+  // Never read host developer tokens automatically to prevent private tokens from appearing in client installs
   return { authtoken: "", claimedDomain: "" };
 }
 

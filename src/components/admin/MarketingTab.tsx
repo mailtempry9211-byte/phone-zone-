@@ -1047,22 +1047,22 @@ export default function MarketingTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-gray-700">Campaign Name *</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-200">Campaign Name *</label>
                 <Input
                   placeholder="e.g. Diwali Super Discount 2026 / iPhone Stock Update"
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
-                  className="mt-1"
+                  className="mt-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-gray-700">Choose Saved Template</label>
-                  <span className="text-[11px] text-gray-500">or type custom below</span>
+                  <label className="text-xs font-bold text-gray-700 dark:text-slate-200">Choose Saved Template</label>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-300">or type custom below</span>
                 </div>
                 <select
-                  className="w-full h-9 px-3 py-1.5 border rounded-md text-xs bg-white"
+                  className="w-full h-9 px-3 py-1.5 border rounded-md text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                   value={selectedTemplateId}
                   onChange={(e) => {
                     setSelectedTemplateId(e.target.value);
@@ -1081,27 +1081,27 @@ export default function MarketingTab() {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-gray-700">Message Content *</label>
+                  <label className="text-xs font-bold text-gray-700 dark:text-slate-200">Message Content *</label>
                   <div className="flex gap-1 text-[11px]">
-                    <span className="text-gray-400">Click to insert:</span>
+                    <span className="text-gray-400 dark:text-slate-300">Click to insert:</span>
                     <button
                       type="button"
                       onClick={() => setCustomMessage((m) => m + " {name}")}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-mono text-[10px]"
+                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-teal-300 font-mono text-[10px]"
                     >
                       &#123;name&#125;
                     </button>
                     <button
                       type="button"
                       onClick={() => setCustomMessage((m) => m + " {shop_name}")}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-mono text-[10px]"
+                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-teal-300 font-mono text-[10px]"
                     >
                       &#123;shop_name&#125;
                     </button>
                     <button
                       type="button"
                       onClick={() => setCustomMessage((m) => m + " {phone}")}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-mono text-[10px]"
+                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-slate-700 dark:text-teal-300 font-mono text-[10px]"
                     >
                       &#123;phone&#125;
                     </button>
@@ -1112,12 +1112,12 @@ export default function MarketingTab() {
                   rows={4}
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  className="text-xs"
+                  className="text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                 />
               </div>
 
               {/* Media Attachment */}
-              <div className="border border-dashed rounded-lg p-3 bg-slate-50">
+              <div className="border border-dashed rounded-lg p-3 bg-slate-50 dark:bg-slate-900/60 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Paperclip className="h-4 w-4 text-sky-600" />
@@ -1177,41 +1177,41 @@ export default function MarketingTab() {
                 <div>
                   <div className="flex justify-between font-semibold text-gray-700 mb-1">
                     <span>Human-Like Randomized Typing Delay:</span>
-                    <span className="text-emerald-700 font-mono font-bold">{delayMin}s – {delayMax}s per message</span>
+                    <span className="text-emerald-700 dark:text-emerald-300 font-mono font-bold">{delayMin}s – {delayMax}s per message</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     <div>
-                      <span className="text-[10px] text-gray-500">Min Jitter (Seconds):</span>
+                      <span className="text-[10px] text-gray-500 dark:text-slate-300">Min Jitter (Seconds):</span>
                       <Input
                         type="number"
                         min={15}
                         max={120}
                         value={delayMin}
                         onChange={(e) => setDelayMin(Number(e.target.value))}
-                        className="h-7 text-xs bg-white font-mono"
+                        className="h-7 text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] text-gray-500">Max Jitter (Seconds):</span>
+                      <span className="text-[10px] text-gray-500 dark:text-slate-300">Max Jitter (Seconds):</span>
                       <Input
                         type="number"
                         min={25}
                         max={180}
                         value={delayMax}
                         onChange={(e) => setDelayMax(Number(e.target.value))}
-                        className="h-7 text-xs bg-white font-mono"
+                        className="h-7 text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono"
                       />
                     </div>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[10px] text-gray-400 dark:text-slate-300 mt-1 font-medium">
                     Meta detects automated blasting. Random 25-65s gaps prevent algorithm triggers.
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between border-t pt-2">
+                <div className="flex items-center justify-between border-t pt-2 border-slate-200 dark:border-slate-800">
                   <div>
-                    <div className="font-semibold text-gray-800">Simulate Human Typing Activity</div>
-                    <div className="text-[10px] text-gray-500">Sends &quot;typing...&quot; presence indicator before sending</div>
+                    <div className="font-semibold text-gray-800 dark:text-slate-100">Simulate Human Typing Activity</div>
+                    <div className="text-[10px] text-gray-500 dark:text-slate-300">Sends &quot;typing...&quot; presence indicator before sending</div>
                   </div>
                   <input
                     type="checkbox"
@@ -1221,17 +1221,17 @@ export default function MarketingTab() {
                   />
                 </div>
 
-                <div className="border-t pt-2 space-y-1">
-                  <div className="flex justify-between font-semibold text-gray-800">
+                <div className="border-t pt-2 space-y-1 border-slate-200 dark:border-slate-800">
+                  <div className="flex justify-between font-semibold text-gray-800 dark:text-slate-100">
                     <span>Smart Batch Cooldown Break:</span>
-                    <span className="text-sky-700 font-semibold">Pause {cooldownMinutes}m after {cooldownBatchSize} msgs</span>
+                    <span className="text-sky-700 dark:text-sky-300 font-semibold">Pause {cooldownMinutes}m after {cooldownBatchSize} msgs</span>
                   </div>
-                  <p className="text-[10px] text-gray-400">
+                  <p className="text-[10px] text-gray-400 dark:text-slate-300 font-medium">
                     Takes automatic rest intervals like a real human shop staff typing from a phone.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 border-t pt-2">
+                <div className="flex items-center gap-2 border-t pt-2 border-slate-200 dark:border-slate-800">
                   <input
                     type="checkbox"
                     id="dryRunMarketing"
@@ -1239,7 +1239,7 @@ export default function MarketingTab() {
                     onChange={(e) => setDryRun(e.target.checked)}
                     className="h-4 w-4 rounded text-blue-600"
                   />
-                  <label htmlFor="dryRunMarketing" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                  <label htmlFor="dryRunMarketing" className="text-xs font-semibold text-gray-700 dark:text-slate-200 cursor-pointer">
                     Dry Run Test (Simulate queue without actual WhatsApp delivery)
                   </label>
                 </div>
@@ -1659,15 +1659,15 @@ export default function MarketingTab() {
                 Save Template
               </Button>
             </div>
-            <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
-              <h4 className="text-xs font-semibold uppercase text-gray-500">Saved Templates</h4>
+            <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 max-h-48 overflow-y-auto space-y-2 bg-white dark:bg-slate-900/60">
+              <h4 className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">Saved Templates</h4>
               {templates.length === 0 ? (
-                <p className="text-xs text-gray-400">No templates created yet.</p>
+                <p className="text-xs text-gray-400 dark:text-slate-400">No templates created yet.</p>
               ) : (
                 templates.map((t: any) => (
-                  <div key={t.id} className="text-sm p-2 border rounded bg-slate-50">
-                    <div className="font-semibold text-xs">{t.name}</div>
-                    <div className="text-xs text-gray-600 line-clamp-2">{t.content}</div>
+                  <div key={t.id} className="text-sm p-2 border border-slate-200 dark:border-slate-800 rounded bg-slate-50 dark:bg-slate-800/80">
+                    <div className="font-semibold text-xs text-slate-900 dark:text-slate-100">{t.name}</div>
+                    <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{t.content}</div>
                   </div>
                 ))
               )}
@@ -1677,10 +1677,10 @@ export default function MarketingTab() {
       </Card>
 
       {/* Opt-Out Tool */}
-      <Card>
+      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Customer Opt-Out Form</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-sm font-semibold text-slate-900 dark:text-slate-100">Customer Opt-Out Form</CardTitle>
+          <CardDescription className="text-slate-500 dark:text-slate-300">
             If a customer requests not to receive WhatsApp promotions, submit their phone number here.
           </CardDescription>
         </CardHeader>
@@ -1690,11 +1690,13 @@ export default function MarketingTab() {
               placeholder="10-digit Phone Number"
               value={optOutPhone}
               onChange={(e) => setOptOutPhone(e.target.value)}
+              className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
             />
             <Button
               variant="outline"
               onClick={() => optOutMutation.mutate()}
               disabled={!optOutPhone}
+              className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200"
             >
               Opt Out
             </Button>

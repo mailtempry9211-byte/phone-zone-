@@ -123,6 +123,8 @@ export interface InvoiceSettingsLike {
   address?: string;
   phone_primary?: string;
   phone_secondary?: string;
+  contact_phone?: string;
+  gst_number?: string;
   email?: string;
   instagram?: string;
   logo_url?: string;
@@ -149,6 +151,8 @@ export interface InvoicePartyLike {
   id_proof_type?: string;
   id_number?: string;
   photo_url?: string;
+  seller_photo_url?: string;
+  seller_signature_url?: string;
 }
 
 /** The phones row fields an invoice can print. */
@@ -190,6 +194,7 @@ export interface InvoiceBuildOptions {
   photoChoice: InvoicePhotoChoice;
   productPhotos?: string[];
   documentPhotos?: string[];
+  paymentProofPhotos?: string[];
   documentLabel?: string;
   terms: string[];
   fallbackTerms: string[];
@@ -276,6 +281,13 @@ function collectContent(o: InvoiceBuildOptions): InvoiceContent {
       urls: o.documentPhotos,
     });
   }
+  if (o.paymentProofPhotos?.length) {
+    photos.push({
+      heading: "Payment Proof",
+      caption: "Payment Proof",
+      urls: o.paymentProofPhotos,
+    });
+  }
 
   const bank: Array<[string, string]> = [];
   if (isSale && s.bank_name && s.account_number) {
@@ -309,7 +321,7 @@ function collectContent(o: InvoiceBuildOptions): InvoiceContent {
       phone1: s.phone_primary || (s as any).primaryPhone || (s as any).phone || "",
       phone2: s.phone_secondary || (s as any).secondaryPhone || "",
       email: s.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email) && !s.email.startsWith("admin@placeholder") ? s.email : "",
-      instagram: s.instagram || "",
+      instagram: (s.instagram || (s as any).instagram || "").replace(/^@+/, "").trim(),
       udyam,
       logo: s.logo_url || (s as any).logoUrl || "",
       signature: s.signature_url || (s as any).signatureUrl || "",
@@ -1321,3 +1333,466 @@ export const DEFAULT_PURCHASE_TERMS: string[] = [
   "If in any case phone is marked as Lost/Stolen/Blacklisted then seller is responsible for it.",
   "Subject to local jurisdiction (Sitapur) only.",
 ];
+
+export function buildCombinedSaleInvoiceHtml({
+  settings,
+  customer,
+  phones,
+  totalAmount,
+  invoiceNumber = "SALE-COMBINED",
+  saleDate = new Date().toLocaleDateString("en-IN"),
+  paymentMethod = "Cash",
+  terms = DEFAULT_SALE_TERMS,
+  productPhotos = [],
+  saleDocuments = [],
+}: {
+  settings: InvoiceSettingsLike;
+  customer: InvoicePartyLike;
+  phones: Array<{
+    phone_name?: string;
+    model?: string;
+    imei_number?: string;
+    imei2_number?: string;
+    variant?: string;
+    colour?: string;
+    condition?: string;
+    selling_price: number;
+    product_photos?: string[];
+  }>;
+  totalAmount: number;
+  invoiceNumber?: string;
+  saleDate?: string;
+  paymentMethod?: string;
+  terms?: string[];
+  productPhotos?: string[];
+  saleDocuments?: string[];
+}): string {
+  const shopName = settings?.business_name || "PHONEZONE";
+  const address = settings?.address || "Sitapur, Uttar Pradesh";
+  const phone = settings?.contact_phone || "7275862175";
+  const gst = settings?.gst_number || "";
+  const udyam = settings?.udyam_number || "";
+
+  const itemsRows = phones
+    .map(
+      (p, idx) => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px 8px; text-align: center; font-weight: bold; color: #64748b;">${idx + 1}</td>
+      <td style="padding: 10px 8px;">
+        <div style="font-weight: bold; color: #0f172a; font-size: 13px;">${p.phone_name || ""} ${p.model || ""}</div>
+        <div style="font-size: 11px; color: #64748b;">Variant: ${p.variant || "-"} | Color: ${p.colour || "-"}</div>
+      </td>
+      <td style="padding: 10px 8px; font-family: monospace; font-size: 12px; color: #334155;">
+        ${p.imei_number || ""}${p.imei2_number ? `<br><span style="color:#64748b;font-size:10px;">SIM2: ${p.imei2_number}</span>` : ""}
+      </td>
+      <td style="padding: 10px 8px; text-align: center;">
+        <span style="display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: bold; background: #e0f2fe; color: #0369a1; border-radius: 9999px;">
+          ${(p.condition || "good").toUpperCase()}
+        </span>
+      </td>
+      <td style="padding: 10px 8px; text-align: right; font-weight: bold; color: #0f172a; font-size: 13px;">
+        ₹${Number(p.selling_price || 0).toLocaleString("en-IN")}
+      </td>
+    </tr>
+  `
+    )
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tax Invoice - ${invoiceNumber}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm 15mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 15px; font-size: 12px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 15px; }
+    .title { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #0f172a; margin: 0; }
+    .tagline { font-size: 10px; font-weight: 700; color: #c9a227; text-transform: uppercase; letter-spacing: 1px; }
+    .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #0f172a; color: #ffffff; padding: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .totals-box { margin-top: 15px; display: flex; justify-content: flex-end; }
+    .totals-table { width: 320px; border-collapse: collapse; }
+    .totals-table td { padding: 6px 10px; }
+    .grand-total { background: #f1f5f9; font-size: 15px; font-weight: 900; color: #0f172a; border-top: 2px solid #0f172a; }
+    .terms { margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 10px; color: #64748b; }
+    .sign-box { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 class="title">${shopName}</h1>
+      <div class="tagline">Premium Certified Pre-Owned Smartphones</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 4px; max-width: 320px;">
+        ${address}<br>
+        Phone: ${phone}${gst ? ` | GSTIN: ${gst}` : ""}${udyam ? ` | Udyam: ${udyam}` : ""}
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="display: inline-block; padding: 4px 12px; background: #0f172a; color: #ffffff; font-weight: 800; border-radius: 6px; font-size: 14px; letter-spacing: 0.5px;">
+        TAX INVOICE (COMBINED)
+      </div>
+      <div style="margin-top: 8px; font-size: 11px;">
+        <strong>Invoice No:</strong> <span style="font-family: monospace;">${invoiceNumber}</span><br>
+        <strong>Date:</strong> ${saleDate}<br>
+        <strong>Payment Mode:</strong> ${paymentMethod}
+      </div>
+    </div>
+  </div>
+
+  <div class="meta-box">
+    <div>
+      <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">BILL TO (CUSTOMER)</div>
+      <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px;">${customer?.name || "Retail Buyer"}</div>
+      <div style="font-size: 11px; color: #475569;">
+        Phone: ${customer?.phone || "-"}<br>
+        Address: ${customer?.address || "Sitapur"}<br>
+        ${customer?.id_number ? `ID: ${customer.id_proof_type?.toUpperCase() || "ID"} (${customer.id_number})` : ""}
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">TRANSACTION SUMMARY</div>
+      <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 2px;">Items Count: ${phones.length} Units</div>
+      <div style="font-size: 11px; color: #475569;">Delivery Status: Delivered</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 35px; text-align: center;">#</th>
+        <th style="text-align: left;">Device Description</th>
+        <th style="text-align: left; width: 180px;">IMEI Number</th>
+        <th style="text-align: center; width: 90px;">Condition</th>
+        <th style="text-align: right; width: 110px;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRows}
+    </tbody>
+  </table>
+
+  <div class="totals-box">
+    <table class="totals-table">
+      <tr>
+        <td style="color: #64748b;">Total Phones:</td>
+        <td style="text-align: right; font-weight: bold;">${phones.length} Units</td>
+      </tr>
+      <tr>
+        <td style="color: #64748b;">Subtotal:</td>
+        <td style="text-align: right; font-weight: bold;">₹${totalAmount.toLocaleString("en-IN")}</td>
+      </tr>
+      <tr class="grand-total">
+        <td>GRAND TOTAL:</td>
+        <td style="text-align: right; color: #059669;">₹${totalAmount.toLocaleString("en-IN")}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 6px;">
+    Amount in words: <span style="color: #0f172a; font-style: italic;">${numberToWords(totalAmount)} Only</span>
+  </div>
+
+  ${(() => {
+    const allProductPhotos = productPhotos && productPhotos.length > 0
+      ? productPhotos
+      : phones.flatMap((p) => p.product_photos || []);
+    if (!allProductPhotos.length) return "";
+    return `
+    <div style="margin-top: 15px; page-break-inside: avoid;">
+      <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+        PRODUCT PHOTOS (${allProductPhotos.length})
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        ${allProductPhotos.map((url, i) => `
+          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #ffffff; text-align: center;">
+            <img src="${esc(url)}" alt="Product ${i + 1}" style="width: 85px; height: 85px; object-fit: cover; border-radius: 4px; display: block;" onerror="this.src='${PHOTO_PLACEHOLDER}'">
+            <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Photo ${i + 1}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+  })()}
+
+  ${(saleDocuments && saleDocuments.length > 0) ? `
+  <div style="margin-top: 15px; page-break-inside: avoid;">
+    <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+      SALE DOCUMENTS (${saleDocuments.length})
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      ${saleDocuments.map((url, i) => `
+        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #ffffff; text-align: center;">
+          <img src="${esc(url)}" alt="Sale Doc ${i + 1}" style="width: 85px; height: 85px; object-fit: cover; border-radius: 4px; display: block;" onerror="this.src='${PHOTO_PLACEHOLDER}'">
+          <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Doc ${i + 1}</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>` : ""}
+
+  <div class="terms">
+    <div style="font-weight: bold; color: #0f172a; margin-bottom: 4px;">Terms & Conditions:</div>
+    <ol style="margin: 0; padding-left: 16px; line-height: 1.5;">
+      ${terms.map((t) => `<li>${t}</li>`).join("")}
+    </ol>
+  </div>
+
+  <div class="sign-box">
+    <div style="text-align: center; width: 180px;">
+      <div style="border-bottom: 1px dashed #94a3b8; height: 35px;"></div>
+      <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 4px;">Customer Signature</div>
+    </div>
+    <div style="text-align: center; width: 200px;">
+      <div style="font-size: 11px; font-weight: bold; color: #0f172a; margin-bottom: 2px;">For ${shopName}</div>
+      <div style="border-bottom: 1px dashed #94a3b8; height: 35px;"></div>
+      <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 4px;">Authorised Signatory</div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+export function buildCombinedPurchaseInvoiceHtml({
+  settings,
+  seller,
+  phones,
+  totalAmount,
+  invoiceNumber = "PUR-COMBINED",
+  purchaseDate = new Date().toLocaleDateString("en-IN"),
+  paymentMethod = "Cash",
+  terms = DEFAULT_PURCHASE_TERMS,
+  documentPhotos = [],
+  paymentProofPhotos = [],
+  productPhotos = [],
+}: {
+  settings: InvoiceSettingsLike;
+  seller: InvoicePartyLike;
+  phones: Array<{
+    phone_name?: string;
+    model?: string;
+    imei_number?: string;
+    imei2_number?: string;
+    variant?: string;
+    colour?: string;
+    condition?: string;
+    purchase_price: number;
+    product_photos?: string[];
+  }>;
+  totalAmount: number;
+  invoiceNumber?: string;
+  purchaseDate?: string;
+  paymentMethod?: string;
+  terms?: string[];
+  documentPhotos?: string[];
+  paymentProofPhotos?: string[];
+  productPhotos?: string[];
+}): string {
+  const shopName = settings?.business_name || "PHONEZONE";
+  const address = settings?.address || "Sitapur, Uttar Pradesh";
+  const phone = settings?.contact_phone || "7275862175";
+  const gst = settings?.gst_number || "";
+  const udyam = settings?.udyam_number || "";
+
+  const itemsRows = phones
+    .map(
+      (p, idx) => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px 8px; text-align: center; font-weight: bold; color: #64748b;">${idx + 1}</td>
+      <td style="padding: 10px 8px;">
+        <div style="font-weight: bold; color: #0f172a; font-size: 13px;">${p.phone_name || ""} ${p.model || ""}</div>
+        <div style="font-size: 11px; color: #64748b;">Variant: ${p.variant || "-"} | Color: ${p.colour || "-"}</div>
+      </td>
+      <td style="padding: 10px 8px; font-family: monospace; font-size: 12px; color: #334155;">
+        ${p.imei_number || ""}${p.imei2_number ? `<br><span style="color:#64748b;font-size:10px;">SIM2: ${p.imei2_number}</span>` : ""}
+      </td>
+      <td style="padding: 10px 8px; text-align: center;">
+        <span style="display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: bold; background: #fef3c7; color: #b45309; border-radius: 9999px;">
+          ${(p.condition || "good").toUpperCase()}
+        </span>
+      </td>
+      <td style="padding: 10px 8px; text-align: right; font-weight: bold; color: #0f172a; font-size: 13px;">
+        ₹${Number(p.purchase_price || 0).toLocaleString("en-IN")}
+      </td>
+    </tr>
+  `
+    )
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Purchase Voucher & Legal Affidavit - ${invoiceNumber}</title>
+  <style>
+    @page { size: A4 portrait; margin: 12mm 15mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 15px; font-size: 12px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 15px; }
+    .title { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #0f172a; margin: 0; }
+    .tagline { font-size: 10px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 1px; }
+    .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #0f172a; color: #ffffff; padding: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .totals-box { margin-top: 15px; display: flex; justify-content: flex-end; }
+    .totals-table { width: 320px; border-collapse: collapse; }
+    .totals-table td { padding: 6px 10px; }
+    .grand-total { background: #fef3c7; font-size: 15px; font-weight: 900; color: #92400e; border-top: 2px solid #b45309; }
+    .declaration { margin-top: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; font-size: 11px; line-height: 1.5; color: #78350f; }
+    .terms { margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 10px; color: #64748b; }
+    .sign-box { margin-top: 35px; display: flex; justify-content: space-between; align-items: flex-end; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 class="title">${shopName}</h1>
+      <div class="tagline">Official Purchase Voucher & Inward Stock Intake</div>
+      <div style="font-size: 11px; color: #475569; margin-top: 4px; max-width: 320px;">
+        ${address}<br>
+        Phone: ${phone}${gst ? ` | GSTIN: ${gst}` : ""}${udyam ? ` | Udyam: ${udyam}` : ""}
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="display: inline-block; padding: 4px 12px; background: #b45309; color: #ffffff; font-weight: 800; border-radius: 6px; font-size: 14px; letter-spacing: 0.5px;">
+        PURCHASE VOUCHER (MULTI-PHONE)
+      </div>
+      <div style="margin-top: 8px; font-size: 11px;">
+        <strong>Voucher No:</strong> <span style="font-family: monospace;">${invoiceNumber}</span><br>
+        <strong>Date:</strong> ${purchaseDate}<br>
+        <strong>Disbursement Mode:</strong> ${paymentMethod}
+      </div>
+    </div>
+  </div>
+
+  <div class="meta-box">
+    <div>
+      <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">SELLER INFORMATION (विक्रेता विवरण)</div>
+      <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px;">${seller?.name || "Walk-in Seller"}</div>
+      <div style="font-size: 11px; color: #475569;">
+        Phone: ${seller?.phone || "-"}<br>
+        Address: ${seller?.address || "Sitapur"}<br>
+        ID Proof: ${seller?.id_proof_type ? seller.id_proof_type.toUpperCase() : "Aadhaar"} (${seller?.id_number || "-"})
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">TRANSACTION SUMMARY</div>
+      <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin-top: 2px;">Total Units: ${phones.length} Phones</div>
+      <div style="font-size: 11px; color: #475569;">Verification: KYC Verified</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 35px; text-align: center;">#</th>
+        <th style="text-align: left;">Phone & Model</th>
+        <th style="text-align: left; width: 180px;">IMEI Number</th>
+        <th style="text-align: center; width: 90px;">Condition</th>
+        <th style="text-align: right; width: 110px;">Purchase Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRows}
+    </tbody>
+  </table>
+
+  <div class="totals-box">
+    <table class="totals-table">
+      <tr>
+        <td style="color: #64748b;">Total Devices:</td>
+        <td style="text-align: right; font-weight: bold;">${phones.length} Units</td>
+      </tr>
+      <tr class="grand-total">
+        <td>TOTAL DISBURSED:</td>
+        <td style="text-align: right;">₹${totalAmount.toLocaleString("en-IN")}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 6px;">
+    Amount in words: <span style="color: #0f172a; font-style: italic;">${numberToWords(totalAmount)} Only</span>
+  </div>
+
+  ${(() => {
+    const allProductPhotos = productPhotos && productPhotos.length > 0
+      ? productPhotos
+      : phones.flatMap((p) => p.product_photos || []);
+    if (!allProductPhotos.length) return "";
+    return `
+    <div style="margin-top: 15px; page-break-inside: avoid;">
+      <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+        PRODUCT PHOTOS (${allProductPhotos.length})
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        ${allProductPhotos.map((url, i) => `
+          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #ffffff; text-align: center;">
+            <img src="${esc(url)}" alt="Product ${i + 1}" style="width: 85px; height: 85px; object-fit: cover; border-radius: 4px; display: block;" onerror="this.src='${PHOTO_PLACEHOLDER}'">
+            <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Photo ${i + 1}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+  })()}
+
+  ${(documentPhotos && documentPhotos.length > 0) ? `
+  <div style="margin-top: 15px; page-break-inside: avoid;">
+    <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+      PURCHASE DOCUMENTS & KYC (${documentPhotos.length})
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      ${documentPhotos.map((url, i) => `
+        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #ffffff; text-align: center;">
+          <img src="${esc(url)}" alt="Document ${i + 1}" style="width: 85px; height: 85px; object-fit: cover; border-radius: 4px; display: block;" onerror="this.src='${PHOTO_PLACEHOLDER}'">
+          <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Doc ${i + 1}</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>` : ""}
+
+  ${(paymentProofPhotos && paymentProofPhotos.length > 0) ? `
+  <div style="margin-top: 15px; page-break-inside: avoid;">
+    <div style="font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px;">
+      PAYMENT PROOF (${paymentProofPhotos.length})
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      ${paymentProofPhotos.map((url, i) => `
+        <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; background: #ffffff; text-align: center;">
+          <img src="${esc(url)}" alt="Payment Proof ${i + 1}" style="width: 85px; height: 85px; object-fit: cover; border-radius: 4px; display: block;" onerror="this.src='${PHOTO_PLACEHOLDER}'">
+          <div style="font-size: 9px; color: #64748b; margin-top: 2px;">Proof ${i + 1}</div>
+        </div>
+      `).join("")}
+    </div>
+  </div>` : ""}
+
+  <div class="declaration">
+    <strong>वैधानिक शपथ पत्र (Legal Declaration / Shapath Patra):</strong><br>
+    मैं, <strong>${seller?.name || "विक्रेता"}</strong> (पुत्र/पुत्री: नि. ${seller?.address || "उपरोक्त पता"}), यह सत्यनिष्ठा से घोषणा करता/करती हूँ कि ऊपर तालिका में उल्लिखित सभी <strong>${phones.length} मोबाइल फ़ोन</strong> पूर्णतः मेरी वैध व्यक्तिगत संपत्ति हैं। यह उपकरण किसी भी प्रकार के अपराध, चोरी, गुमशुदगी या वित्तीय विवाद से मुक्त हैं। इस बिक्री के संबंध में भविष्य में किसी भी कानूनी दायित्व हेतु मैं व्यक्तिगत रूप से जिम्मेदार रहूँगा/रहूँगी।
+  </div>
+
+  <div class="terms">
+    <div style="font-weight: bold; color: #0f172a; margin-bottom: 2px;">Terms:</div>
+    <ol style="margin: 0; padding-left: 16px; line-height: 1.4;">
+      ${terms.slice(0, 3).map((t) => `<li>${t}</li>`).join("")}
+    </ol>
+  </div>
+
+  <div class="sign-box">
+    <div style="text-align: center; width: 180px;">
+      ${seller?.seller_signature_url ? `<img src="${seller.seller_signature_url}" style="max-height: 40px; margin-bottom: 4px;" alt="Signature" /><br>` : `<div style="border-bottom: 1px dashed #94a3b8; height: 35px;"></div>`}
+      <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 4px;">Seller Signature (विक्रेता हस्ताक्षर)</div>
+    </div>
+    <div style="text-align: center; width: 200px;">
+      <div style="font-size: 11px; font-weight: bold; color: #0f172a; margin-bottom: 2px;">For ${shopName}</div>
+      <div style="border-bottom: 1px dashed #94a3b8; height: 35px;"></div>
+      <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 4px;">Authorised Receiver / Buyer</div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}

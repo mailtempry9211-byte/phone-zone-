@@ -54,6 +54,8 @@ const Setup = () => {
     whatsappNumber: '',
     password: '',
     confirmPassword: '',
+    securityQuestion: 'What was the name of your first school?',
+    securityAnswer: '',
     bankName: '',
     accountHolderName: '',
     accountNumber: '',
@@ -66,11 +68,20 @@ const Setup = () => {
   });
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('mode') === 'new') {
+      setMode('new');
+    }
     checkSetupStatus();
   }, []);
 
   const checkSetupStatus = async () => {
     try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('force') === '1' || searchParams.get('reconfigure') === '1') {
+        setLoading(false);
+        return;
+      }
       const res = await fetch('/api/setup/status', { credentials: 'include' });
       if (res.ok) {
         const status = await res.json();
@@ -85,10 +96,12 @@ const Setup = () => {
     setLoading(false);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    const finalVal = name === 'instagram' ? value.replace(/^@+/, '').trim() : value;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : finalVal }));
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'logo' | 'signature') => {
@@ -193,6 +206,10 @@ const Setup = () => {
       }
       if (formData.password !== formData.confirmPassword) {
         toast.error('Passwords do not match');
+        return;
+      }
+      if (!formData.securityAnswer || formData.securityAnswer.trim().length < 2) {
+        toast.error('Please enter an answer for your password recovery security question');
         return;
       }
       setStep(3);
@@ -406,6 +423,18 @@ const Setup = () => {
                   <div>
                     <Label htmlFor='instagram'>Instagram Handle</Label>
                     <Input id='instagram' name='instagram' value={formData.instagram} onChange={handleInputChange} />
+                    <Label htmlFor='instagram'>Instagram Handle (without @)</Label>
+                    <div className='relative mt-1'>
+                      <span className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-semibold'>@</span>
+                      <Input
+                        id='instagram'
+                        name='instagram'
+                        placeholder='your_store_handle'
+                        className='pl-7'
+                        value={formData.instagram}
+                        onChange={handleInputChange}
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor='whatsappNumber'>WhatsApp Number</Label>
@@ -419,6 +448,43 @@ const Setup = () => {
                   <div>
                     <Label htmlFor='confirmPassword'>Confirm Password *</Label>
                     <Input id='confirmPassword' name='confirmPassword' type='password' value={formData.confirmPassword} onChange={handleInputChange} required />
+                  </div>
+                  <div className='p-3.5 bg-blue-50/70 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900/50 space-y-3 mt-2'>
+                    <div>
+                      <Label htmlFor='securityQuestion' className='text-xs font-bold text-blue-900 dark:text-blue-300'>
+                        🔐 Password Recovery Security Question *
+                      </Label>
+                      <select
+                        id='securityQuestion'
+                        name='securityQuestion'
+                        className='w-full h-9 px-3 py-1.5 border rounded-md text-xs bg-background mt-1 font-medium'
+                        value={formData.securityQuestion}
+                        onChange={handleInputChange}
+                      >
+                        <option value="What was the name of your first school?">What was the name of your first school? (पहले स्कूल का नाम)</option>
+                        <option value="What is your secret childhood nickname?">What is your secret childhood nickname? (बच बचपन का निकनेम)</option>
+                        <option value="What is the birth city of your mother?">What is the birth city of your mother? (माता जी का जन्म शहर)</option>
+                        <option value="What was the registration number of your first vehicle?">What was the registration number of your first vehicle? (पहली गाड़ी का नंबर)</option>
+                        <option value="What is your favorite childhood food?">What is your favorite childhood food? (पसंदीदा बचपन का खाना)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor='securityAnswer' className='text-xs font-bold text-blue-900 dark:text-blue-300'>
+                        Security Answer *
+                      </Label>
+                      <Input
+                        id='securityAnswer'
+                        name='securityAnswer'
+                        placeholder='e.g. Lucknow, Model High School (याद रखने योग्य उत्तर)'
+                        value={formData.securityAnswer}
+                        onChange={handleInputChange}
+                        required
+                        className='h-9 text-xs mt-1'
+                      />
+                      <p className='text-[11px] text-blue-700 dark:text-blue-400 mt-1'>
+                        Agar aap apna Master Admin password bhool jayenge, toh is sawal ka jawab dekar naya password reset kar sakenge.
+                      </p>
+                    </div>
                   </div>
                   <div className='flex justify-between'>
                     <Button variant='outline' onClick={prevStep}>Back</Button>

@@ -27,18 +27,36 @@ import {
   MessageSquare,
   Smartphone,
   ShieldCheck,
+  IndianRupee,
+  LayoutList,
+  LayoutGrid,
 } from "lucide-react";
 import AddRepairDialog from "./AddRepairDialog";
 import RepairDetailDialog from "./RepairDetailDialog";
 import RepairInvoiceModal, { type RepairDocType } from "./RepairInvoiceModal";
 import CreateReworkDialog from "./CreateReworkDialog";
 import RepairCustomerOverviewDialog from "./RepairCustomerOverviewDialog";
+import { RepairPaymentCollectionDialog } from "./RepairPaymentCollectionDialog";
 import { dispatchWhatsApp } from "@/utils/whatsappDispatcher";
 import { printRepairSticker } from "@/lib/deviceQr";
 import { toast } from "sonner";
 
 export const RepairsTab: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<"jobs" | "rework" | "customers" | "accounting">("jobs");
+  const [viewLayout, setViewLayout] = useState<"table" | "cards">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("phonezone_repairs_layout");
+      if (saved === "table" || saved === "cards") return saved;
+    }
+    return "table";
+  });
+
+  const changeViewLayout = (mode: "table" | "cards") => {
+    setViewLayout(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("phonezone_repairs_layout", mode);
+    }
+  };
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -49,6 +67,7 @@ export const RepairsTab: React.FC = () => {
   const [docModalJob, setDocModalJob] = useState<any | null>(null);
   const [docModalType, setDocModalType] = useState<RepairDocType>("invoice");
   const [docModalOpen, setDocModalOpen] = useState(false);
+  const [paymentModalJob, setPaymentModalJob] = useState<any | null>(null);
 
   // Customers state
   const [repairCustomers, setRepairCustomers] = useState<any[]>([]);
@@ -298,6 +317,35 @@ export const RepairsTab: React.FC = () => {
                   <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
                   Refresh
                 </Button>
+
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => changeViewLayout("table")}
+                    className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
+                      viewLayout === "table"
+                        ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs font-bold"
+                        : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                    }`}
+                    title="Compact Fluid Table (0 Horizontal Scroll)"
+                  >
+                    <LayoutList className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Table</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeViewLayout("cards")}
+                    className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
+                      viewLayout === "cards"
+                        ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs font-bold"
+                        : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                    }`}
+                    title="Responsive Cards Grid"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Cards</span>
+                  </button>
+                </div>
               </div>
 
               {/* Status filter chips */}
@@ -338,22 +386,124 @@ export const RepairsTab: React.FC = () => {
                       : "Click 'New Repair Job' above to log your first repair"}
                   </p>
                 </div>
+              ) : viewLayout === "cards" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 p-3.5">
+                  {jobs.map((job) => {
+                    const wDays = Number(job.warranty_days || 0);
+                    let isWarrantyActive = false;
+                    let daysRemaining = 0;
+                    if (wDays > 0) {
+                      const baseDate = new Date(job.delivered_at || job.updated_at || job.created_at);
+                      const diffDays = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
+                      daysRemaining = Math.max(0, wDays - diffDays);
+                      isWarrantyActive = daysRemaining > 0;
+                    }
+
+                    return (
+                      <div
+                        key={job.id}
+                        onClick={() => handleOpenDetail(job.id)}
+                        className={`rounded-xl border p-3.5 transition-all hover:shadow-md cursor-pointer ${
+                          isWarrantyActive
+                            ? "bg-blue-50/50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-600/40"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-sm text-indigo-700 dark:text-indigo-400">{job.job_no}</span>
+                            {job.is_rework === 1 && (
+                              <Badge className="bg-amber-600 text-[10px] px-1 py-0">REWORK</Badge>
+                            )}
+                            {isWarrantyActive && (
+                              <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0 flex items-center gap-1">
+                                <ShieldCheck className="w-2.5 h-2.5" />
+                                {daysRemaining}d
+                              </Badge>
+                            )}
+                          </div>
+                          <div>{getStatusBadge(job.status)}</div>
+                        </div>
+
+                        <div className="space-y-1 text-xs mb-3">
+                          <div className="flex justify-between items-baseline">
+                            <span className="font-bold text-slate-900 dark:text-slate-100">{job.customer_name}</span>
+                            <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">{job.customer_phone}</span>
+                          </div>
+                          <div className="text-slate-800 dark:text-slate-200 font-semibold flex items-center justify-between">
+                            <span>{job.device_brand} {job.device_model}</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                              {job.final_price ? `₹${job.final_price}` : job.estimate ? `₹${job.estimate}` : "-"}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono">{job.imei || "NO IMEI"}</div>
+                          <p className="text-slate-600 dark:text-slate-300 line-clamp-2 text-[11px] bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded mt-1">
+                            {job.problem}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-slate-400">
+                            {job.received_at ? new Date(job.received_at).toLocaleDateString("en-IN") : "-"}
+                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {job.status === "delivered" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-1.5 text-[10px] text-amber-700 border-amber-300 dark:text-amber-300"
+                                onClick={() => handleCreateReworkForJob(job)}
+                              >
+                                Rework
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] font-bold border-emerald-500 text-emerald-400 bg-emerald-950/20"
+                              onClick={() => setPaymentModalJob(job)}
+                            >
+                              <IndianRupee className="h-2.5 w-2.5 mr-0.5" /> Pay
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] text-emerald-700"
+                              onClick={() => {
+                                setDocModalJob(job);
+                                setDocModalType("invoice");
+                                setDocModalOpen(true);
+                              }}
+                            >
+                              Invoice
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] text-indigo-700"
+                              onClick={() => handleOpenDetail(job.id)}
+                            >
+                              Open
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left border-collapse">
-                    <thead className="bg-gray-50 border-b text-xs text-gray-600 uppercase">
+                <div className="w-full overflow-hidden">
+                  <table className="w-full text-xs sm:text-sm text-left border-collapse">
+                    <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       <tr>
-                        <th className="p-3">Job No</th>
-                        <th className="p-3">Customer</th>
-                        <th className="p-3">Device &amp; IMEI</th>
-                        <th className="p-3">Problem</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3 text-right">Estimate / Final</th>
-                        <th className="p-3">Received</th>
-                        <th className="p-3 text-center">Action</th>
+                        <th className="py-2.5 px-3">Job &amp; Customer</th>
+                        <th className="py-2.5 px-3">Device &amp; Problem</th>
+                        <th className="py-2.5 px-3">Status &amp; Date</th>
+                        <th className="py-2.5 px-3 text-right">Estimate / Final</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {jobs.map((job) => {
                         const wDays = Number(job.warranty_days || 0);
                         let isWarrantyActive = false;
@@ -370,112 +520,137 @@ export const RepairsTab: React.FC = () => {
                             key={job.id}
                             className={`transition-colors cursor-pointer ${
                               isWarrantyActive
-                                ? "bg-blue-50/50 hover:bg-blue-100/60 border-l-4 border-l-blue-600"
-                                : "hover:bg-gray-50/80"
+                                ? "bg-blue-50/40 hover:bg-blue-100/50 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 border-l-4 border-l-blue-600"
+                                : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                             }`}
                             onClick={() => handleOpenDetail(job.id)}
                           >
-                            <td className="p-3 font-semibold text-indigo-700 whitespace-nowrap">
+                            {/* Column 1: Job & Customer */}
+                            <td className="py-2.5 px-3 align-top">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span>{job.job_no}</span>
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono text-xs">
+                                  {job.job_no}
+                                </span>
                                 {job.is_rework === 1 && (
-                                  <Badge className="bg-amber-600 text-[10px] px-1 py-0">REWORK</Badge>
+                                  <Badge className="bg-amber-600 text-[9px] px-1 py-0 font-bold">RW</Badge>
                                 )}
                                 {isWarrantyActive && (
-                                  <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold px-1.5 py-0 flex items-center gap-1 shadow-xs" title="Internal Service Warranty Active">
+                                  <Badge className="bg-blue-600 text-white text-[9px] font-semibold px-1 py-0 flex items-center gap-0.5" title="Warranty Active">
                                     <ShieldCheck className="w-2.5 h-2.5" />
-                                    {daysRemaining}d Warranty
+                                    {daysRemaining}d
                                   </Badge>
                                 )}
                               </div>
+                              <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs mt-0.5 truncate max-w-[180px]">
+                                {job.customer_name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">
+                                {job.customer_phone}
+                              </div>
                             </td>
-                          <td className="p-3">
-                            <div className="font-medium text-gray-900">{job.customer_name}</div>
-                            <div className="text-xs text-gray-500">{job.customer_phone}</div>
-                          </td>
-                          <td className="p-3">
-                            <div className="font-medium text-gray-800">
-                              {job.device_brand} {job.device_model}
-                            </div>
-                            <div className="font-mono text-xs text-gray-500">{job.imei || "NO IMEI"}</div>
-                            {job.board_replaced === 1 && (
-                              <span className="inline-flex items-center text-[11px] text-red-600 font-bold">
-                                <AlertTriangle className="w-3 h-3 mr-0.5" />
-                                Motherboard Replaced
+
+                            {/* Column 2: Device & Problem */}
+                            <td className="py-2.5 px-3 align-top">
+                              <div className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate max-w-[220px]">
+                                {job.device_brand} {job.device_model}
+                              </div>
+                              <div className="font-mono text-[11px] text-slate-400 truncate max-w-[220px]">
+                                {job.imei || "NO IMEI"}
+                                {job.board_replaced === 1 && (
+                                  <span className="text-red-500 font-sans font-bold ml-1.5">
+                                    • MB Replaced
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1 italic max-w-[260px] mt-0.5" title={job.problem}>
+                                {job.problem}
+                              </p>
+                            </td>
+
+                            {/* Column 3: Status & Date */}
+                            <td className="py-2.5 px-3 align-top whitespace-nowrap">
+                              <div>{getStatusBadge(job.status)}</div>
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                {job.received_at ? new Date(job.received_at).toLocaleDateString("en-IN") : "-"}
+                              </div>
+                            </td>
+
+                            {/* Column 4: Estimate / Final */}
+                            <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">
+                              <span className="font-bold text-slate-900 dark:text-emerald-400 text-xs sm:text-sm">
+                                {job.final_price ? `₹${job.final_price}` : job.estimate ? `₹${job.estimate}` : "-"}
                               </span>
-                            )}
-                          </td>
-                          <td className="p-3 max-w-xs truncate text-gray-700 text-xs">
-                            {job.problem}
-                          </td>
-                          <td className="p-3 whitespace-nowrap">
-                            {getStatusBadge(job.status)}
-                          </td>
-                          <td className="p-3 text-right whitespace-nowrap font-medium text-gray-900">
-                            {job.final_price ? `₹${job.final_price}` : job.estimate ? `₹${job.estimate}` : "-"}
-                          </td>
-                          <td className="p-3 text-xs text-gray-500 whitespace-nowrap">
-                            {job.received_at ? new Date(job.received_at).toLocaleDateString("en-IN") : "-"}
-                          </td>
-                          <td className="p-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-center gap-1">
-                              {job.status === "delivered" && (
+                            </td>
+
+                            {/* Column 5: Compact Actions */}
+                            <td className="py-2.5 px-3 align-top text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1 flex-wrap">
+                                {job.status === "delivered" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
+                                    title="Return for Rework / Repeat Warranty Claim"
+                                    onClick={() => handleCreateReworkForJob(job)}
+                                  >
+                                    <RotateCcw className="h-3 w-3 text-amber-600" />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs h-7 px-2 border-amber-300 text-amber-700 hover:bg-amber-50"
-                                  title="Return for Rework / Repeat Warranty Claim"
-                                  onClick={() => handleCreateReworkForJob(job)}
+                                  className="h-6 px-1.5 text-[10px] font-bold border-emerald-500/50 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-900/40"
+                                  title="Collect Payment & Handover"
+                                  onClick={() => setPaymentModalJob(job)}
                                 >
-                                  <RotateCcw className="h-3.5 w-3.5 mr-1 text-amber-600" />
-                                  Rework
+                                  <IndianRupee className="h-2.5 w-2.5 mr-0.5" />
+                                  Pay
                                 </Button>
-                              )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-7 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                                title="Repair Invoice & Multi-Style Print / WA"
-                                onClick={() => {
-                                  setDocModalJob(job);
-                                  setDocModalType("invoice");
-                                  setDocModalOpen(true);
-                                }}
-                              >
-                                <Receipt className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                                Invoice
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-7 px-2"
-                                title="Print Device QR Sticker"
-                                onClick={() =>
-                                  printRepairSticker({
-                                    jobNo: job.job_no,
-                                    customerName: job.customer_name,
-                                    deviceModel: `${job.device_brand || ''} ${job.device_model || ''}`.trim(),
-                                    problem: job.problem,
-                                    receivedDate: job.received_at,
-                                  })
-                                }
-                              >
-                                <QrCode className="h-3.5 w-3.5 mr-1 text-gray-600" />
-                                Sticker
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-7 px-2.5 text-indigo-700 hover:text-indigo-800"
-                                onClick={() => handleOpenDetail(job.id)}
-                              >
-                                Open
-                                <ChevronRight className="h-3 w-3 ml-0.5" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ); })}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-1.5 text-[10px] border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300"
+                                  title="Repair Invoice & Multi-Style Print / WA"
+                                  onClick={() => {
+                                    setDocModalJob(job);
+                                    setDocModalType("invoice");
+                                    setDocModalOpen(true);
+                                  }}
+                                >
+                                  <Receipt className="h-2.5 w-2.5 mr-0.5" />
+                                  Bill
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  title="Print Device QR Sticker"
+                                  onClick={() =>
+                                    printRepairSticker({
+                                      jobNo: job.job_no,
+                                      customerName: job.customer_name,
+                                      deviceModel: `${job.device_brand || ''} ${job.device_model || ''}`.trim(),
+                                      problem: job.problem,
+                                      receivedDate: job.received_at,
+                                    })
+                                  }
+                                >
+                                  <QrCode className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-indigo-700 hover:text-indigo-800 dark:text-indigo-300"
+                                  title="Open Job Details"
+                                  onClick={() => handleOpenDetail(job.id)}
+                                >
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -938,6 +1113,19 @@ export const RepairsTab: React.FC = () => {
           }
           fetchJobs();
           fetchRepairCustomers();
+        }}
+      />
+
+      {/* Repair Payment Collection Modal (Item 8 & 15) */}
+      <RepairPaymentCollectionDialog
+        job={paymentModalJob}
+        open={!!paymentModalJob}
+        onOpenChange={(o) => {
+          if (!o) setPaymentModalJob(null);
+        }}
+        onSuccess={() => {
+          fetchJobs();
+          fetchAccounting();
         }}
       />
     </div>

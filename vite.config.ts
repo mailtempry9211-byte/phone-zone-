@@ -9,6 +9,19 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    watch: {
+      ignored: [
+        "**/*.md",
+        "**/*.log",
+        "**/*.db*",
+        "**/backend/**",
+        "**/database/**",
+        "**/.git/**",
+        "**/_backup*/**",
+        "**/dist/**",
+        "**/dist-electron/**",
+      ],
+    },
     proxy: {
       "/api": {
         target: "http://127.0.0.1:47713",
@@ -16,6 +29,12 @@ export default defineConfig(({ mode }) => ({
         secure: false,
       },
     },
+  },
+  build: {
+    target: "es2020",
+    minify: "esbuild",
+    cssMinify: true,
+    chunkSizeWarningLimit: 2000,
   },
   define: {
     "import.meta.env.VITE_PHONEZONE_OFFLINE": JSON.stringify("true"),

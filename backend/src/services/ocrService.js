@@ -6,13 +6,31 @@
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { PNG } from "pngjs";
 import jpeg from "jpeg-js";
-import sharp from "sharp";
+
+import { getDb } from "../db/index.js";
+
+const require = createRequire(import.meta.url);
+const sharp = require("sharp");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(__dirname, "../../..");
 const OCR_DIR = path.join(APP_ROOT, "public", "ocr");
+
+let tacQueryStmt = null;
+function checkTacExists(tac8) {
+  try {
+    if (!tacQueryStmt) {
+      const db = getDb();
+      if (db) tacQueryStmt = db.prepare("SELECT 1 FROM tac_codes WHERE tac = ?");
+    }
+    return !!tacQueryStmt?.get(tac8);
+  } catch (_e) {
+    return false;
+  }
+}
 
 function decodeImage(buffer) {
   if (buffer && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -55,8 +73,9 @@ export function computeLuhnCheckDigit(d14) {
 }
 
 /**
- * Intelligent single-digit and missing-digit error recovery for 15-digit IMEI.
- * Handles missing first TAC digit, missing check digit, and single OCR confusions.
+ * Intelligent single-digit, double-digit and missing-digit error recovery for 15-digit IMEI.
+ * Powered by local GSMA TAC database validation (254k records) and exact Luhn check.
+ * Fixes optical confusions: 0 <-> 8, 6 <-> 8, 3 <-> 8, 5 <-> 6, 1 <-> 7.
  */
 export function repairImei(rawCandidate) {
   if (!rawCandidate) return null;
@@ -65,82 +84,113 @@ export function repairImei(rawCandidate) {
   // If already 15 digits and Luhn passes, return as is
   if (digits.length === 15 && luhnOk(digits)) return digits;
 
-  // Case A: 14 digits - check if missing first TAC digit or missing 15th check digit
+  const scored = [];
+
+  const addCandidate = (cand, edits, reason) => {
+    if (!cand || cand.length !== 15 || !luhnOk(cand)) return;
+    const tac = cand.slice(0, 8);
+    const inDb = checkTacExists(tac);
+    const isStd = /^(?:35|86|01|99)/.test(tac);
+    let score = 0;
+    if (inDb) score = 1000 - edits * 50;
+    else if (isStd) score = 800 - edits * 50;
+    else score = 600 - edits * 50;
+    scored.push({ imei: cand, score, edits, inDb, reason });
+  };
+
+  // Case A: 14 digits - missing leading TAC digit or check digit
   if (digits.length === 14) {
-    // A.1: Missing leading '3' on 35 TAC (e.g. '5614489...')
-    if (digits.startsWith("5")) {
-      const candidate = "3" + digits;
-      if (luhnOk(candidate)) return candidate;
-    }
-    // A.2: Missing leading '8' on 86 TAC (e.g. '6219053...')
-    if (digits.startsWith("6")) {
-      const candidate = "8" + digits;
-      if (luhnOk(candidate)) return candidate;
-    }
-    // A.3: Missing 15th check digit on standard TAC (starts with 35, 86, 01, 99)
-    if (/^(?:35|86|01|99)/.test(digits)) {
-      const check = computeLuhnCheckDigit(digits);
-      if (check !== null) {
-        const candidate = digits + check;
-        if (luhnOk(candidate)) return candidate;
-      }
-    }
+    if (digits.startsWith("5")) addCandidate("3" + digits, 1, "missing_leading_3");
+    if (digits.startsWith("6")) addCandidate("8" + digits, 1, "missing_leading_8");
+    const check = computeLuhnCheckDigit(digits);
+    if (check !== null) addCandidate(digits + check, 1, "missing_check_digit");
   }
 
-  // Case B: 15 digits with single OCR digit confusion
+  // Case B: 16 digits - trim leading or trailing noise
+  if (digits.length === 16) {
+    addCandidate(digits.slice(1), 1, "trim_first");
+    addCandidate(digits.slice(0, 15), 1, "trim_last");
+  }
+
+  // Case C: 15 digits - single or double substitution
   if (digits.length === 15) {
     const CONFUSIONS = {
       "0": ["8", "6", "9"],
       "1": ["7", "4"],
       "2": ["7", "3"],
-      "3": ["5", "8", "9"],
+      "3": ["8", "5", "9"],
       "4": ["9", "1"],
-      "5": ["3", "6", "8"],
-      "6": ["8", "5", "0"],
+      "5": ["6", "3", "8"],
+      "6": ["8", "0", "5"],
       "7": ["1", "2"],
-      "8": ["3", "0", "6", "5", "9"],
-      "9": ["4", "8", "0"],
+      "8": ["0", "6", "3", "9", "5"],
+      "9": ["8", "4", "0"],
     };
 
-    // Priority 1: Check if TAC prefix itself is corrupted (e.g. '85...' -> '35...' or '55...' -> '35...')
+    // Priority 1: TAC prefix corruption (e.g. '85...' -> '35...')
     if (digits[1] === "5" && digits[0] !== "3") {
-      const cand = "3" + digits.slice(1);
-      if (luhnOk(cand)) return cand;
+      addCandidate("3" + digits.slice(1), 1, "tac_35_fix");
     }
     if (digits[1] === "6" && digits[0] !== "8") {
-      const cand = "8" + digits.slice(1);
-      if (luhnOk(cand)) return cand;
+      addCandidate("8" + digits.slice(1), 1, "tac_86_fix");
     }
 
-    // Priority 2: Substitution across all positions matching standard TACs
+    // Priority 2: 1-digit edit across all positions
     for (let i = 0; i < 15; i++) {
       const cur = digits[i];
       const alts = CONFUSIONS[cur] || [];
       for (const alt of alts) {
-        const cand = digits.slice(0, i) + alt + digits.slice(i + 1);
-        if (/^(?:35|86|01|99)/.test(cand) && luhnOk(cand)) return cand;
+        addCandidate(digits.slice(0, i) + alt + digits.slice(i + 1), 1, `1-edit:${cur}->${alt}`);
       }
     }
 
-    // Priority 3: Recompute check digit if TAC starts with 35 or 86
+    // Priority 3: Check digit recalculation for standard TAC
     if (/^(?:35|86|01|99)/.test(digits)) {
       const check = computeLuhnCheckDigit(digits.slice(0, 14));
-      if (check !== null) {
-        const cand = digits.slice(0, 14) + check;
-        if (luhnOk(cand)) return cand;
+      if (check !== null && check !== digits[14]) {
+        addCandidate(digits.slice(0, 14) + check, 1, "check_digit_recalc");
+      }
+    }
+
+    // Priority 4: 2-digit edits focusing on primary optical confusions: { 0, 8, 6, 3 }
+    const HIGH_CONFUSION = {
+      "0": ["8", "6"],
+      "8": ["0", "6", "3"],
+      "6": ["8", "0"],
+      "3": ["8"],
+      "5": ["6"],
+      "1": ["7"],
+      "7": ["1"],
+      "9": ["8"],
+    };
+
+    const ambigIndices = [];
+    for (let i = 0; i < 15; i++) {
+      if (HIGH_CONFUSION[digits[i]]) ambigIndices.push(i);
+    }
+
+    for (let a = 0; a < ambigIndices.length; a++) {
+      const i = ambigIndices[a];
+      const alts1 = HIGH_CONFUSION[digits[i]];
+      for (let b = a + 1; b < ambigIndices.length; b++) {
+        const j = ambigIndices[b];
+        const alts2 = HIGH_CONFUSION[digits[j]];
+        for (const a1 of alts1) {
+          for (const a2 of alts2) {
+            const arr = digits.split("");
+            arr[i] = a1;
+            arr[j] = a2;
+            addCandidate(arr.join(""), 2, `2-edit:[${i}]${digits[i]}->${a1},[${j}]${digits[j]}->${a2}`);
+          }
+        }
       }
     }
   }
 
-  // Case C: 16 digits - stray noise character at beginning or end
-  if (digits.length === 16) {
-    const candFirst = digits.slice(1);
-    if (/^(?:35|86|01|99)/.test(candFirst) && luhnOk(candFirst)) return candFirst;
-    const candLast = digits.slice(0, 15);
-    if (/^(?:35|86|01|99)/.test(candLast) && luhnOk(candLast)) return candLast;
-  }
-
-  return null;
+  if (scored.length === 0) return null;
+  // Sort descending by score (highest score = DB TAC verified, fewest edits)
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].imei;
 }
 
 // Verhoeff validation matrix for 12-digit Aadhaar
@@ -1022,6 +1072,58 @@ export async function ocrAadhaarBuffer(buffer, side) {
   };
 }
 
+/**
+ * Precision Line-Zoom OCR:
+ * Given overview OCR result, finds bounding box of IMEI text line,
+ * crops it from the high-resolution image, upscales line to 60px height (Lanczos3),
+ * and recognizes it with tessedit_char_whitelist: "0123456789 -/:." and PSM 7 (single line).
+ * Eliminates character loop confusion (0 <-> 8, 6 <-> 8, 3 <-> 8).
+ */
+async function recognizePrecisionImeiLine(worker, highResSharp, textRes, origW, origH, scaleX = 1, scaleY = 1) {
+  try {
+    const lines = textRes?.data?.lines || [];
+    for (const line of lines) {
+      const text = line.text || "";
+      if (/imei|meid|s\s*\/\s*n/i.test(text) || /\d[\d\s.\-–—/]{10,}/.test(text)) {
+        const b = line.bbox;
+        if (!b) continue;
+        const padX = Math.round(Math.max(20, (b.x1 - b.x0) * 0.12));
+        const padY = Math.round(Math.max(10, (b.y1 - b.y0) * 0.35));
+        const left = Math.max(0, Math.floor((b.x0 - padX) * scaleX));
+        const top = Math.max(0, Math.floor((b.y0 - padY) * scaleY));
+        const width = Math.min(origW - left, Math.ceil((b.x1 - b.x0 + padX * 2) * scaleX));
+        const height = Math.min(origH - top, Math.ceil((b.y1 - b.y0 + padY * 2) * scaleY));
+
+        if (width < 30 || height < 8) continue;
+
+        // Upscale crop so text line height is 55-70px (optimal for Tesseract LSTM)
+        const targetH = Math.max(55, Math.min(100, Math.round(height * 2.2)));
+        const cropBuf = await highResSharp.clone()
+          .extract({ left, top, width, height })
+          .resize({ height: targetH, kernel: "lanczos3" })
+          .grayscale()
+          .normalize()
+          .png()
+          .toBuffer();
+
+        await worker.setParameters({
+          tessedit_pageseg_mode: "7",
+          tessedit_char_whitelist: "0123456789 -/:.",
+        });
+        const cropRes = await worker.recognize(cropBuf);
+        const cropText = cropRes.data?.text || "";
+        const ext = extractImeiFromText(cropText);
+        if (ext && ext.imei) {
+          if (ext.checksumOk) return { imei: ext.imei, checksumOk: true, raw: cropText };
+          const rep = repairImei(ext.imei);
+          if (rep) return { imei: rep, checksumOk: true, raw: cropText };
+        }
+      }
+    }
+  } catch (_e) {}
+  return null;
+}
+
 /** Recognize IMEI from an Image Buffer */
 export async function ocrImeiBuffer(buffer) {
   const worker = await getTesseractWorker();
@@ -1037,92 +1139,151 @@ export async function ocrImeiBuffer(buffer) {
     }
   } catch (_e) {}
 
-  // 2) Fast Pass: Try normalized full frame (< 900ms) with standard TAC validation
+  const rawMeta = await sharp(buffer).metadata();
+  const maxDim = Math.max(rawMeta.width || 1000, rawMeta.height || 1000);
+  
+  // High-res reference image (up to 2400px so digits keep large loops)
+  const highResP = maxDim > 2400
+    ? sharp(buffer).resize({ width: 2400, height: 2400, fit: "inside" })
+    : sharp(buffer);
+  const highResBuf = await highResP.png().toBuffer();
+  const highResMeta = await sharp(highResBuf).metadata();
+  const hrW = highResMeta.width;
+  const hrH = highResMeta.height;
+
+  // Overview image (1600px width for fast whole-frame layout detection)
+  const overviewW = Math.min(1600, hrW);
+  const overviewH = Math.round((hrH / hrW) * overviewW);
+  const scaleX = hrW / overviewW;
+  const scaleY = hrH / overviewH;
+
+  // 2) Pass 1: Natural Grayscale + Normalized Contrast (Soft, no harsh loop-closing blobbing)
   try {
+    const pass1Buf = await sharp(highResBuf)
+      .resize({ width: overviewW, height: overviewH })
+      .grayscale()
+      .normalize()
+      .png()
+      .toBuffer();
+
     await worker.setParameters({
       tessedit_pageseg_mode: "6",
-      tessedit_char_whitelist: "",
+      tessedit_char_whitelist: "0123456789 -/:.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
     });
-    const fastBuf = await sharp(buffer).resize({ width: 1400 }).grayscale().normalize().sharpen().png().toBuffer();
-    const res = await worker.recognize(fastBuf);
-    const ext = extractImeiFromText(res.data?.text || "");
-    if (ext && ext.imei) {
-      if (ext.checksumOk) return { imei: ext.imei, via: "ocr", checksumOk: true, raw: res.data?.text };
-      const rep = repairImei(ext.imei);
-      if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: res.data?.text };
+    const res1 = await worker.recognize(pass1Buf);
+    const text1 = res1.data?.text || "";
+
+    // Precision line zoom pass on detected bounding box
+    const zoomRes = await recognizePrecisionImeiLine(worker, sharp(highResBuf), res1, hrW, hrH, scaleX, scaleY);
+    if (zoomRes && zoomRes.checksumOk) {
+      return { imei: zoomRes.imei, via: "ocr", checksumOk: true, raw: zoomRes.raw };
+    }
+
+    const ext1 = extractImeiFromText(text1);
+    if (ext1 && ext1.imei) {
+      if (ext1.checksumOk) return { imei: ext1.imei, via: "ocr", checksumOk: true, raw: text1 };
+      const rep = repairImei(ext1.imei);
+      if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: text1 };
     }
   } catch (_e) {}
 
-  // 3) Multi-angle orientation check (portrait / landscape)
-  const meta = await sharp(buffer).metadata();
-  const orientations = meta.height > meta.width ? [0, 90, 270] : [0, 90];
+  // 3) Pass 2: Linear Contrast Boost (widens inner loops of 0, 6, 8, 3)
+  try {
+    const pass2Buf = await sharp(highResBuf)
+      .resize({ width: overviewW, height: overviewH })
+      .grayscale()
+      .linear(1.35, -20)
+      .normalize()
+      .png()
+      .toBuffer();
 
+    await worker.setParameters({
+      tessedit_pageseg_mode: "6",
+      tessedit_char_whitelist: "0123456789 -/:.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    });
+    const res2 = await worker.recognize(pass2Buf);
+    const text2 = res2.data?.text || "";
+
+    const zoomRes2 = await recognizePrecisionImeiLine(worker, sharp(highResBuf), res2, hrW, hrH, scaleX, scaleY);
+    if (zoomRes2 && zoomRes2.checksumOk) {
+      return { imei: zoomRes2.imei, via: "ocr", checksumOk: true, raw: zoomRes2.raw };
+    }
+
+    const ext2 = extractImeiFromText(text2);
+    if (ext2 && ext2.imei) {
+      if (ext2.checksumOk) return { imei: ext2.imei, via: "ocr", checksumOk: true, raw: text2 };
+      const rep = repairImei(ext2.imei);
+      if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: text2 };
+    }
+  } catch (_e) {}
+
+  // 4) Pass 3: Inverted image (for dark mode phone screens / black stickers)
+  try {
+    const pass3Buf = await sharp(highResBuf)
+      .resize({ width: overviewW, height: overviewH })
+      .grayscale()
+      .negate()
+      .normalize()
+      .png()
+      .toBuffer();
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: "6",
+      tessedit_char_whitelist: "0123456789 -/:.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    });
+    const res3 = await worker.recognize(pass3Buf);
+    const text3 = res3.data?.text || "";
+
+    const zoomRes3 = await recognizePrecisionImeiLine(worker, sharp(highResBuf).negate(), res3, hrW, hrH, scaleX, scaleY);
+    if (zoomRes3 && zoomRes3.checksumOk) {
+      return { imei: zoomRes3.imei, via: "ocr", checksumOk: true, raw: zoomRes3.raw };
+    }
+
+    const ext3 = extractImeiFromText(text3);
+    if (ext3 && ext3.imei) {
+      if (ext3.checksumOk) return { imei: ext3.imei, via: "ocr", checksumOk: true, raw: text3 };
+      const rep = repairImei(ext3.imei);
+      if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: text3 };
+    }
+  } catch (_e) {}
+
+  // 5) Multi-orientation check (90° / 270°) if phone was photographed sideways
+  const orientations = hrH > hrW ? [90, 270] : [90];
   for (const rot of orientations) {
-    let rotBuf = buffer;
-    if (rot !== 0) {
-      rotBuf = await sharp(buffer).rotate(rot).toBuffer();
-    }
-    const curMeta = await sharp(rotBuf).metadata();
-
-    const regions = [
-      { name: "topBox", crop: { left: Math.round(curMeta.width * 0.05), top: Math.round(curMeta.height * 0.08), width: Math.round(curMeta.width * 0.90), height: Math.round(curMeta.height * 0.45) } },
-      { name: "imeiBox", crop: { left: Math.round(curMeta.width * 0.05), top: Math.round(curMeta.height * 0.40), width: Math.round(curMeta.width * 0.90), height: Math.round(curMeta.height * 0.50) } },
-      { name: "full", crop: null },
-    ];
-
-    for (const reg of regions) {
-      try {
-        let p = sharp(rotBuf);
-        if (reg.crop) {
-          const left = Math.max(0, Math.min(curMeta.width - 20, reg.crop.left));
-          const top = Math.max(0, Math.min(curMeta.height - 20, reg.crop.top));
-          const width = Math.min(curMeta.width - left, Math.max(20, reg.crop.width));
-          const height = Math.min(curMeta.height - top, Math.max(20, reg.crop.height));
-          p = p.extract({ left, top, width, height });
-        }
-
-        // Test normal and inverted (for dark mode phone screens)
-        for (const invert of [false, true]) {
-          let base = p.clone().resize({ width: 1400, withoutEnlargement: false }).grayscale();
-          if (invert) base = base.negate();
-
-          for (const th of [160, 180, 140]) {
-            const processed = await base.clone().threshold(th).png().toBuffer();
-            await worker.setParameters({
-              tessedit_pageseg_mode: "6",
-              tessedit_char_whitelist: "",
-            });
-
-            const res = await worker.recognize(processed);
-            const text = res.data?.text || "";
-            const ext = extractImeiFromText(text);
-            if (ext && ext.imei) {
-              if (ext.checksumOk) return { imei: ext.imei, via: "ocr", checksumOk: true, raw: text };
-              const rep = repairImei(ext.imei);
-              if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: text };
-            }
-          }
-        }
-      } catch (_e) {}
-    }
-  }
-
-  // Fallback: standard unconstrained recognition
-  for (const psm of ["6", "11", "4"]) {
     try {
-      await worker.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: "" });
-      const normBuf = await sharp(buffer).resize({ width: 1400 }).grayscale().normalize().sharpen().png().toBuffer();
-      const res = await worker.recognize(normBuf);
-      const text = res.data?.text || "";
-      const extracted = extractImeiFromText(text);
-      if (extracted && extracted.imei) {
-        if (extracted.checksumOk) return { imei: extracted.imei, via: "ocr", checksumOk: true, raw: text };
-        const rep = repairImei(extracted.imei);
-        if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: text };
-        return { imei: extracted.imei, via: "ocr", checksumOk: false, raw: text };
+      const rotBuf = await sharp(highResBuf).rotate(rot).resize({ width: overviewW }).grayscale().normalize().png().toBuffer();
+      await worker.setParameters({
+        tessedit_pageseg_mode: "6",
+        tessedit_char_whitelist: "0123456789 -/:.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+      });
+      const rotRes = await worker.recognize(rotBuf);
+      const textRot = rotRes.data?.text || "";
+      const extRot = extractImeiFromText(textRot);
+      if (extRot && extRot.imei) {
+        if (extRot.checksumOk) return { imei: extRot.imei, via: "ocr", checksumOk: true, raw: textRot };
+        const rep = repairImei(extRot.imei);
+        if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: textRot };
       }
     } catch (_e) {}
   }
+
+  // 6) Sparse text mode fallback
+  try {
+    await worker.setParameters({
+      tessedit_pageseg_mode: "11",
+      tessedit_char_whitelist: "0123456789 -/:.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    });
+    const sparseBuf = await sharp(highResBuf).resize({ width: 1400 }).grayscale().normalize().png().toBuffer();
+    const sparseRes = await worker.recognize(sparseBuf);
+    const textSparse = sparseRes.data?.text || "";
+    const extSparse = extractImeiFromText(textSparse);
+    if (extSparse && extSparse.imei) {
+      if (extSparse.checksumOk) return { imei: extSparse.imei, via: "ocr", checksumOk: true, raw: textSparse };
+      const rep = repairImei(extSparse.imei);
+      if (rep) return { imei: rep, via: "ocr", checksumOk: true, raw: textSparse };
+      return { imei: extSparse.imei, via: "ocr", checksumOk: false, raw: textSparse };
+    }
+  } catch (_e) {}
 
   return null;
 }
