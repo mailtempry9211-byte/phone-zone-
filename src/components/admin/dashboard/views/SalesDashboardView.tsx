@@ -256,25 +256,29 @@ export const SalesDashboardView: React.FC<SalesDashboardViewProps> = ({
                   onClick={() => onSelectInvoice?.(inv)}
                   className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
                 >
-                  <td className="py-3 font-mono font-bold text-slate-900 dark:text-white">
+                  <td className={`py-3 font-mono font-bold ${isLight ? "text-slate-900" : "text-white"}`}>
                     {inv.number}
                   </td>
                   <td className="py-3">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
                       inv.type === "sale"
-                        ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                        : "bg-blue-100 text-blue-900 border-blue-300"
+                        ? isLight
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                          : "bg-emerald-950/80 text-emerald-300 border-emerald-700/50"
+                        : isLight
+                        ? "bg-blue-100 text-blue-900 border-blue-300"
+                        : "bg-blue-950/80 text-blue-300 border-blue-700/50"
                     }`}>
                       {inv.type}
                     </span>
                   </td>
-                  <td className="py-3 font-semibold text-slate-700 dark:text-slate-300">
+                  <td className={`py-3 font-semibold ${isLight ? "text-slate-700" : "text-slate-200"}`}>
                     {inv.party}
                   </td>
-                  <td className="py-3 text-right font-mono font-black text-slate-900 dark:text-white text-sm">
+                  <td className={`py-3 text-right font-mono font-black text-sm ${isLight ? "text-slate-900" : "text-white"}`}>
                     {formatINR(inv.amount)}
                   </td>
-                  <td className="py-3 text-right font-mono text-slate-500 dark:text-slate-400">
+                  <td className={`py-3 text-right font-mono ${isLight ? "text-slate-500" : "text-slate-400"}`}>
                     {formatRelativeTime(inv.date)}
                   </td>
                 </tr>

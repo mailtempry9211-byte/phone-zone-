@@ -500,7 +500,10 @@ const AccountingTab = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={phone.is_sold ? "default" : "outline"}>
+                      <Badge
+                        variant={phone.is_sold ? "default" : "outline"}
+                        className={phone.is_sold ? "bg-emerald-600 text-white" : "border-blue-400/60 text-blue-700 dark:text-blue-300 bg-blue-50/60 dark:bg-blue-950/60"}
+                      >
                         {phone.is_sold ? "Sold" : "In Stock"}
                       </Badge>
                     </TableCell>

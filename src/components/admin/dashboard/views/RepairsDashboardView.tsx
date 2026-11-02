@@ -364,10 +364,16 @@ export const RepairsDashboardView: React.FC<RepairsDashboardViewProps> = ({
                     </span>
                     <Badge className={`text-[10px] font-bold uppercase ${
                       job.status === "ready"
-                        ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                        ? isLight
+                          ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                          : "bg-emerald-950/80 text-emerald-300 border border-emerald-700/50"
                         : job.status === "waiting_parts"
-                        ? "bg-amber-100 text-amber-900 border border-amber-300"
-                        : "bg-slate-100 text-slate-800 border border-slate-300"
+                        ? isLight
+                          ? "bg-amber-100 text-amber-900 border border-amber-300"
+                          : "bg-amber-950/80 text-amber-300 border border-amber-700/50"
+                        : isLight
+                        ? "bg-slate-100 text-slate-800 border border-slate-300"
+                        : "bg-slate-800 text-slate-200 border border-slate-700"
                     }`}>
                       {job.status ? job.status.replace("_", " ") : "Active"}
                     </Badge>

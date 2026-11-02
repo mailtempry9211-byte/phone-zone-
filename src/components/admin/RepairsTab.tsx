@@ -862,12 +862,12 @@ export const RepairsTab: React.FC = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="p-3 text-xs text-gray-600 max-w-xs truncate">
+                            <td className="p-3 text-xs text-gray-600 dark:text-slate-300 max-w-xs truncate">
                               {cust.address || "-"}
                             </td>
                             <td className="p-3 text-center whitespace-nowrap">
                               <div className="inline-flex items-center gap-1">
-                                <Badge variant="outline" className="text-xs bg-slate-50 font-medium">
+                                <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 font-medium">
                                   {totalRepairs} {totalRepairs === 1 ? "Job" : "Jobs"}
                                 </Badge>
                                 {activeCount > 0 && (
@@ -877,16 +877,16 @@ export const RepairsTab: React.FC = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="p-3 text-right font-semibold text-gray-900 whitespace-nowrap">
+                            <td className="p-3 text-right font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                               ₹{totalSpent.toLocaleString()}
                             </td>
                             <td className="p-3 text-center whitespace-nowrap">
                               {balanceDue > 0 ? (
-                                <Badge className="bg-red-50 text-red-700 border-red-300 font-semibold px-2 py-0.5">
+                                <Badge className="bg-red-50 text-red-700 border-red-300 dark:bg-red-950/80 dark:text-red-300 dark:border-red-700/50 font-semibold px-2 py-0.5">
                                   Due: ₹{balanceDue.toLocaleString()}
                                 </Badge>
                               ) : (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 font-medium px-2 py-0.5">
+                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50 font-medium px-2 py-0.5">
                                   Nil (₹0)
                                 </Badge>
                               )}
@@ -896,7 +896,7 @@ export const RepairsTab: React.FC = () => {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="text-xs h-7 px-2.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+                                  className="text-xs h-7 px-2.5 text-blue-700 border-blue-200 hover:bg-blue-50 dark:text-blue-300 dark:border-blue-700/50 dark:hover:bg-blue-950/50"
                                   onClick={() => handleOpenCustomerOverview(cust)}
                                 >
                                   <Eye className="h-3.5 w-3.5 mr-1 text-blue-600" />

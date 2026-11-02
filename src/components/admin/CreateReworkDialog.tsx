@@ -154,17 +154,17 @@ export const CreateReworkDialog: React.FC<CreateReworkDialogProps> = ({
                     <div
                       key={job.id}
                       onClick={() => setSelectedJob(job)}
-                      className="p-2.5 hover:bg-amber-50/60 cursor-pointer transition-colors flex items-center justify-between text-xs"
+                      className="p-2.5 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 cursor-pointer transition-colors flex items-center justify-between text-xs"
                     >
                       <div className="space-y-0.5">
-                        <div className="font-semibold text-gray-900 flex items-center gap-2">
-                          <Smartphone className="h-3.5 w-3.5 text-gray-500" />
+                        <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Smartphone className="h-3.5 w-3.5 text-gray-500 dark:text-slate-400" />
                           <span>{job.device_brand} {job.device_model}</span>
-                          <Badge variant="outline" className="text-[10px] bg-slate-50 font-mono">
+                          <Badge variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 font-mono">
                             {job.job_no}
                           </Badge>
                         </div>
-                        <div className="text-gray-500 text-[11px] flex items-center gap-2">
+                        <div className="text-gray-500 dark:text-slate-400 text-[11px] flex items-center gap-2">
                           <span>👤 {job.customer_name} ({job.customer_phone})</span>
                           <span>•</span>
                           <span className="font-mono">IMEI: {job.imei || "N/A"}</span>
@@ -174,8 +174,8 @@ export const CreateReworkDialog: React.FC<CreateReworkDialogProps> = ({
                         <Badge
                           className={`text-[10px] ${
                             job.status === "delivered"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-blue-100 text-blue-800"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300"
                           }`}
                         >
                           {job.status}
@@ -209,22 +209,22 @@ export const CreateReworkDialog: React.FC<CreateReworkDialogProps> = ({
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded border border-amber-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white dark:bg-slate-900 p-2.5 rounded border border-amber-200 dark:border-amber-800/60">
                 <div>
-                  <div className="font-semibold text-gray-900">
+                  <div className="font-semibold text-gray-900 dark:text-white">
                     {selectedJob.device_brand} {selectedJob.device_model}
                   </div>
-                  <div className="text-gray-500 font-mono text-[11px]">
+                  <div className="text-gray-500 dark:text-slate-400 font-mono text-[11px]">
                     IMEI: {selectedJob.imei || "NO IMEI"}
                   </div>
-                  <div className="text-gray-600 text-[11px] mt-1">
+                  <div className="text-gray-600 dark:text-slate-300 text-[11px] mt-1">
                     <strong>Original Issue:</strong> {selectedJob.problem}
                   </div>
                 </div>
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 text-slate-700 dark:text-slate-200">
                   <div><strong>Customer:</strong> {selectedJob.customer_name}</div>
                   <div><strong>Phone:</strong> {selectedJob.customer_phone}</div>
-                  <div className="text-emerald-700 font-semibold">
+                  <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
                     Original Price: ₹{Number(selectedJob.final_price || selectedJob.estimate || 0).toLocaleString("en-IN")}
                   </div>
                   {selectedJob.delivered_at && (

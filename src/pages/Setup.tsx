@@ -628,7 +628,7 @@ const Setup = () => {
                       <Cloud className="h-4 w-4 text-blue-600" />
                       Detected Google Drive Cloud Backups ({cloudBackups.length})
                     </div>
-                    <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                    <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50 font-bold">
                       Cloud Connected
                     </Badge>
                   </div>

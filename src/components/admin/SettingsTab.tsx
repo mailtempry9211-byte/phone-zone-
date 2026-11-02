@@ -901,7 +901,7 @@ const SettingsTab = () => {
               {tacStats?.bySource?.api ? <span className="text-gray-500">API: {tacStats.bySource.api}</span> : null}
             </div>
             {tacEmbedded?.isEmbeddedAvailable && (
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50">
                 Default Built-in: tac_full.xlsx (~254K models)
               </Badge>
             )}

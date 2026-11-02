@@ -179,7 +179,7 @@ export const ShopSwitcher: React.FC<ShopSwitcherProps> = ({ className = "", isDa
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">{shop.name}</h4>
                         {shop.shop_code && (
-                          <Badge variant="outline" className="text-[9px] font-mono font-bold px-1 py-0">
+                          <Badge variant="outline" className="text-[9px] font-mono font-bold px-1.5 py-0 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700">
                             {shop.shop_code}
                           </Badge>
                         )}

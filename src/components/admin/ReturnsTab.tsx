@@ -291,12 +291,12 @@ const ReturnsTab = () => {
 
   const getReturnTypeBadge = (type: string) => {
     return type === 'sales_return' ? (
-      <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+      <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-700/50">
         <Undo2 className="w-3 h-3 mr-1" />
         Sales Return
       </Badge>
     ) : (
-      <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+      <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 dark:border-orange-700/50">
         <RotateCcw className="w-3 h-3 mr-1" />
         Purchase Return
       </Badge>

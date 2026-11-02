@@ -2065,7 +2065,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       />
                     </div>
                     <div className="space-y-2">
-                      <Badge variant="outline" className="bg-white text-emerald-700 border-emerald-300">
+                      <Badge variant="outline" className="bg-white text-emerald-700 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50">
                         <CheckCircle className="h-3 w-3 mr-1" /> Photo Attached
                       </Badge>
                       <div>

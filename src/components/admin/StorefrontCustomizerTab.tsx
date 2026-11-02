@@ -466,7 +466,7 @@ const StorefrontCustomizerTab: React.FC = () => {
                 Choose the visual style that fits your brand. Each theme alters colors, typography, card borders, and buttons.
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1">
+            <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700">
               Active: {HOMEPAGE_THEMES.find((t) => t.id === selectedTheme)?.name}
             </Badge>
           </div>

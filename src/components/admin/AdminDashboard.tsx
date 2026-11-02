@@ -275,6 +275,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
+    if (typeof document !== "undefined") {
+      const root = document.documentElement;
+      if (themeMode === "light") {
+        root.classList.remove("dark");
+        root.classList.add("light");
+      } else {
+        root.classList.remove("light");
+        root.classList.add("dark");
+      }
+    }
+  }, [themeMode]);
+
+  useEffect(() => {
     if (initialDepartment === "repairs") setActiveTab("repairs");
     else if (initialDepartment === "management") setActiveTab("ngrok");
     else if (initialDepartment === "sales") setActiveTab("dashboard");

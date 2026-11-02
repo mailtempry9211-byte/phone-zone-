@@ -627,12 +627,12 @@ export const DealersTab: React.FC = () => {
             </div>
 
             {/* Dealer Profile Photo Section (Optional) */}
-            <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/60 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <Label className="text-xs font-semibold text-gray-800">Dealer Profile Photo (डीलर की फोटो)</Label>
-                    <Badge variant="outline" className="text-[10px] text-gray-500 bg-gray-100">Optional / वैकल्पिक</Badge>
+                    <Label className="text-xs font-semibold text-gray-800 dark:text-slate-100">Dealer Profile Photo (डीलर की फोटो)</Label>
+                    <Badge variant="outline" className="text-[10px] text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">Optional / वैकल्पिक</Badge>
                   </div>
                   <p className="text-[11px] text-gray-500">
                     Upload or capture dealer photo. If attached, it will automatically show on statutory Sapath Patra &amp; legal bills.
@@ -898,9 +898,9 @@ export const DealersTab: React.FC = () => {
                           <TableCell className="text-right font-bold">₹{Number(p.purchase_price).toLocaleString("en-IN")}</TableCell>
                           <TableCell className="text-center">
                             {p.is_sold ? (
-                              <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Sold</Badge>
+                              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50 text-[10px]">Sold</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-blue-700 bg-blue-50 text-[10px]">In Stock</Badge>
+                              <Badge variant="outline" className="text-blue-700 bg-blue-50 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-700/50 text-[10px]">In Stock</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-center">

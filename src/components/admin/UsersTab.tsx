@@ -258,7 +258,7 @@ export default function UsersTab() {
       case "technician":
         return <Badge className="bg-indigo-600">Technician</Badge>;
       case "viewer":
-        return <Badge variant="outline">Viewer</Badge>;
+        return <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700">Viewer</Badge>;
       default:
         return <Badge className="bg-slate-600">Staff</Badge>;
     }
@@ -267,7 +267,7 @@ export default function UsersTab() {
   const getShopBadge = (shopId?: string) => {
     if (!shopId || shopId === "all") {
       return (
-        <Badge variant="outline" className="border-indigo-400 text-indigo-700 bg-indigo-50/70 font-semibold text-[11px]">
+        <Badge variant="outline" className="border-indigo-400 text-indigo-700 bg-indigo-50/70 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-500/40 font-semibold text-[11px]">
           🌐 All Branches (Global)
         </Badge>
       );
@@ -275,7 +275,7 @@ export default function UsersTab() {
     const matched = shops.find((s) => s.id === shopId);
     const label = matched ? `${matched.name} (${matched.shop_code || matched.id})` : shopId;
     return (
-      <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50/80 font-semibold text-[11px]">
+      <Badge variant="outline" className="border-amber-400 text-amber-800 bg-amber-50/80 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-500/40 font-semibold text-[11px]">
         📍 {label} (Locked)
       </Badge>
     );
