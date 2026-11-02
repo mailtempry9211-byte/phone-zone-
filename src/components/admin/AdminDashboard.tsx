@@ -497,7 +497,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSelectTab = (tabId: string) => {
-    setActiveTab(tabId);
+    let target = tabId;
+    if (tabId === "invoices" || tabId === "sales") target = "sold";
+    else if (tabId === "purchases" || tabId === "stock") target = "inventory";
+    setActiveTab(target);
     setSidebarOpen(false);
   };
 

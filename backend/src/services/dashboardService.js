@@ -397,14 +397,17 @@ export function getDashboardOverview({ range = "week", shop = "", fy = "", role 
     }
   }
 
-  // 6. Recent Invoices (last 8)
+  // 6. Recent Invoices (last 8) with real device and party details
   const invoiceRows = db
     .prepare(
       `SELECT inv.id, inv.invoice_number, inv.invoice_type, inv.amount, inv.created_at,
-              COALESCE(c.name, s.name, 'Customer') AS party_name
+              inv.phone_id, inv.customer_id, inv.seller_id,
+              COALESCE(c.name, s.name, 'Customer') AS party_name,
+              p.phone_name, p.model, p.colour, p.variant, p.condition
        FROM invoices inv
        LEFT JOIN customers c ON c.id = inv.customer_id
        LEFT JOIN sellers s ON s.id = inv.seller_id
+       LEFT JOIN phones p ON p.id = inv.phone_id
        ${shopClause ? "WHERE inv.shop_id = ?" : ""}
        ORDER BY inv.created_at DESC
        LIMIT 8`,
@@ -419,6 +422,12 @@ export function getDashboardOverview({ range = "week", shop = "", fy = "", role 
     amount: Number(inv.amount || 0),
     status: "paid",
     date: inv.created_at || todayStr,
+    phoneId: inv.phone_id || null,
+    phoneName: inv.phone_name || "",
+    model: inv.model || "",
+    variant: inv.variant || "",
+    colour: inv.colour || "",
+    condition: inv.condition || "",
   }));
 
   // 7. Actionable Alerts

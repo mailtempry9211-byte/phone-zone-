@@ -26,6 +26,7 @@ interface SalesDashboardViewProps {
   onChangeRange: (r: "week" | "month" | "year") => void;
   onNavigateTab: (tab: string) => void;
   onQuickAction: (action: string) => void;
+  onSelectInvoice?: (invoice: any) => void;
 }
 
 export const SalesDashboardView: React.FC<SalesDashboardViewProps> = ({
@@ -37,6 +38,7 @@ export const SalesDashboardView: React.FC<SalesDashboardViewProps> = ({
   onChangeRange,
   onNavigateTab,
   onQuickAction,
+  onSelectInvoice,
 }) => {
   const rangeSales = (data.series || []).reduce((acc, curr) => acc + (curr.sales || 0), 0);
   const rangeSold = (data.series || []).reduce((acc, curr) => acc + (curr.count || 0), 0);
@@ -227,12 +229,12 @@ export const SalesDashboardView: React.FC<SalesDashboardViewProps> = ({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => onNavigateTab("invoices")}
+            onClick={() => onNavigateTab("sold")}
             className={`text-xs font-bold rounded-xl ${
               isLight ? "bg-slate-50 border-slate-300 text-slate-800" : "bg-slate-800 border-slate-700 text-slate-200"
             }`}
           >
-            All Invoices
+            All Sold Invoices
           </Button>
         </div>
 
@@ -249,7 +251,11 @@ export const SalesDashboardView: React.FC<SalesDashboardViewProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {data.recentInvoices.map((inv) => (
-                <tr key={inv.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors`}>
+                <tr
+                  key={inv.id}
+                  onClick={() => onSelectInvoice?.(inv)}
+                  className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                >
                   <td className="py-3 font-mono font-bold text-slate-900 dark:text-white">
                     {inv.number}
                   </td>

@@ -3,17 +3,9 @@ import { FileText, ArrowDownLeft, ArrowUpRight, RotateCcw, Wrench } from "lucide
 import { formatINR, formatRelativeTime } from "../dashboardFormat";
 
 interface RecentInvoicesProps {
-  invoices: Array<{
-    id: string;
-    number: string;
-    type: string;
-    party: string;
-    amount: number;
-    status: string;
-    date: string;
-  }>;
+  invoices: Array<any>;
   styleMode?: "glass" | "darkteal";
-  onSelectInvoice?: (id: string) => void;
+  onSelectInvoice?: (invoice: any) => void;
   isLight?: boolean;
 }
 
@@ -95,7 +87,7 @@ export const RecentInvoices: React.FC<RecentInvoicesProps> = ({
             return (
               <div
                 key={inv.id}
-                onClick={() => onSelectInvoice?.(inv.id)}
+                onClick={() => onSelectInvoice?.(inv)}
                 className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
                   isLight
                     ? "bg-white hover:bg-slate-50 border-slate-200/90 shadow-xs"

@@ -28,6 +28,7 @@ import { BrandDonut } from "./widgets/BrandDonut";
 import { StockAging } from "./widgets/StockAging";
 import { RepairPipeline } from "./widgets/RepairPipeline";
 import { RecentInvoices } from "./widgets/RecentInvoices";
+import { InvoiceDetailDialog } from "./widgets/InvoiceDetailDialog";
 import { AlertsPanel } from "./widgets/AlertsPanel";
 import { QuickActions } from "./widgets/QuickActions";
 import { formatINR, formatNumberIN } from "./dashboardFormat";
@@ -73,6 +74,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [activeSubView, setActiveSubView] = useState<"overview" | "sales" | "repairs" | "stock" | "purchase">("overview");
   const [chartRange, setChartRange] = useState<"week" | "month" | "year">("week");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
 
   const effectiveMode = themeMode || prefs.mode;
   const isLight = effectiveMode === "light";
@@ -372,7 +374,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   invoices={data.recentInvoices}
                   styleMode={prefs.style}
                   isLight={isLight}
-                  onSelectInvoice={() => onNavigateTab("invoices")}
+                  onSelectInvoice={(inv) => setViewingInvoice(inv)}
                 />
               </div>
             </div>
@@ -390,6 +392,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             onChangeRange={setChartRange}
             onNavigateTab={onNavigateTab}
             onQuickAction={onQuickAction}
+            onSelectInvoice={(inv) => setViewingInvoice(inv)}
           />
         )}
 
@@ -436,6 +439,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           />
         )}
       </div>
+
+      {/* Real-time Invoice & Transaction Details Dialog */}
+      <InvoiceDetailDialog
+        open={!!viewingInvoice}
+        onOpenChange={(open) => !open && setViewingInvoice(null)}
+        invoice={viewingInvoice}
+        onNavigateTab={onNavigateTab}
+      />
     </div>
   );
 };
