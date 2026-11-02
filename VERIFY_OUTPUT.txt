@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-11-02T07:50:43.805Z
+Date             : 2026-11-02T08:11:03.385Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,7 +20,7 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-11-02T07:49:46.435Z
+Date             : 2026-11-02T08:10:06.743Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
@@ -30,7 +30,7 @@ c4549c2e9bb45dd5d1a59ec14a6ec9bd4d5387e23442a1440a326bf2cce1389c  backend/src/ro
 01fdbe3e29c7e3cdd4bad0a59de251b6de5dd73e9b43ba4776a8377dbce9b3a1  backend/src/routes/compat.js
 90844eed80405522b4a1e40201fd88e20b1d020830c9ee8b2a0332973c914b57  backend/src/services/inventoryService.js
 11ec1c1fc1c26dbe82082dc016d0f7b850ef99410726ef1c7431a0c84cd9a56b  backend/src/services/storageService.js
-9ba9670ec1a7eb5a066da7da5f84ea42a020ca742498d93e299efb6e6f7cac9f  backend/src/services/authService.js
+340ad86fea0d2362879cf3f08bd4a1fce3b766a644aabb495519d657a16a5a6a  backend/src/services/authService.js
 93f96d827f059626fcf2de773cac10f175a00f1ffe0610e7d3a0097a73fcea59  backend/src/services/backupService.js
 62fd132f47a1f6545f188665133dbff7e7b5ba0fa83a98dce01ebeee0600288e  package.json
 802c0161880cd94e4b736df7d63bce48f472a2b14888d0c55d734a953d516dd9  database/migrations/001_initial_schema.sql
@@ -68,7 +68,7 @@ b39033e415b27e8a3c9f487ea5c4dcd682cd8e0b56f2e5d1e2085de3fdc6c17c  database/migra
   A03 PASS  7 pre-stamped, 26/26 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:47459/api
+  server ready on http://127.0.0.1:48367/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -109,7 +109,7 @@ b39033e415b27e8a3c9f487ea5c4dcd682cd8e0b56f2e5d1e2085de3fdc6c17c  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 24084140-170d-4325-bb84-10e7bcfd49cb
+  A61 PASS  by-phone match returned repair customer 9ddad6bf-7af8-487b-a42a-0b0c37c16787
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403
