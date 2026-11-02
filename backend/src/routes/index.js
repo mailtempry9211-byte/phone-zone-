@@ -338,6 +338,23 @@ export function buildRouter() {
     logger.info("Restore succeeded", { result });
     res.json({ restored: true, backupName: path.basename(targetPath), ...result });
   }));
+
+  // Query available cloud backups during initial setup wizard
+  r.get("/setup/cloud-backups", wrap(async (req, res) => {
+    requireLocalSetup(req);
+    res.json(googleDrive.getCloudBackupStatus());
+  }));
+
+  // Restore directly from Google Drive / Cloud folder during initial setup
+  r.post("/setup/restore-cloud", wrap(async (req, res) => {
+    enforce(restoreLimiter, req);
+    requireLocalSetup(req);
+    const backupName = String(req.body?.backupName || "").trim();
+    if (!backupName) throw badRequest("Please select a cloud backup to restore.");
+    const result = googleDrive.restoreFromCloudBackup(backupName);
+    logger.info("Setup cloud restore succeeded", { backupName, result });
+    res.json({ restored: true, backupName, ...result });
+  }));
   r.get("/public/inventory", wrap((_req, res) => res.json(inventory.listPublicInventory())));
   r.get("/public/repair/track", wrap((req, res) => {
     const q = String(req.query.q || "").trim();
@@ -736,6 +753,13 @@ export function buildRouter() {
   r.post("/google-drive/sync", requireAuth, wrap((req, res) => {
     enforce(backupLimiter, req);
     res.json(googleDrive.syncToGoogleDrive());
+  }));
+  r.post("/google-drive/restore", requireAuth, requireRole("admin"), wrap((req, res) => {
+    enforce(restoreLimiter, req);
+    const backupName = String(req.body?.backupName || "").trim();
+    if (!backupName) throw badRequest("Please select a cloud backup to restore.");
+    const result = googleDrive.restoreFromCloudBackup(backupName);
+    res.json({ restored: true, backupName, ...result });
   }));
 
   // ---------------- database maintenance (admin) ----------------

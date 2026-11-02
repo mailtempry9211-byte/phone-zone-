@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -272,6 +273,50 @@ const SettingsTab = () => {
       toast.error(err.message || 'Import failed');
     } finally {
       setTacImporting(false);
+    }
+  };
+
+  const { data: tacEmbedded } = useQuery({
+    queryKey: ['tac-embedded-info'],
+    queryFn: async () => {
+      const res = await fetch('/api/tac/embedded-info', { credentials: 'include' });
+      if (!res.ok) return { exists: false, isEmbeddedAvailable: false };
+      return res.json();
+    },
+  });
+
+  const handleResetEmbeddedTac = async () => {
+    if (!confirm('This will reload the built-in default tac_full.xlsx database with ~250,000 phone models. Continue?')) {
+      return;
+    }
+    setTacImporting(true);
+    try {
+      const res = await fetch('/api/tac/reset-embedded', { method: 'POST', credentials: 'include' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Failed to reload embedded TAC');
+      setTacReport(body);
+      toast.success(`Default TAC database restored: ${body.databaseTotal} models ready!`);
+      queryClient.invalidateQueries({ queryKey: ['tac-stats'] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reload embedded TAC');
+    } finally {
+      setTacImporting(false);
+    }
+  };
+
+  const handleClearTac = async () => {
+    if (!confirm('Warning: This will clear all stored TAC codes from the local database. Auto-fill for phone models from IMEI will stop until models are re-imported. Continue?')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/tac/clear', { method: 'POST', credentials: 'include' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Failed to clear TAC database');
+      toast.success('TAC database cleared');
+      setTacReport(null);
+      queryClient.invalidateQueries({ queryKey: ['tac-stats'] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to clear TAC');
     }
   };
 
@@ -848,17 +893,35 @@ const SettingsTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <span><strong>{tacStats?.total ?? '–'}</strong> TACs stored</span>
-            {tacStats?.bySource?.excel ? <span className="text-gray-500">Excel: {tacStats.bySource.excel}</span> : null}
-            {tacStats?.bySource?.learned ? <span className="text-gray-500">Learned: {tacStats.bySource.learned}</span> : null}
-            {tacStats?.bySource?.api ? <span className="text-gray-500">API: {tacStats.bySource.api}</span> : null}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span><strong>{tacStats?.total ?? '–'}</strong> models in local database</span>
+              {tacStats?.bySource?.excel ? <span className="text-gray-500">Excel: {tacStats.bySource.excel}</span> : null}
+              {tacStats?.bySource?.learned ? <span className="text-gray-500">Learned: {tacStats.bySource.learned}</span> : null}
+              {tacStats?.bySource?.api ? <span className="text-gray-500">API: {tacStats.bySource.api}</span> : null}
+            </div>
+            {tacEmbedded?.isEmbeddedAvailable && (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                Default Built-in: tac_full.xlsx (~254K models)
+              </Badge>
+            )}
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2.5">
+            {tacEmbedded?.isEmbeddedAvailable && (
+              <Button
+                variant="default"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleResetEmbeddedTac}
+                disabled={tacImporting}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {tacImporting ? 'Loading Built-in TAC...' : 'Reload Default Built-in TAC'}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => tacFileInput.current?.click()} disabled={tacImporting}>
               <Upload className="h-4 w-4 mr-2" />
-              {tacImporting ? 'Importing... (takes up to a minute)' : 'Upload tac_full.xlsx'}
+              {tacImporting ? 'Importing... (takes up to a minute)' : 'Upload Custom tac_full.xlsx'}
             </Button>
             <input
               ref={tacFileInput}
@@ -869,7 +932,15 @@ const SettingsTab = () => {
             />
             <Button variant="outline" onClick={handleTacExport} disabled={tacImporting}>
               <Download className="h-4 w-4 mr-2" />
-              Download TAC database (Excel)
+              Download TAC (Excel)
+            </Button>
+            <Button
+              variant="outline"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={handleClearTac}
+              disabled={tacImporting || !tacStats?.total}
+            >
+              Clear TAC Database
             </Button>
           </div>
 

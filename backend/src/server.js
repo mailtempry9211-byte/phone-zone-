@@ -128,6 +128,11 @@ if (isMain) {
     import("./services/ngrokService.js")
       .then((m) => m.autoStartTunnelOnBoot().catch((err) => logger.warn("Ngrok auto-start error", err)))
       .catch(() => {});
+
+    // Auto-load embedded TAC database on fresh installs if empty
+    import("./services/tacService.js")
+      .then((m) => m.ensureEmbeddedTacLoaded().catch((err) => logger.warn("TAC auto-load error", err)))
+      .catch(() => {});
   });
   const shutdown = () => {
     server.close(() => {

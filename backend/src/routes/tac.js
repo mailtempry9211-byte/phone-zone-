@@ -45,6 +45,19 @@ export function buildTacRouter(staff) {
     res.json(tac.getStats());
   }));
 
+  r.get("/embedded-info", staff, wrap(async (_req, res) => {
+    res.json(tac.getEmbeddedTacInfo());
+  }));
+
+  r.post("/reset-embedded", staff, wrap(async (_req, res) => {
+    const report = await tac.resetToEmbeddedTac();
+    res.json(report);
+  }));
+
+  r.post("/clear", staff, wrap(async (_req, res) => {
+    res.json(tac.clearTacDatabase());
+  }));
+
   r.get("/export", staff, wrap(async (_req, res) => {
     const stamp = new Date().toISOString().slice(0, 10);
     const name = `PhoneZone_TAC_${stamp}.xlsx`;

@@ -10,10 +10,13 @@
  * so the test-suite can pin them to the real spreadsheet's quirks.
  */
 import fs from "node:fs";
+import path from "node:path";
 import ExcelJS from "exceljs";
 import unzipper from "unzipper";
 import { getDb } from "../db/index.js";
 import { badRequest } from "../lib/errors.js";
+import { APP_ROOT, DATABASE_DEF_DIR } from "../config/paths.js";
+import { logger } from "../lib/logger.js";
 
 /* ------------------------------------------------------------------ TAC */
 
@@ -541,3 +544,88 @@ export async function exportDatabase(outPath) {
   await wb.commit();
   return outPath;
 }
+
+/* ------------------------------------------------------------- embedded TAC */
+
+/** Find the built-in bundled tac_full.xlsx file path. */
+export function getEmbeddedTacPath() {
+  const candidates = [
+    path.join(DATABASE_DEF_DIR, "tac_full.xlsx"),
+    path.join(APP_ROOT, "database", "tac_full.xlsx"),
+    path.join(APP_ROOT, "tac_full.xlsx"),
+    process.resourcesPath ? path.join(process.resourcesPath, "database", "tac_full.xlsx") : null,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Returns status of the embedded TAC dataset. */
+export function getEmbeddedTacInfo() {
+  const filePath = getEmbeddedTacPath();
+  if (!filePath) {
+    return { exists: false, isEmbeddedAvailable: false };
+  }
+  const stat = fs.statSync(filePath);
+  return {
+    exists: true,
+    isEmbeddedAvailable: true,
+    filePath,
+    fileName: path.basename(filePath),
+    sizeBytes: stat.size,
+    defaultModels: 254786,
+  };
+}
+
+/** Resets the database to the embedded tac_full.xlsx spreadsheet. */
+export async function resetToEmbeddedTac() {
+  const embeddedPath = getEmbeddedTacPath();
+  if (!embeddedPath) {
+    throw badRequest("Built-in tac_full.xlsx not found in application assets.");
+  }
+  logger.info("Resetting TAC database from embedded asset", { embeddedPath });
+  return importWorkbook(embeddedPath, { overwrite: true });
+}
+
+/** Clears all stored TAC codes. */
+export function clearTacDatabase() {
+  const db = getDb();
+  db.prepare("DELETE FROM tac_codes").run();
+  logger.info("TAC database cleared by administrator");
+  return { ok: true, databaseTotal: 0 };
+}
+
+/**
+ * Auto-initializes the TAC database on a fresh install if empty and embedded dataset exists.
+ */
+export async function ensureEmbeddedTacLoaded() {
+  const db = getDb();
+  let count = 0;
+  try {
+    count = db.prepare("SELECT COUNT(*) AS n FROM tac_codes").get()?.n || 0;
+  } catch {
+    return { alreadyLoaded: false, reason: "table_not_ready" };
+  }
+
+  if (count > 0) {
+    return { alreadyLoaded: true, count };
+  }
+
+  const embeddedPath = getEmbeddedTacPath();
+  if (!embeddedPath) {
+    return { alreadyLoaded: false, reason: "embedded_file_missing" };
+  }
+
+  try {
+    logger.info("Fresh database detected with empty TAC table. Importing embedded TAC dataset...", { embeddedPath });
+    const report = await importWorkbook(embeddedPath, { overwrite: false });
+    logger.info("Embedded TAC dataset successfully imported", { total: report.databaseTotal, durationMs: report.durationMs });
+    return { alreadyLoaded: false, loaded: true, count: report.databaseTotal };
+  } catch (err) {
+    logger.error("Failed to auto-import embedded TAC dataset", err);
+    return { alreadyLoaded: false, error: err.message };
+  }
+}
+

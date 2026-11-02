@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Cloud, CloudUpload, CheckCircle2, HardDrive, RefreshCw, ExternalLink, Loader2, FolderOpen } from "lucide-react";
+import { Cloud, CloudUpload, CheckCircle2, HardDrive, RefreshCw, ExternalLink, Loader2, FolderOpen, RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -72,6 +72,35 @@ export const GoogleDriveBackupCard: React.FC = () => {
       toast.error(err.message || "Failed to sync to Google Drive");
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const [isRestoring, setIsRestoring] = useState<string | null>(null);
+
+  const handleRestoreFromCloud = async (backupName: string) => {
+    if (!confirm(`Warning: This will restore your database and all records from "${backupName}". Your current database will be automatically snapshotted before the restore. Continue?`)) {
+      return;
+    }
+    setIsRestoring(backupName);
+    try {
+      const res = await fetch("/api/google-drive/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ backupName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to restore backup");
+      }
+      toast.success("Database restored successfully from Google Drive backup! Reloading page...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to restore cloud backup");
+    } finally {
+      setIsRestoring(null);
     }
   };
 
@@ -193,12 +222,34 @@ export const GoogleDriveBackupCard: React.FC = () => {
               {driveStatus.recentBackups.map((b: any) => (
                 <div
                   key={b.name}
-                  className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded border text-gray-700"
+                  className="flex items-center justify-between text-xs p-2 bg-gray-50 dark:bg-slate-900/60 rounded border text-gray-700 dark:text-gray-200"
                 >
-                  <span className="font-mono truncate mr-2">{b.name}</span>
-                  <span className="text-gray-500 shrink-0">
-                    {(b.sizeBytes / (1024 * 1024)).toFixed(2)} MB
-                  </span>
+                  <div className="flex flex-col truncate mr-2">
+                    <span className="font-mono truncate font-medium">{b.name}</span>
+                    <span className="text-[10px] text-gray-400">
+                      {(b.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {b.modifiedAt ? new Date(b.modifiedAt).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[11px] px-2 text-blue-700 dark:text-blue-400 hover:text-blue-800 hover:bg-blue-50 border-blue-200 shrink-0 gap-1"
+                    onClick={() => handleRestoreFromCloud(b.name)}
+                    disabled={!!isRestoring}
+                  >
+                    {isRestoring === b.name ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Restoring...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="h-3 w-3" />
+                        Restore
+                      </>
+                    )}
+                  </Button>
                 </div>
               ))}
             </div>

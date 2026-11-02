@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Store, Upload, History, ShieldCheck, Star } from 'lucide-react';
+import { ArrowLeft, Store, Upload, History, ShieldCheck, Star, Cloud, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 type SetupMode = 'choose' | 'new' | 'restore';
@@ -36,6 +37,50 @@ const Setup = () => {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cloud / Google Drive Backups
+  const [cloudBackups, setCloudBackups] = useState<any[]>([]);
+  const [cloudTargetDir, setCloudTargetDir] = useState<string>('');
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+  const [restoringCloudName, setRestoringCloudName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode === 'restore') {
+      fetch('/api/setup/cloud-backups')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.recentBackups) {
+            setCloudBackups(data.recentBackups);
+            setCloudTargetDir(data.targetDir || data.activeFolder || '');
+            setIsCloudConnected(!!data.isConnected);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mode]);
+
+  const handleRestoreCloudBackup = async (backupName: string) => {
+    if (!confirm(`Restore all business data from "${backupName}"?`)) return;
+    setRestoring(true);
+    setRestoringCloudName(backupName);
+    try {
+      const res = await fetch('/api/setup/restore-cloud', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupName }),
+      });
+      if (!res.ok) {
+        throw new Error(await readError(res, 'Cloud restore failed'));
+      }
+      toast.success('Data restored successfully from Google Drive backup! Welcome back.');
+      window.location.replace('/');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to restore cloud backup');
+    } finally {
+      setRestoring(false);
+      setRestoringCloudName(null);
+    }
+  };
 
   const [formData, setFormData] = useState({
     businessModule: 'both',
@@ -572,24 +617,75 @@ const Setup = () => {
           <Card>
             <CardHeader>
               <CardTitle>Restore from Backup</CardTitle>
-              <CardDescription>Upload your PhoneZone backup file (.zip or .tar.gz)</CardDescription>
+              <CardDescription>Restore from Google Drive cloud storage or upload a backup file (.zip or .tar.gz)</CardDescription>
             </CardHeader>
-            <CardContent className='space-y-4'>
+            <CardContent className='space-y-5'>
+              {/* Cloud / Google Drive Backups */}
+              {cloudBackups && cloudBackups.length > 0 && (
+                <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
+                      <Cloud className="h-4 w-4 text-blue-600" />
+                      Detected Google Drive Cloud Backups ({cloudBackups.length})
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                      Cloud Connected
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                    Found backups in <code className="bg-white/80 dark:bg-slate-900 px-1 py-0.5 rounded text-[10px]">{cloudTargetDir}</code>. 1-click restore:
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {cloudBackups.map((b: any) => (
+                      <div key={b.name} className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs">
+                        <div className="flex flex-col truncate mr-2">
+                          <span className="font-mono truncate font-semibold text-slate-800 dark:text-slate-100">{b.name}</span>
+                          <span className="text-[10px] text-gray-500">
+                            {(b.sizeBytes / (1024 * 1024)).toFixed(2)} MB {b.modifiedAt ? `• ${new Date(b.modifiedAt).toLocaleDateString()}` : ''}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1"
+                          onClick={() => handleRestoreCloudBackup(b.name)}
+                          disabled={restoring}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          {restoringCloudName === b.name ? 'Restoring...' : 'Restore This'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Divider if cloud backups found */}
+              {cloudBackups && cloudBackups.length > 0 && (
+                <div className="relative text-center">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-800"></div></div>
+                  <span className="relative bg-white dark:bg-[#0c1322] px-3 text-[11px] text-muted-foreground uppercase font-semibold">
+                    Or Upload Backup File Manually
+                  </span>
+                </div>
+              )}
+
               <div>
-                <Label htmlFor='restoreFile'>Backup File</Label>
+                <Label htmlFor='restoreFile'>Upload Backup File (.tar.gz / .zip)</Label>
                 <Input
                   id='restoreFile'
                   type='file'
                   accept='.zip,.tar.gz'
                   onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
                   ref={fileInputRef}
+                  className="mt-1"
                 />
-                <p className='text-xs text-gray-500 mt-1'>Select the backup file you exported from Admin Panel</p>
+                <p className='text-xs text-gray-500 mt-1'>Select the backup file downloaded from drive.google.com or exported from Admin Panel</p>
               </div>
-              <div className='flex justify-between'>
+
+              <div className='flex justify-between pt-2'>
                 <Button variant='outline' onClick={() => setMode('choose')}>Back</Button>
-                <Button onClick={handleRestore} disabled={restoring}>
-                  {restoring ? 'Restoring...' : 'Restore Data'}
+                <Button onClick={handleRestore} disabled={restoring || !restoreFile}>
+                  {restoring && !restoringCloudName ? 'Restoring...' : 'Restore Selected File'}
                 </Button>
               </div>
             </CardContent>

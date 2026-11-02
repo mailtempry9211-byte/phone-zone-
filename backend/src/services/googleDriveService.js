@@ -7,7 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { getDb } from "../db/index.js";
-import { createBackup, getBackupFilePath } from "./backupService.js";
+import { createBackup, getBackupFilePath, restoreBackup } from "./backupService.js";
+import { PATHS } from "../config/paths.js";
 import { logger } from "../lib/logger.js";
 import { AppError } from "../lib/errors.js";
 
@@ -186,4 +187,35 @@ export function syncToGoogleDrive() {
     syncedAt: nowIso,
   };
 }
+
+/**
+ * Restores a snapshot file from Google Drive / Cloud sync folder.
+ * Safely copies the archive to the local backups directory and applies it.
+ */
+export function restoreFromCloudBackup(backupFileName) {
+  if (!backupFileName) throw new AppError("Backup file name is required.", 400);
+  const status = getCloudBackupStatus();
+  const targetDir = status.targetDir;
+  const safeName = path.basename(backupFileName);
+  const cloudFilePath = path.join(targetDir, safeName);
+
+  if (!fs.existsSync(cloudFilePath)) {
+    throw new AppError(`Backup file "${safeName}" not found in cloud folder (${targetDir}).`, 404);
+  }
+
+  // Ensure local backups folder exists
+  fs.mkdirSync(PATHS.backupsDir, { recursive: true });
+  const localTarget = path.join(PATHS.backupsDir, safeName);
+
+  // Copy cloud file to local backups
+  try {
+    fs.copyFileSync(cloudFilePath, localTarget);
+  } catch (err) {
+    throw new AppError(`Failed to copy cloud backup locally: ${err.message}`, 500);
+  }
+
+  logger.info("Restoring from cloud backup", { safeName, cloudFilePath, localTarget });
+  return restoreBackup(safeName);
+}
+
 

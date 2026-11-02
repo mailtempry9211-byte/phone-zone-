@@ -42,7 +42,9 @@ tmp-*.mjs
 tmp-*.png
 back-*.png
 scratch/
-tac_full.xlsx
+/tac_full.xlsx
+!database/tac_full.xlsx
+database/seeds/tac_seed.db
 extracted_pdf.txt
 clean_pdf_text.txt
 full_pdf_extracted.txt

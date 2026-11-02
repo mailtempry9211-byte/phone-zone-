@@ -1,6 +1,6 @@
 PhoneZone VERIFY_OUTPUT
 Stage            : 5
-Date             : 2026-11-02T08:11:03.385Z
+Date             : 2026-11-02T08:51:09.656Z
 Node             : v24.21.0
 Platform         : win32 x64
 
@@ -20,13 +20,13 @@ FAILED ITEMS: none
 PhoneZone VERIFY
 ========================================================================
 Stage            : 5
-Date             : 2026-11-02T08:10:06.743Z
+Date             : 2026-11-02T08:50:10.591Z
 Node             : v24.21.0
 Platform         : win32 x64 (10.0.26200)
 Project root     : C:\Users\Kohinoor\Desktop\phonezonestp-mainv2.zipp
 
 --- sha256 of security-critical files ---
-c4549c2e9bb45dd5d1a59ec14a6ec9bd4d5387e23442a1440a326bf2cce1389c  backend/src/routes/index.js
+730b3bea799eb2629a5bf2158869a1c4b4417d8cccdc4ddff98372cfe1a02fa3  backend/src/routes/index.js
 01fdbe3e29c7e3cdd4bad0a59de251b6de5dd73e9b43ba4776a8377dbce9b3a1  backend/src/routes/compat.js
 90844eed80405522b4a1e40201fd88e20b1d020830c9ee8b2a0332973c914b57  backend/src/services/inventoryService.js
 11ec1c1fc1c26dbe82082dc016d0f7b850ef99410726ef1c7431a0c84cd9a56b  backend/src/services/storageService.js
@@ -68,7 +68,7 @@ b39033e415b27e8a3c9f487ea5c4dcd682cd8e0b56f2e5d1e2085de3fdc6c17c  database/migra
   A03 PASS  7 pre-stamped, 26/26 after startup
 
 --- live backend on a throwaway data directory ---
-  server ready on http://127.0.0.1:48367/api
+  server ready on http://127.0.0.1:47941/api
   A04 PASS  GET /api/health -> 200
   A05 PASS  users at startup = 0, password printed = false
   A14 PASS  /setup 403, /setup/upload 403, /setup/restore 403, users 0
@@ -109,7 +109,7 @@ b39033e415b27e8a3c9f487ea5c4dcd682cd8e0b56f2e5d1e2085de3fdc6c17c  database/migra
   A26 PASS  by-phone found = Anand Repair, in customers table = 0
   A27 PASS  repair data leaked in public routes = false
   A28 PASS  escaped output = &lt;img src=x onerror=alert(1)&gt;
-  A61 PASS  by-phone match returned repair customer 9ddad6bf-7af8-487b-a42a-0b0c37c16787
+  A61 PASS  by-phone match returned repair customer df62fda3-1e93-44f6-9ce6-d1716dea1fed
   A62 PASS  audit note status 201, rows in audit_logs = 1
   A31 PASS  staff2 sees shop 1 phone = false, admin sees all = true
   A63 PASS  cross-shop update status = 403
