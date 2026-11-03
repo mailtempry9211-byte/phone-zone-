@@ -134,7 +134,11 @@ const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
         phone.phone_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.imei_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        phone.sellers?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone as any).purchase_invoice_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone as any).invoice_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone as any).batch_purchase_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (phone.sellers?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone.sellers as any)?.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (phone.variant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (phone.colour || '').toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -236,7 +240,7 @@ const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
     let documentPhotos = photos.photos === 'none' || photos.photos === 'product'
       ? []
       : (phone.purchase_documents || []);
-    let paymentProofPhotos = photos.photos === 'none' || photos.photos === 'product'
+    let paymentProofPhotos = (photos.photos === 'none' || photos.photos === 'product' || photos.includePaymentProof === false)
       ? []
       : (phone.payment_proof_photos || []);
 
@@ -515,7 +519,7 @@ const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search phones..."
+            placeholder="Search phones, purchase bill no, IMEI, seller..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -883,6 +887,7 @@ const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
         kind="purchase"
         productCount={invoiceDialogPhone?.product_photos?.length || 0}
         purchaseCount={invoiceDialogPhone?.purchase_documents?.length || 0}
+        paymentProofCount={invoiceDialogPhone?.payment_proof_photos?.length || 0}
         saleCount={0}
         baseAmount={Number(invoiceDialogPhone?.purchase_price || 0)}
         onGenerate={(c) => {

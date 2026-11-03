@@ -4,6 +4,17 @@ export interface DashboardOverviewData {
   generatedAt: string;
   timezone: string;
   financialYear: string;
+  range?: "today" | "yesterday" | "week" | "month" | "year";
+  selectedDate?: string | null;
+  periodLabel?: string;
+  periodMetrics?: {
+    salesAmount: number;
+    phonesSold: number;
+    profit?: number;
+    purchasesAmount: number;
+    phonesBought: number;
+    returnsCount: number;
+  };
   today: {
     salesAmount: number;
     phonesSold: number;
@@ -134,18 +145,21 @@ export interface DashboardOverviewData {
 
 export function useDashboardData({
   range = "week",
+  date = "",
   fy = "",
   shop = "",
 }: {
-  range?: "week" | "month" | "year";
+  range?: "today" | "yesterday" | "week" | "month" | "year";
+  date?: string;
   fy?: string;
   shop?: string;
 } = {}) {
   return useQuery<DashboardOverviewData, Error>({
-    queryKey: ["dashboard-overview", range, fy, shop],
+    queryKey: ["dashboard-overview", range, date, fy, shop],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (range) params.set("range", range);
+      if (date) params.set("date", date);
       if (fy) params.set("fy", fy);
       if (shop) params.set("shop", shop);
 

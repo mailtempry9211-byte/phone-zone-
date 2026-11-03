@@ -130,18 +130,21 @@ export const SplitSliderTheme: React.FC<ThemeProps> = ({
               {/* Center Device Visual */}
               <div className="my-8 flex items-center justify-center min-h-[260px] sm:min-h-[320px] relative">
                 <div className="absolute w-64 h-64 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
-                {featured.image_url ? (
-                  <img
-                    src={featured.image_url}
-                    alt={featured.phone_name}
-                    className="max-h-72 w-auto object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.8)] transition-transform hover:scale-105 duration-300"
-                  />
-                ) : (
-                  <div className="text-center p-8 text-teal-400/80">
-                    <Smartphone className="h-28 w-28 mx-auto stroke-1 mb-2" />
-                    <p className="text-xs text-slate-400">Hardware Grade A+ Certified</p>
-                  </div>
-                )}
+                {(() => {
+                  const img = featured.product_photos?.[0] || featured.photo_url || featured.image_url;
+                  return img ? (
+                    <img
+                      src={img}
+                      alt={featured.phone_name}
+                      className="max-h-72 w-auto object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.8)] transition-transform hover:scale-105 duration-300"
+                    />
+                  ) : (
+                    <div className="text-center p-8 text-teal-400/80">
+                      <Smartphone className="h-28 w-28 mx-auto stroke-1 mb-2" />
+                      <p className="text-xs text-slate-400">Hardware Grade A+ Certified</p>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Device Selector Thumbnails */}
@@ -296,15 +299,18 @@ export const SplitSliderTheme: React.FC<ThemeProps> = ({
             >
               <div className="space-y-3">
                 <div className="h-40 rounded-xl bg-slate-900 flex items-center justify-center overflow-hidden">
-                  {phone.image_url ? (
-                    <img
-                      src={phone.image_url}
-                      alt={phone.phone_name}
-                      className="h-36 w-auto object-contain group-hover:scale-105 transition-transform"
-                    />
-                  ) : (
-                    <Smartphone className="h-12 w-12 text-slate-600" />
-                  )}
+                  {(() => {
+                    const img = phone.product_photos?.[0] || phone.photo_url || phone.image_url;
+                    return img ? (
+                      <img
+                        src={img}
+                        alt={phone.phone_name}
+                        className="h-36 w-auto object-contain group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <Smartphone className="h-12 w-12 text-slate-600" />
+                    );
+                  })()}
                 </div>
 
                 <div>

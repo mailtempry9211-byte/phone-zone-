@@ -238,7 +238,16 @@ function makeClient(base) {
         headers["content-type"] = "application/json";
         payload = JSON.stringify(body);
       }
-      const res = await fetch(`${base}${url}`, { method, headers, body: payload, redirect: "manual" });
+      let res;
+      try {
+        res = await fetch(`${base}${url}`, { method, headers, body: payload, redirect: "manual" });
+      } catch (e) {
+        if (e?.cause?.code === "ECONNRESET" || e?.code === "ECONNRESET" || /ECONNRESET/.test(String(e))) {
+          res = await fetch(`${base}${url}`, { method, headers, body: payload, redirect: "manual" });
+        } else {
+          throw e;
+        }
+      }
       const setCookie = res.headers.get("set-cookie");
       if (setCookie) cookie = setCookie.split(";")[0];
       const text = await res.text();

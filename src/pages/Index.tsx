@@ -283,8 +283,10 @@ const Index: React.FC = () => {
     }
   };
 
+  const isLightTheme = ["apple_minimal", "brutalist", "glassmorphism"].includes(activeTheme);
+
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col">
+    <div className={`min-h-screen w-full max-w-full overflow-x-hidden flex flex-col ${isLightTheme ? 'bg-[#f8fafc] text-slate-900' : 'bg-slate-950 text-slate-100'}`}>
       {/* 1. Global Storefront Top Trust & Social Strip */}
       <StorefrontTopBar
         contact={contact}

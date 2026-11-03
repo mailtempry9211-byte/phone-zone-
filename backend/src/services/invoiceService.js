@@ -104,7 +104,22 @@ export function getInvoice(id) {
        WHERE inv.id = ? OR inv.invoice_number = ?`,
     )
     .get(id, id);
-  if (!inv) throw badRequest("Invoice not found.");
+  if (!inv) {
+    try {
+      const batch = db.prepare(`
+        SELECT b.id, b.invoice_number, 'purchase' AS invoice_type, b.total_amount AS amount,
+               b.purchase_date AS issued_at, b.created_at, b.notes,
+               d.name AS seller_name, d.phone AS seller_phone, d.address AS seller_address,
+               'Dealer Batch Purchase' AS phone_name,
+               CAST(b.total_phones AS TEXT) || ' phones' AS model
+        FROM dealer_batches b
+        LEFT JOIN dealers d ON d.id = b.dealer_id
+        WHERE b.id = ? OR b.invoice_number = ?
+      `).get(id, id);
+      if (batch) return batch;
+    } catch {}
+    throw badRequest("Invoice not found.");
+  }
   return inv;
 }
 
@@ -336,4 +351,164 @@ export function htmlToPdfBuffer(html) {
     try { if (fs.existsSync(tempPdf)) fs.unlinkSync(tempPdf); } catch {}
   }
   return null;
+}
+
+/**
+ * Universal Unified Invoice & Transaction Search
+ * Searches across:
+ * 1. Sales Invoices (invoices table + phones)
+ * 2. Purchase Bills / Invoices (invoices table + dealer_batches)
+ * 3. Repair Invoices & Job Sheets (repair_jobs table)
+ */
+export function searchUnifiedInvoices(query = "", { limit = 30 } = {}) {
+  const qStr = String(query || "").trim();
+  if (!qStr) {
+    return { query: "", sales: [], purchases: [], repairs: [], total: 0 };
+  }
+
+  const db = getDb();
+  const qLike = `%${qStr}%`;
+  const capped = Math.min(Math.max(Number(limit) || 30, 5), 100);
+
+  // 1. Search `invoices` table (both sales & individual purchases)
+  const invRows = db
+    .prepare(
+      `SELECT inv.id, inv.invoice_number, inv.invoice_type, inv.amount, inv.issued_at, inv.financial_year,
+              p.id AS phone_id, p.phone_name, p.model, p.imei_number, p.variant, p.colour,
+              c.name AS customer_name, c.phone AS customer_phone,
+              s.name AS seller_name, s.phone AS seller_phone,
+              sh.name AS shop_name
+       FROM invoices inv
+       LEFT JOIN phones p ON p.id = inv.phone_id
+       LEFT JOIN customers c ON c.id = inv.customer_id
+       LEFT JOIN sellers s ON s.id = inv.seller_id
+       LEFT JOIN shops sh ON sh.id = inv.shop_id
+       WHERE inv.invoice_number LIKE ?
+          OR inv.id LIKE ?
+          OR p.imei_number LIKE ?
+          OR p.phone_name LIKE ?
+          OR p.model LIKE ?
+          OR c.name LIKE ?
+          OR c.phone LIKE ?
+          OR s.name LIKE ?
+          OR s.phone LIKE ?
+       ORDER BY inv.issued_at DESC
+       LIMIT ?`,
+    )
+    .all(qLike, qLike, qLike, qLike, qLike, qLike, qLike, qLike, qLike, capped);
+
+  const sales = [];
+  const purchases = [];
+
+  for (const row of invRows) {
+    const item = {
+      id: row.id,
+      invoice_number: row.invoice_number,
+      invoice_type: row.invoice_type,
+      amount: Number(row.amount || 0),
+      date: row.issued_at,
+      financial_year: row.financial_year,
+      phone_id: row.phone_id,
+      phone_name: row.phone_name,
+      model: row.model,
+      imei: row.imei_number,
+      title: row.phone_name ? `${row.phone_name} ${row.model || ""}`.trim() : `Invoice #${row.invoice_number}`,
+      party_name: row.invoice_type === "sale" ? (row.customer_name || "Walk-in Customer") : (row.seller_name || "Seller"),
+      party_phone: row.invoice_type === "sale" ? (row.customer_phone || "") : (row.seller_phone || ""),
+      shop_name: row.shop_name || "Main Branch",
+      status: row.invoice_type === "sale" ? "Sold" : "Purchased",
+      raw: row,
+    };
+
+    if (row.invoice_type === "sale") {
+      sales.push(item);
+    } else {
+      purchases.push(item);
+    }
+  }
+
+  // 2. Search `dealer_batches` for Dealer Purchase Invoices
+  try {
+    const batchRows = db
+      .prepare(
+        `SELECT b.id, b.invoice_number, b.purchase_date, b.total_amount, b.total_phones, b.payment_status, b.notes,
+                d.name AS dealer_name, d.phone AS dealer_phone
+         FROM dealer_batches b
+         LEFT JOIN dealers d ON d.id = b.dealer_id
+         WHERE b.invoice_number LIKE ?
+            OR b.id LIKE ?
+            OR d.name LIKE ?
+            OR d.phone LIKE ?
+         ORDER BY b.purchase_date DESC
+         LIMIT ?`,
+      )
+      .all(qLike, qLike, qLike, qLike, capped);
+
+    for (const b of batchRows) {
+      // Avoid duplicate if already in invoices
+      if (!purchases.some((p) => p.invoice_number === b.invoice_number)) {
+        purchases.push({
+          id: b.id,
+          invoice_number: b.invoice_number || `BATCH-${b.id.slice(0, 8)}`,
+          invoice_type: "purchase",
+          amount: Number(b.total_amount || 0),
+          date: b.purchase_date,
+          financial_year: null,
+          title: `Dealer Batch (${b.total_phones || 1} phones)`,
+          party_name: b.dealer_name || "Dealer",
+          party_phone: b.dealer_phone || "",
+          shop_name: "Inventory",
+          status: b.payment_status || "Purchased",
+          raw: b,
+        });
+      }
+    }
+  } catch {}
+
+  // 3. Search `repair_jobs` for Repair Invoices & Job Sheets
+  const repairs = [];
+  try {
+    const repairRows = db
+      .prepare(
+        `SELECT j.id, j.job_no, j.device_brand, j.device_model, j.imei, j.status,
+                j.final_price, j.estimate, j.advance_paid, j.received_at, j.delivered_at, j.notes,
+                c.name AS customer_name, c.phone AS customer_phone
+         FROM repair_jobs j
+         LEFT JOIN repair_customers c ON c.id = j.repair_customer_id
+         WHERE j.deleted_at IS NULL
+           AND (j.job_no LIKE ?
+                OR j.imei LIKE ?
+                OR j.device_model LIKE ?
+                OR c.name LIKE ?
+                OR c.phone LIKE ?)
+         ORDER BY j.received_at DESC
+         LIMIT ?`,
+      )
+      .all(qLike, qLike, qLike, qLike, qLike, capped);
+
+    for (const r of repairRows) {
+      repairs.push({
+        id: r.id,
+        invoice_number: r.job_no,
+        invoice_type: "repair",
+        amount: Number(r.final_price || r.estimate || 0),
+        date: r.delivered_at || r.received_at,
+        financial_year: null,
+        title: `${r.device_brand || ""} ${r.device_model || ""}`.trim() || `Repair #${r.job_no}`,
+        party_name: r.customer_name || "Repair Customer",
+        party_phone: r.customer_phone || "",
+        shop_name: "Workshop",
+        status: r.status,
+        raw: r,
+      });
+    }
+  } catch {}
+
+  return {
+    query: qStr,
+    sales,
+    purchases,
+    repairs,
+    total: sales.length + purchases.length + repairs.length,
+  };
 }

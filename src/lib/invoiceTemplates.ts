@@ -50,6 +50,7 @@ export interface InvoiceCustomization {
   brokerAmount: number;
   brokerName: string;
   includeSapathPatra?: boolean;
+  includePaymentProof?: boolean;
   sapathLanguage?: "hindi" | "english" | "both";
   action?: "pdf" | "preview" | "whatsapp";
 }

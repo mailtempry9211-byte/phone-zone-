@@ -87,11 +87,63 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
   };
 
   if (formOnly) {
+    const isDarkTheme = !["apple_minimal", "brutalist", "glassmorphism"].includes(theme);
+    const isLuxury = theme === "luxury";
+    const isNeon = theme === "neon";
+    const isSplitSlider = theme === "split_slider";
+    const isFluidCarousel = theme === "fluid_carousel";
+    const isBrutalist = theme === "brutalist";
+    const isGlass = theme === "glassmorphism";
+
+    const cardClasses = isLuxury
+      ? "bg-[#13151c] border-amber-500/30 text-amber-100 shadow-xl"
+      : isNeon
+      ? "bg-[#0d1322] border-cyan-500/30 text-slate-100 shadow-xl shadow-cyan-500/5"
+      : isSplitSlider
+      ? "bg-[#0f172a] border-teal-500/30 text-slate-100 shadow-xl shadow-teal-500/5"
+      : isFluidCarousel
+      ? "bg-[#140f28] border-violet-500/30 text-slate-100 shadow-xl shadow-violet-500/5"
+      : isBrutalist
+      ? "bg-white border-4 border-black text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rounded-none"
+      : isGlass
+      ? "bg-white/80 backdrop-blur-md border-indigo-200 text-slate-900 shadow-lg"
+      : isDarkTheme
+      ? "bg-[#0f172a] border-slate-800 text-slate-100 shadow-xl"
+      : "bg-white border-slate-200 text-slate-900 shadow-sm";
+
+    const inputClasses = isDarkTheme
+      ? "bg-slate-900/90 border-slate-700 text-white placeholder:text-slate-500 focus:border-cyan-400"
+      : isBrutalist
+      ? "border-2 border-black rounded-none focus:ring-0 focus:border-black font-mono text-black"
+      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400";
+
+    const labelClasses = isLuxury
+      ? "text-xs font-bold text-amber-200"
+      : isNeon
+      ? "text-xs font-bold text-cyan-200"
+      : isDarkTheme
+      ? "text-xs font-bold text-slate-200"
+      : "text-xs font-bold text-slate-700";
+
+    const buttonClasses = isLuxury
+      ? "bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-500 hover:from-amber-500 hover:to-yellow-400 text-black font-extrabold shadow-md shadow-amber-500/20"
+      : isNeon
+      ? "bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-white font-extrabold shadow-md shadow-cyan-500/25"
+      : isSplitSlider
+      ? "bg-teal-600 hover:bg-teal-500 text-white font-extrabold shadow-md shadow-teal-600/25"
+      : isFluidCarousel
+      ? "bg-violet-600 hover:bg-violet-500 text-white font-extrabold shadow-md shadow-violet-600/25"
+      : isBrutalist
+      ? "bg-black text-white hover:bg-amber-400 hover:text-black font-black uppercase rounded-none border-2 border-black tracking-wider"
+      : isGlass
+      ? "bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-600/25"
+      : "bg-slate-900 hover:bg-black text-white font-bold";
+
     return (
-      <Card className="shadow-sm border border-slate-200">
+      <Card className={`transition-colors duration-300 ${cardClasses}`}>
         <CardHeader>
-          <CardTitle>Send us a Message</CardTitle>
-          <CardDescription>
+          <CardTitle className={isDarkTheme ? "text-white" : "text-slate-900"}>Send us a Message</CardTitle>
+          <CardDescription className={isDarkTheme ? "text-slate-400" : "text-slate-600"}>
             Fill out the form below and we'll get back to you as soon as possible.
           </CardDescription>
         </CardHeader>
@@ -99,7 +151,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor="name" className={labelClasses}>Name *</Label>
                 <Input
                   id="name"
                   name="name"
@@ -107,10 +159,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
                   onChange={handleInputChange}
                   required
                   placeholder="Your full name"
+                  className={inputClasses}
                 />
               </div>
               <div>
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email" className={labelClasses}>Email *</Label>
                 <Input
                   id="email"
                   name="email"
@@ -119,23 +172,25 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
                   onChange={handleInputChange}
                   required
                   placeholder="your.email@example.com"
+                  className={inputClasses}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone" className={labelClasses}>Phone</Label>
                 <Input
                   id="phone"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
                   placeholder="+91 12345 67890"
+                  className={inputClasses}
                 />
               </div>
               <div>
-                <Label htmlFor="subject">Subject *</Label>
+                <Label htmlFor="subject" className={labelClasses}>Subject *</Label>
                 <Input
                   id="subject"
                   name="subject"
@@ -143,12 +198,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
                   onChange={handleInputChange}
                   required
                   placeholder="What's this about?"
+                  className={inputClasses}
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="message">Message *</Label>
+              <Label htmlFor="message" className={labelClasses}>Message *</Label>
               <Textarea
                 id="message"
                 name="message"
@@ -157,10 +213,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ theme = "modern", formOnly = 
                 required
                 placeholder="Tell us how we can help you..."
                 rows={6}
+                className={inputClasses}
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button type="submit" className={`w-full h-11 ${buttonClasses}`} disabled={isSubmitting}>
               {isSubmitting ? "Sending..." : "Send Message"}
             </Button>
           </form>

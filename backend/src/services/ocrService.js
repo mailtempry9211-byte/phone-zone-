@@ -17,7 +17,13 @@ const sharp = require("sharp");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(__dirname, "../../..");
-const OCR_DIR = path.join(APP_ROOT, "public", "ocr");
+const possibleOcrDirs = [
+  path.join(APP_ROOT, "public", "ocr"),
+  path.join(APP_ROOT, "dist", "ocr"),
+  path.join(APP_ROOT, "..", "dist", "ocr"),
+  ...(process.resourcesPath ? [path.join(process.resourcesPath, "dist", "ocr")] : []),
+];
+const OCR_DIR = possibleOcrDirs.find((d) => fs.existsSync(d)) || path.join(APP_ROOT, "public", "ocr");
 
 let tacQueryStmt = null;
 function checkTacExists(tac8) {
@@ -245,7 +251,12 @@ export async function getTesseractWorker() {
   if (tesseractWorkerPromise) return tesseractWorkerPromise;
 
   const { createWorker } = await import("tesseract.js");
-  const nodeWorkerScript = path.join(APP_ROOT, "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js");
+  const possibleWorkerScripts = [
+    path.join(APP_ROOT, "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js"),
+    path.join(__dirname, "../../../node_modules/tesseract.js/src/worker-script/node/index.js"),
+    ...(process.resourcesPath ? [path.join(process.resourcesPath, "app.asar", "node_modules", "tesseract.js", "src", "worker-script", "node", "index.js")] : []),
+  ];
+  const nodeWorkerScript = possibleWorkerScripts.find((s) => fs.existsSync(s));
 
   tesseractWorkerPromise = createWorker("eng", 1, {
     workerPath: fs.existsSync(nodeWorkerScript) ? nodeWorkerScript : undefined,

@@ -25,9 +25,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   isAdmin = true,
 }) => {
   const { user } = useAuth();
+  const [range, setRange] = useState<"today" | "yesterday" | "week" | "month" | "year">("week");
+  const [selectedDate, setSelectedDate] = useState<string>("");
 
   const { data, isLoading, isError, error, refetch } = useDashboardData({
-    range: "week",
+    range,
+    date: selectedDate,
     fy: financialYear,
     shop: shopId,
   });
@@ -80,6 +83,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       onRefresh={() => refetch()}
       onNavigateTab={onNavigateTab}
       onQuickAction={onQuickAction}
+      currentRange={range}
+      onChangeRange={(r) => {
+        setSelectedDate("");
+        setRange(r);
+      }}
+      selectedDate={selectedDate}
+      onChangeSelectedDate={(d) => {
+        setSelectedDate(d);
+        if (d) setRange("today");
+      }}
     />
   );
 };

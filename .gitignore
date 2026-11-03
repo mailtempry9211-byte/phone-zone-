@@ -71,3 +71,11 @@ release
 
 # ---- OCR language data (the copy under public/ocr is what the app uses) ----
 /*.traineddata
+
+# ---- Android / Gradle ----
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml

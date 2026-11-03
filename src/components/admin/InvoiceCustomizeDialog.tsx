@@ -43,6 +43,7 @@ interface InvoiceCustomizeDialogProps {
   productCount: number;
   purchaseCount: number;
   saleCount?: number;
+  paymentProofCount?: number;
   /** sale price of the phone (invoice amount the real sale carries) */
   baseAmount: number;
   onGenerate: (c: InvoiceCustomization) => void;
@@ -109,6 +110,7 @@ export const InvoiceCustomizeDialog = ({
   productCount,
   purchaseCount,
   saleCount = 0,
+  paymentProofCount = 0,
   baseAmount,
   onGenerate,
 }: InvoiceCustomizeDialogProps) => {
@@ -118,6 +120,7 @@ export const InvoiceCustomizeDialog = ({
   const [brokerAmount, setBrokerAmount] = useState("");
   const [brokerName, setBrokerName] = useState("");
   const [includeSapathPatra, setIncludeSapathPatra] = useState(false);
+  const [includePaymentProof, setIncludePaymentProof] = useState(true);
   const [sapathLanguage, setSapathLanguage] = useState<"hindi" | "english" | "both">("both");
 
   useEffect(() => {
@@ -128,9 +131,10 @@ export const InvoiceCustomizeDialog = ({
       setBrokerAmount("");
       setBrokerName("");
       setIncludeSapathPatra(false);
+      setIncludePaymentProof(paymentProofCount > 0);
       setSapathLanguage("both");
     }
-  }, [open, kind, productCount, purchaseCount, saleCount]);
+  }, [open, kind, productCount, purchaseCount, saleCount, paymentProofCount]);
 
   const handleSubmit = (action: "pdf" | "preview" | "whatsapp" = "pdf") => {
     if (broker) {
@@ -143,16 +147,16 @@ export const InvoiceCustomizeDialog = ({
         toast.error("Broker invoices apply to sales only");
         return;
       }
-      onGenerate({ photos, style, broker: true, brokerAmount: amt, brokerName: brokerName.trim(), includeSapathPatra, sapathLanguage, action });
+      onGenerate({ photos, style, broker: true, brokerAmount: amt, brokerName: brokerName.trim(), includeSapathPatra, includePaymentProof, sapathLanguage, action });
     } else {
-      onGenerate({ photos, style, broker: false, brokerAmount: 0, brokerName: "", includeSapathPatra, sapathLanguage, action });
+      onGenerate({ photos, style, broker: false, brokerAmount: 0, brokerName: "", includeSapathPatra, includePaymentProof, sapathLanguage, action });
     }
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5" />
@@ -279,7 +283,30 @@ export const InvoiceCustomizeDialog = ({
             </div>
           )}
 
-          {/* 4) Broker option (sales only) */}
+          {/* 4) Payment proof photo option */}
+          <div className="border rounded-lg p-3 bg-slate-50/80 space-y-1.5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includePaymentProof}
+                onChange={(e) => setIncludePaymentProof(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                  <Camera className="h-4 w-4 text-emerald-600" />
+                  Include Payment Proof Screenshot (पेमेंट प्रूफ फोटो संलग्न करें)
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  {paymentProofCount > 0
+                    ? `${paymentProofCount} payment screenshot(s) found on record. Checked = included on print/PDF.`
+                    : "Include UPI / transaction / payment screenshot if available."}
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {/* 5) Broker option (sales only) */}
           {kind === "sale" && (
             <div>
               <Label className="text-sm font-semibold flex items-center gap-2 mb-2">
@@ -336,31 +363,41 @@ export const InvoiceCustomizeDialog = ({
             </div>
           )}
 
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {/* Bottom Action Buttons - Zero Horizontal Scroll Guaranteed */}
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t w-full">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-9 px-3 text-xs font-semibold"
+            >
               Cancel
             </Button>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => handleSubmit("preview")}
-              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+              className="h-9 px-3 text-xs font-semibold border-blue-300 text-blue-700 hover:bg-blue-50"
             >
               <Eye className="h-4 w-4 mr-1.5" />
               Preview
             </Button>
             <Button
               type="button"
+              size="sm"
               onClick={() => handleSubmit("pdf")}
-              className="bg-gray-900 text-white hover:bg-black"
+              className="h-9 px-3.5 text-xs font-semibold bg-gray-900 text-white hover:bg-black"
             >
               <Printer className="h-4 w-4 mr-1.5" />
               Print / PDF
             </Button>
             <Button
               type="button"
+              size="sm"
               onClick={() => handleSubmit("whatsapp")}
-              className="bg-emerald-600 text-white hover:bg-emerald-700 font-medium shadow-sm"
+              className="h-9 px-3.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
               title="व्हाट्सएप पर इनवॉइस टेक्स्ट एवं पीडीएफ दोनों भेजें"
             >
               <Send className="h-4 w-4 mr-1.5" />

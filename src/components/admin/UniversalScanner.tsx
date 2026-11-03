@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,15 +24,38 @@ import {
   CheckCircle2,
   Plus,
   ArrowRight,
+  Receipt,
+  FileText,
+  Eye,
+  Calendar,
 } from "lucide-react";
 import { decodeBarcode } from "./ImeiScanButton";
 import ProcessSaleDialog from "./ProcessSaleDialog";
 import RepairDetailDialog from "./RepairDetailDialog";
 import AddPhoneDialog from "./AddPhoneDialog";
 import AddRepairDialog from "./AddRepairDialog";
+import { InvoiceDetailDialog } from "./dashboard/widgets/InvoiceDetailDialog";
+import { formatINR } from "./dashboard/dashboardFormat";
 
-export const UniversalScanner: React.FC<{ className?: string }> = ({ className = "" }) => {
-  const [modalOpen, setModalOpen] = useState(false);
+export interface UniversalScannerProps {
+  className?: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialQuery?: string;
+}
+
+export const UniversalScanner: React.FC<UniversalScannerProps> = ({
+  className = "",
+  isOpen,
+  onOpenChange,
+  initialQuery = "",
+}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const modalOpen = isOpen !== undefined ? isOpen : internalOpen;
+  const setModalOpen = (val: boolean) => {
+    setInternalOpen(val);
+    onOpenChange?.(val);
+  };
   const [manualCode, setManualCode] = useState("");
   const [scanning, setScanning] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
@@ -42,7 +65,18 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
     phone?: any;
   } | null>(null);
 
+  // Unified Invoice Search Results State
+  const [invoiceSearchResults, setInvoiceSearchResults] = useState<{
+    query: string;
+    sales: any[];
+    purchases: any[];
+    repairs: any[];
+    total: number;
+  } | null>(null);
+  const [resultTab, setResultTab] = useState<"all" | "sales" | "purchases" | "repairs">("all");
+
   // Routed Target Dialog States
+  const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
   const [selectedPhoneForSale, setSelectedPhoneForSale] = useState<any | null>(null);
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
 
@@ -56,6 +90,28 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
 
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Sync initial query if provided when dialog opens
+  useEffect(() => {
+    if (modalOpen && initialQuery && initialQuery.trim()) {
+      setManualCode(initialQuery.trim());
+      processScannedCode(initialQuery.trim());
+    }
+  }, [modalOpen, initialQuery]);
+
+  const displayedItems = invoiceSearchResults
+    ? resultTab === "sales"
+      ? invoiceSearchResults.sales
+      : resultTab === "purchases"
+      ? invoiceSearchResults.purchases
+      : resultTab === "repairs"
+      ? invoiceSearchResults.repairs
+      : [
+          ...invoiceSearchResults.sales,
+          ...invoiceSearchResults.purchases,
+          ...invoiceSearchResults.repairs,
+        ]
+    : [];
 
   // Smart Routing Core Logic
   const processScannedCode = async (rawCode: string) => {
@@ -77,11 +133,53 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
     } catch {}
 
     setScanning(true);
-    setStatusMsg(`Checking code: ${code}...`);
+    setStatusMsg(`Searching: ${code}...`);
     setUnmatchedResult(null);
+    setInvoiceSearchResults(null);
 
     try {
-      // 1. REPAIR CHECK: Does it match a Repair Job Number? (starts with RJ- or search match)
+      // 1. INVOICE SEARCH CHECK (Sales Invoices, Purchase Bills, or Repair Invoices)
+      try {
+        setStatusMsg("Looking up invoices, purchase bills & repair records...");
+        const invRes = await fetch(`/api/invoices/search?q=${encodeURIComponent(code)}`);
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          if (invData && invData.total > 0) {
+            if (invData.total === 1) {
+              if (invData.sales.length === 1) {
+                const s = invData.sales[0];
+                toast.success(`Found Sales Invoice: ${s.invoice_number} (${s.party_name})`);
+                setViewingInvoice(s.raw || s);
+                setModalOpen(false);
+                setScanning(false);
+                return;
+              } else if (invData.purchases.length === 1) {
+                const p = invData.purchases[0];
+                toast.success(`Found Purchase Bill: ${p.invoice_number} (${p.party_name})`);
+                setViewingInvoice(p.raw || p);
+                setModalOpen(false);
+                setScanning(false);
+                return;
+              } else if (invData.repairs.length === 1) {
+                const r = invData.repairs[0];
+                toast.success(`Found Repair Job / Invoice: ${r.invoice_number} (${r.party_name})`);
+                setSelectedRepairJob(r.raw || r);
+                setRepairDialogOpen(true);
+                setModalOpen(false);
+                setScanning(false);
+                return;
+              }
+            } else {
+              setInvoiceSearchResults(invData);
+              setResultTab("all");
+              setScanning(false);
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      // 2. REPAIR JOB CHECK: Does it match a Repair Job Number? (starts with RJ- or search match)
       if (/^RJ-/i.test(code) || code.toLowerCase().includes("rj-")) {
         setStatusMsg("Looking up repair job records...");
         const res = await fetch(`/api/repair/jobs?search=${encodeURIComponent(code)}`);
@@ -102,7 +200,7 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
         }
       }
 
-      // 2. PHONE INVENTORY CHECK: Is it a 15-digit IMEI or phone record?
+      // 3. PHONE INVENTORY CHECK: Is it a 15-digit IMEI or phone record?
       const digitsOnly = code.replace(/\D/g, "");
       const isLikelyImei = digitsOnly.length >= 14 && digitsOnly.length <= 16;
 
@@ -132,7 +230,7 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
               setScanning(false);
               return;
             } else {
-              // Phone is already sold
+              // Phone is already sold -> offer viewing invoice directly
               setUnmatchedResult({
                 code: isLikelyImei ? digitsOnly : code,
                 isSold: true,
@@ -168,7 +266,7 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
         return;
       }
 
-      // 3. GENERAL SEARCH FALLBACK (Search both repairs and inventory by text)
+      // 4. GENERAL SEARCH FALLBACK (Search both repairs and inventory by text)
       setStatusMsg("Searching database...");
       const [rSearch, pSearch] = await Promise.all([
         fetch(`/api/repair/jobs?search=${encodeURIComponent(code)}`).then((r) => (r.ok ? r.json() : [])),
@@ -275,16 +373,16 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
 
       {/* 2. Universal Scanner Dialog */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className={invoiceSearchResults && invoiceSearchResults.total > 0 ? "max-w-2xl max-h-[90vh] overflow-y-auto" : "max-w-md"}>
           <DialogHeader>
             <div className="flex items-center gap-2">
               <ScanLine className="h-5 w-5 text-blue-600" />
-              <DialogTitle className="text-base font-bold text-slate-900">
-                Universal PhoneZone Scanner
+              <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                Universal PhoneZone Search & Scanner
               </DialogTitle>
             </div>
-            <DialogDescription className="text-xs text-gray-500">
-              Scan any QR Code, Barcode, or enter IMEI / Job No. Automatically routes to <strong>Process Sale</strong> or <strong>Repair Status Update</strong>.
+            <DialogDescription className="text-xs text-gray-500 dark:text-gray-400">
+              Search any <strong>Invoice No</strong> (Sale <span className="font-mono text-emerald-600">SAL-</span>, Purchase <span className="font-mono text-blue-600">PUR-</span>, Repair <span className="font-mono text-amber-600">RJ-</span>), IMEI, or Customer. Instant routing to invoice preview, print, or status.
             </DialogDescription>
           </DialogHeader>
 
@@ -304,24 +402,24 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
               <Button
                 type="button"
                 variant="outline"
-                className="h-20 flex flex-col items-center justify-center gap-1.5 border-slate-300 hover:bg-slate-50 rounded-xl shadow-sm"
+                className="h-20 flex flex-col items-center justify-center gap-1.5 border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 rounded-xl shadow-sm"
                 disabled={scanning}
                 onClick={() => uploadInputRef.current?.click()}
               >
-                <Upload className="h-6 w-6 text-slate-700" />
-                <span className="text-xs font-semibold text-slate-800">Upload Photo / File</span>
+                <Upload className="h-6 w-6 text-slate-700 dark:text-slate-300" />
+                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Upload Photo / File</span>
               </Button>
             </div>
 
             {/* Manual Text / USB Barcode Gun Input */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Or Type / Scan with Barcode Gun</span>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>Type Invoice No, IMEI, or Job No</span>
                 <span className="text-[10px] text-gray-400 font-normal">Press Enter to Search</span>
               </label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="15-digit IMEI or Job No (e.g. RJ-MAIN-...)"
+                  placeholder="e.g. SAL-..., PUR-..., RJ-..., or 15-digit IMEI"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   onKeyDown={(e) => {
@@ -350,7 +448,138 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
             {scanning && (
               <div className="flex items-center justify-center gap-2 py-3 text-xs text-blue-700 dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/30 rounded-xl">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{statusMsg || "Scanning & identifying code..."}</span>
+                <span>{statusMsg || "Searching across all invoices and database..."}</span>
+              </div>
+            )}
+
+            {/* Multiple Invoice / Transaction Search Results */}
+            {invoiceSearchResults && invoiceSearchResults.total > 0 && (
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-900/80 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-100">
+                    <Receipt className="h-4 w-4 text-blue-600" />
+                    <span>Found {invoiceSearchResults.total} Matching Invoices & Records</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    "{invoiceSearchResults.query}"
+                  </Badge>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setResultTab("all")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      resultTab === "all"
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                        : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300"
+                    }`}
+                  >
+                    All ({invoiceSearchResults.total})
+                  </button>
+                  {invoiceSearchResults.sales.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setResultTab("sales")}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        resultTab === "sales"
+                          ? "bg-emerald-600 text-white"
+                          : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-300"
+                      }`}
+                    >
+                      Sales ({invoiceSearchResults.sales.length})
+                    </button>
+                  )}
+                  {invoiceSearchResults.purchases.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setResultTab("purchases")}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        resultTab === "purchases"
+                          ? "bg-blue-600 text-white"
+                          : "bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-950 dark:text-blue-300"
+                      }`}
+                    >
+                      Purchases ({invoiceSearchResults.purchases.length})
+                    </button>
+                  )}
+                  {invoiceSearchResults.repairs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setResultTab("repairs")}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        resultTab === "repairs"
+                          ? "bg-amber-600 text-white"
+                          : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300"
+                      }`}
+                    >
+                      Repairs ({invoiceSearchResults.repairs.length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Items List */}
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  {displayedItems.map((item: any, idx: number) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/90 hover:border-blue-400 dark:hover:border-blue-500 transition-all shadow-xs flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                            item.invoice_type === "sale"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : item.invoice_type === "purchase"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                          }`}>
+                            {item.invoice_type === "sale" ? "Sale Invoice" : item.invoice_type === "purchase" ? "Purchase Bill" : "Repair Sheet"}
+                          </span>
+                          <span className="font-mono font-bold text-xs text-slate-900 dark:text-white">
+                            {item.invoice_number}
+                          </span>
+                          {item.date && (
+                            <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                              <Calendar className="h-2.5 w-2.5" />
+                              {item.date.slice(0, 10)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                          {item.title}
+                        </div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                          Party: <strong className="text-slate-700 dark:text-slate-300">{item.party_name}</strong> {item.party_phone ? `(${item.party_phone})` : ""}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-1">
+                        <div className="font-mono font-bold text-xs text-slate-900 dark:text-white">
+                          {formatINR(item.amount)}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 px-2.5 text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs flex items-center gap-1"
+                          onClick={() => {
+                            if (item.invoice_type === "repair") {
+                              setSelectedRepairJob(item.raw || item);
+                              setRepairDialogOpen(true);
+                              setModalOpen(false);
+                            } else {
+                              setViewingInvoice(item.raw || item);
+                              setModalOpen(false);
+                            }
+                          }}
+                        >
+                          <Eye className="h-3 w-3" /> View / Print
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -359,25 +588,43 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
               <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-800/80 space-y-2.5">
                 {unmatchedResult.isSold ? (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
                       Phone is ALREADY SOLD!
                     </div>
-                    <p className="text-xs text-gray-600">
-                      <strong>{unmatchedResult.phone?.phone_name} {unmatchedResult.phone?.model}</strong> (IMEI: {unmatchedResult.phone?.imei_number}) has already been sold.
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      <strong>{unmatchedResult.phone?.phone_name} {unmatchedResult.phone?.model}</strong> (IMEI: {unmatchedResult.phone?.imei_number}) was already sold.
                     </p>
-                    <div className="text-[11px] text-gray-500">
-                      Sale Price: ₹{unmatchedResult.phone?.selling_price?.toLocaleString("en-IN")}
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                      <span>Sale Price: ₹{unmatchedResult.phone?.selling_price?.toLocaleString("en-IN")}</span>
+                      {unmatchedResult.phone?.invoice_number && (
+                        <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold">
+                          Invoice: {unmatchedResult.phone?.invoice_number}
+                        </span>
+                      )}
                     </div>
+                    {unmatchedResult.phone?.invoice_number && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs mt-1"
+                        onClick={() => {
+                          setViewingInvoice(unmatchedResult.phone);
+                          setModalOpen(false);
+                        }}
+                      >
+                        <Receipt className="h-3.5 w-3.5 mr-1" /> View Sale Invoice
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />
-                      Code Not Found in Active Inventory
+                      Code Not Found in Active Inventory or Invoices
                     </div>
-                    <p className="text-xs text-gray-600">
-                      Code <strong>{unmatchedResult.code}</strong> is not in available phone stock or repair records. Choose an action:
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      Code <strong>{unmatchedResult.code}</strong> is not in available phone stock, invoices, or repair records. Choose an action:
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       <Button
@@ -396,7 +643,7 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs"
+                        className="border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 text-xs"
                         onClick={() => {
                           setAddRepairDialogOpen(true);
                           setModalOpen(false);
@@ -423,6 +670,17 @@ export const UniversalScanner: React.FC<{ className?: string }> = ({ className =
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 2b. Auto-Routed Invoice Detail Dialog for Sales / Purchases */}
+      {viewingInvoice && (
+        <InvoiceDetailDialog
+          open={!!viewingInvoice}
+          onOpenChange={(open) => {
+            if (!open) setViewingInvoice(null);
+          }}
+          invoice={viewingInvoice}
+        />
+      )}
 
       {/* 3. Auto-Routed Process Sale Dialog */}
       {selectedPhoneForSale && (

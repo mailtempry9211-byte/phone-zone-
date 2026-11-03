@@ -296,7 +296,11 @@ export function buildCompatRouter(staff, canRead = staff) {
 
     if (hasShopId) {
       if (!isGlobal) {
-        filters.push({ op: "eq", col: "shop_id", val: userShopId });
+        if (userShopId === "shop_1") {
+          filters.push({ op: "or", val: "shop_id.eq.shop_1,shop_id.is.null" });
+        } else {
+          filters.push({ op: "eq", col: "shop_id", val: userShopId });
+        }
       } else if (req.query?.shop && req.query.shop !== "all") {
         filters.push({ op: "eq", col: "shop_id", val: req.query.shop });
       }
@@ -346,16 +350,31 @@ export function buildCompatRouter(staff, canRead = staff) {
         customers: r.customer_id ? (customerOf.get(r.customer_id) || null) : null,
         sellers: r.seller_id ? (sellerOf.get(r.seller_id) || null) : null,
       })));
-    } else if (t === "customers" || t === "sellers") {
-      res.json(rows.map((r) => {
-        if (r.id_proof_type === "aadhaar" && r.id_number) {
-          const raw = String(r.id_number).trim();
-          return {
-            ...r,
-            id_number_masked: raw.length >= 4 ? `•••• •••• ${raw.slice(-4)}` : raw,
-          };
-        }
-        return r;
+    } else if (t === "sellers") {
+      const phonesOf = db.prepare(
+        "SELECT id, phone_name, model, purchase_price, selling_price, is_sold, imei_number, imei2_number, variant, colour, condition, seller_photo_url, seller_signature_url, purchase_date FROM phones WHERE seller_id = ? AND deleted_at IS NULL"
+      );
+      res.json(rows.map((s) => {
+        const phs = phonesOf.all(s.id);
+        const raw = s.id_number ? String(s.id_number).trim() : "";
+        return {
+          ...s,
+          phones: phs,
+          id_number_masked: s.id_proof_type === "aadhaar" && raw.length >= 4 ? `•••• •••• ${raw.slice(-4)}` : raw,
+        };
+      }));
+    } else if (t === "customers") {
+      const phonesOf = db.prepare(
+        "SELECT id, phone_name, model, purchase_price, selling_price, is_sold, imei_number, variant, colour, condition, sold_date FROM phones WHERE customer_id = ? AND deleted_at IS NULL"
+      );
+      res.json(rows.map((c) => {
+        const phs = phonesOf.all(c.id);
+        const raw = c.id_number ? String(c.id_number).trim() : "";
+        return {
+          ...c,
+          phones: phs,
+          id_number_masked: c.id_proof_type === "aadhaar" && raw.length >= 4 ? `•••• •••• ${raw.slice(-4)}` : raw,
+        };
       }));
     } else {
       res.json(rows);

@@ -16,6 +16,24 @@ function badRequestThrow() {
 export function listPeople(kind, { search = "", limit = 200 } = {}) {
   const db = getDb();
   const like = `%${search}%`;
+  if (kind === "seller") {
+    return search
+      ? db
+          .prepare(
+            `SELECT s.*,
+              (SELECT p.seller_signature_url FROM phones p WHERE p.seller_id = s.id AND p.seller_signature_url IS NOT NULL AND p.seller_signature_url != '' ORDER BY p.created_at DESC LIMIT 1) AS seller_signature_url
+             FROM ${table(kind)} s WHERE s.deleted_at IS NULL AND (s.name LIKE ? OR s.phone LIKE ? OR s.id_number LIKE ?)
+             ORDER BY s.created_at DESC LIMIT ?`,
+          )
+          .all(like, like, like, limit)
+      : db
+          .prepare(
+            `SELECT s.*,
+              (SELECT p.seller_signature_url FROM phones p WHERE p.seller_id = s.id AND p.seller_signature_url IS NOT NULL AND p.seller_signature_url != '' ORDER BY p.created_at DESC LIMIT 1) AS seller_signature_url
+             FROM ${table(kind)} s WHERE s.deleted_at IS NULL ORDER BY s.created_at DESC LIMIT ?`,
+          )
+          .all(limit);
+  }
   return search
     ? db
         .prepare(
@@ -29,6 +47,17 @@ export function listPeople(kind, { search = "", limit = 200 } = {}) {
 export function getPerson(kind, id) {
   const row = getDb().prepare(`SELECT * FROM ${table(kind)} WHERE id = ?`).get(id);
   if (!row) throw notFound(`That ${kind} could not be found.`);
+  if (kind === "seller") {
+    const recentSig = getDb()
+      .prepare(
+        "SELECT seller_signature_url FROM phones WHERE seller_id = ? AND seller_signature_url IS NOT NULL AND seller_signature_url != '' ORDER BY created_at DESC LIMIT 1",
+      )
+      .get(id);
+    if (recentSig?.seller_signature_url) {
+      row.seller_signature_url = recentSig.seller_signature_url;
+      row.signature_url = recentSig.seller_signature_url;
+    }
+  }
   return row;
 }
 
@@ -125,5 +154,136 @@ export function sellerHistory(sellerId) {
     totalSpent: purchases.reduce((sum, p) => sum + Number(p.purchase_price || 0), 0),
     returnsCount: returns.length,
     totalReturned: returns.reduce((sum, r) => sum + Number(r.return_amount || 0), 0),
+  };
+}
+
+/**
+ * Universal cross-entity phone lookup.
+ * Probes across sellers, customers, dealers, and repair customers simultaneously.
+ * Returns linked profiles, past purchases, sales, and repairs for seamless cross-operations.
+ */
+export function lookupUniversal(rawPhone) {
+  if (!rawPhone) return { found: false, matches: [] };
+  const clean = String(rawPhone).replace(/\D/g, "").slice(-10);
+  if (clean.length < 10) return { found: false, matches: [] };
+  const db = getDb();
+  const phoneLike = `%${clean}`;
+
+  // 1. Check sellers
+  const sellerRows = db
+    .prepare(
+      `SELECT s.*,
+        (SELECT p.seller_signature_url FROM phones p WHERE p.seller_id = s.id AND p.seller_signature_url IS NOT NULL AND p.seller_signature_url != '' ORDER BY p.created_at DESC LIMIT 1) AS seller_signature_url
+       FROM sellers s
+       WHERE s.deleted_at IS NULL AND s.phone LIKE ?
+       ORDER BY s.created_at DESC`,
+    )
+    .all(phoneLike);
+
+  // 2. Check customers
+  const customerRows = db
+    .prepare("SELECT * FROM customers WHERE deleted_at IS NULL AND phone LIKE ? ORDER BY created_at DESC")
+    .all(phoneLike);
+
+  // 3. Check dealers
+  const dealerRows = db
+    .prepare("SELECT * FROM dealers WHERE deleted_at IS NULL AND phone LIKE ? ORDER BY created_at DESC")
+    .all(phoneLike);
+
+  // 4. Check repair customers
+  let repairCustomerRows = [];
+  try {
+    repairCustomerRows = db
+      .prepare("SELECT * FROM repair_customers WHERE phone LIKE ? ORDER BY created_at DESC")
+      .all(phoneLike);
+  } catch {}
+
+  const matches = [];
+
+  for (const s of sellerRows) {
+    const pStats = db
+      .prepare("SELECT COUNT(*) as count, COALESCE(SUM(purchase_price), 0) as total FROM phones WHERE seller_id = ?")
+      .get(s.id);
+    matches.push({
+      role: "seller",
+      id: s.id,
+      name: s.name,
+      phone: s.phone,
+      address: s.address,
+      id_proof_type: s.id_proof_type,
+      id_number: s.id_number,
+      photo_url: s.seller_photo_url,
+      signature_url: s.seller_signature_url,
+      summary: `Sold ${pStats.count} phone(s) to store (₹${Number(pStats.total).toLocaleString("en-IN")})`,
+      txCount: pStats.count,
+      txTotal: pStats.total,
+    });
+  }
+
+  for (const c of customerRows) {
+    const cStats = db
+      .prepare("SELECT COUNT(*) as count, COALESCE(SUM(selling_price), 0) as total FROM phones WHERE customer_id = ?")
+      .get(c.id);
+    matches.push({
+      role: "customer",
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      address: c.address,
+      id_proof_type: c.id_proof_type,
+      id_number: c.id_number,
+      photo_url: c.customer_photo_url,
+      signature_url: null,
+      summary: `Bought ${cStats.count} phone(s) from store (₹${Number(cStats.total).toLocaleString("en-IN")})`,
+      txCount: cStats.count,
+      txTotal: cStats.total,
+    });
+  }
+
+  for (const d of dealerRows) {
+    const dStats = db
+      .prepare("SELECT COUNT(*) as count, COALESCE(SUM(purchase_price), 0) as total FROM phones WHERE dealer_id = ?")
+      .get(d.id);
+    matches.push({
+      role: "dealer",
+      id: d.id,
+      name: d.shop_name ? `${d.shop_name} (${d.proprietor_name})` : d.proprietor_name,
+      phone: d.phone,
+      address: d.address,
+      id_proof_type: d.gst_number ? "gst" : null,
+      id_number: d.gst_number || "",
+      photo_url: d.photo_url,
+      signature_url: d.signature_url,
+      summary: `B2B Supplier: Supplied ${dStats.count} phones (₹${Number(dStats.total).toLocaleString("en-IN")})`,
+      txCount: dStats.count,
+      txTotal: dStats.total,
+    });
+  }
+
+  for (const rc of repairCustomerRows) {
+    if (!matches.some((m) => m.name.toLowerCase() === rc.name?.toLowerCase())) {
+      const rStats = db.prepare("SELECT COUNT(*) as count FROM repair_jobs WHERE customer_id = ?").get(rc.id);
+      matches.push({
+        role: "repair_customer",
+        id: rc.id,
+        name: rc.name,
+        phone: rc.phone,
+        address: rc.address,
+        id_proof_type: null,
+        id_number: "",
+        photo_url: null,
+        signature_url: null,
+        summary: `Repair Client: ${rStats.count} repair job(s) booked`,
+        txCount: rStats.count,
+        txTotal: 0,
+      });
+    }
+  }
+
+  return {
+    found: matches.length > 0,
+    phone: clean,
+    primary: matches[0] || null,
+    matches,
   };
 }

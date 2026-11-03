@@ -6,12 +6,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
-import { DesktopNavControls } from "./components/DesktopNavControls";
+
 
 // Lazy-load secondary routes to keep the initial load ultra-fast on mobile phones
 const Setup = React.lazy(() => import("./pages/Setup"));
 const TrackRepair = React.lazy(() => import("./pages/TrackRepair"));
 const OAuthConsent = React.lazy(() => import("./pages/OAuthConsent"));
+const MobileEmulator = React.lazy(() => import("./pages/MobileEmulator"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 
 // Transparently bypass ngrok free browser warning page on all API requests
@@ -73,7 +74,7 @@ const App: React.FC = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <DesktopNavControls />
+
           <Suspense fallback={
             <div className="min-h-screen flex items-center justify-center bg-slate-950 text-cyan-400">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400"></div>
@@ -83,6 +84,9 @@ const App: React.FC = () => {
               {!setupComplete && <Route path="*" element={<Navigate to="/setup" replace />} />}
               <Route path="/setup" element={<Setup />} />
               <Route path="/" element={<Index />} />
+              <Route path="/mobile-preview" element={<MobileEmulator />} />
+              <Route path="/preview" element={<MobileEmulator />} />
+              <Route path="/emulator" element={<MobileEmulator />} />
               <Route path="/track" element={<TrackRepair />} />
               <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
               <Route path="*" element={<NotFound />} />

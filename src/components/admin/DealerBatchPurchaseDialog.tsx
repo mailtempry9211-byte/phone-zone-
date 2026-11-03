@@ -57,6 +57,43 @@ export const DealerBatchPurchaseDialog: React.FC<DealerBatchPurchaseDialogProps>
   const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>("UPI");
   const [notes, setNotes] = useState<string>("");
 
+  const [quickAddDealerOpen, setQuickAddDealerOpen] = useState(false);
+  const [quickAddingDealer, setQuickAddingDealer] = useState(false);
+  const [newDealerForm, setNewDealerForm] = useState({
+    shop_name: "",
+    proprietor_name: "",
+    phone: "",
+    address: "",
+    gst_number: "",
+  });
+
+  const handleQuickAddDealer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDealerForm.shop_name.trim() || !newDealerForm.proprietor_name.trim() || !newDealerForm.phone.trim()) {
+      toast.error("Please fill Firm Name, Proprietor Name, and Mobile Number.");
+      return;
+    }
+    setQuickAddingDealer(true);
+    try {
+      const res = await fetch("/api/dealers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newDealerForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create dealer");
+      await queryClient.invalidateQueries({ queryKey: ["dealers"] });
+      setSelectedDealerId(data.id);
+      setQuickAddDealerOpen(false);
+      setNewDealerForm({ shop_name: "", proprietor_name: "", phone: "", address: "", gst_number: "" });
+      toast.success(`Dealer "${data.shop_name}" registered & selected!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add dealer");
+    } finally {
+      setQuickAddingDealer(false);
+    }
+  };
+
   const [phoneRows, setPhoneRows] = useState<BatchPhoneItem[]>([
     {
       id: "row_1",
@@ -574,9 +611,18 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
             {/* Dealer & Batch Metadata */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <div>
-                <Label className="text-xs font-semibold text-gray-700">Select Registered Dealer *</Label>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs font-semibold text-gray-700">Select Registered Dealer *</Label>
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddDealerOpen(true)}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" /> Add New Dealer
+                  </button>
+                </div>
                 <Select value={selectedDealerId} onValueChange={setSelectedDealerId}>
-                  <SelectTrigger className="mt-1 h-9 bg-white">
+                  <SelectTrigger className="h-9 bg-white">
                     <SelectValue placeholder="Choose a Dealer..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -951,6 +997,77 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
         </DialogContent>
       </Dialog>
     )}
+    {/* Quick Register New Dealer Modal */}
+    <Dialog open={quickAddDealerOpen} onOpenChange={setQuickAddDealerOpen}>
+      <DialogContent className="max-w-md bg-white text-slate-900 z-[120]">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900">
+            <Building2 className="h-4 w-4 text-blue-600" />
+            Quick Register Dealer / B2B Supplier
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleQuickAddDealer} className="space-y-3 pt-1">
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">Shop / Firm Name *</Label>
+            <Input
+              value={newDealerForm.shop_name}
+              onChange={(e) => setNewDealerForm({ ...newDealerForm, shop_name: e.target.value })}
+              placeholder="e.g. Apex Mobile Wholesale"
+              required
+              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">Proprietor / Contact Person *</Label>
+            <Input
+              value={newDealerForm.proprietor_name}
+              onChange={(e) => setNewDealerForm({ ...newDealerForm, proprietor_name: e.target.value })}
+              placeholder="e.g. Rajesh Sharma"
+              required
+              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">Mobile Phone *</Label>
+            <Input
+              value={newDealerForm.phone}
+              onChange={(e) => setNewDealerForm({ ...newDealerForm, phone: e.target.value })}
+              placeholder="10-digit mobile number"
+              required
+              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">GST / PAN (Optional)</Label>
+            <Input
+              value={newDealerForm.gst_number}
+              onChange={(e) => setNewDealerForm({ ...newDealerForm, gst_number: e.target.value })}
+              placeholder="e.g. 09AAACA1234A1Z5"
+              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">Address / City (Optional)</Label>
+            <Input
+              value={newDealerForm.address}
+              onChange={(e) => setNewDealerForm({ ...newDealerForm, address: e.target.value })}
+              placeholder="Market name or city"
+              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button type="button" variant="outline" size="sm" onClick={() => setQuickAddDealerOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-bold" disabled={quickAddingDealer}>
+              {quickAddingDealer ? "Saving..." : "Save & Select Dealer"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };

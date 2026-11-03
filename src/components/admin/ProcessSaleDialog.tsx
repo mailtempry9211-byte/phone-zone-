@@ -14,6 +14,7 @@ import { Upload, X, Plus, User, CalendarIcon, Search, Wrench } from "lucide-reac
 import { compressImage } from "@/utils/imageCompression";
 import AadhaarScanButton from "./AadhaarScanButton";
 import PartyPicker from "./PartyPicker";
+import { InterconnectedPartyLookup } from "./InterconnectedPartyLookup";
 import RepairMatchDialog from "./RepairMatchDialog";
 import { fillPersonFields, type AadhaarData } from "@/lib/aadhaarParser";
 import { format } from "date-fns";
@@ -646,7 +647,7 @@ const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: Pro
                   <p className="text-sm text-gray-500">Scan Aadhaar to fill the customer details.</p>
                   <AadhaarScanButton onResult={applyAadhaarToCustomer} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label htmlFor="customer_name">Name *</Label>
                     <Input
@@ -668,6 +669,25 @@ const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: Pro
                     />
                   </div>
                 </div>
+
+                {/* Universal Cross-Entity Interconnection Banner */}
+                <InterconnectedPartyLookup
+                  phone={newCustomer.phone}
+                  currentRole="customer"
+                  onApply={(party) => {
+                    setNewCustomer((prev) => ({
+                      ...prev,
+                      name: party.name,
+                      phone: party.phone,
+                      address: party.address || prev.address,
+                      id_proof_type: (party.id_proof_type || prev.id_proof_type) as any,
+                      id_number: party.id_number || prev.id_number,
+                    }));
+                    if (party.role === "customer" && party.id) {
+                      setSelectedCustomerId(party.id);
+                    }
+                  }}
+                />
                 
                 <div>
                   <Label htmlFor="customer_address">Address</Label>
@@ -679,7 +699,7 @@ const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: Pro
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <Label htmlFor="id_proof_type">ID Proof Type *</Label>
                     <Select 
@@ -754,12 +774,13 @@ const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: Pro
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-4 border-t">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={loading}
+              className="h-10 text-xs font-bold"
             >
               Cancel
             </Button>
@@ -767,9 +788,9 @@ const ProcessSaleDialog = ({ phone, phones, open, onOpenChange, onSuccess }: Pro
               type="button"
               onClick={handleProcessSale}
               disabled={loading}
-              className="bg-green-600 hover:bg-green-700"
+              className="h-10 text-xs font-bold bg-green-600 hover:bg-green-700 text-white"
             >
-              {loading ? "Processing..." : "Process Sale"}
+              {loading ? "Processing..." : "Process Sale & Generate Bill"}
             </Button>
           </div>
         </div>

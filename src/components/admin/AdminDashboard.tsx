@@ -29,6 +29,7 @@ import StorageUsageCard from "./StorageUsageCard";
 import FinancialYearSwitcher from "./FinancialYearSwitcher";
 import ShopSwitcher from "./ShopSwitcher";
 import PasswordChangeDialog from "./PasswordChangeDialog";
+import LicenseActivationModal from "./LicenseActivationModal";
 import { toast } from "sonner";
 
 import {
@@ -43,6 +44,7 @@ import {
   Wrench,
   Palette,
   MessageSquare,
+  Smartphone,
   Globe,
   ShieldCheck,
   Inbox,
@@ -218,6 +220,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return "dashboard";
   });
 
+  const [universalScannerOpen, setUniversalScannerOpen] = useState(false);
+  const [universalSearchQuery, setUniversalSearchQuery] = useState("");
+  const [licenseModalOpen, setLicenseModalOpen] = useState(false);
   const [tabHistory, setTabHistory] = useState<string[]>([activeTab]);
 
   const setActiveTab = (tab: string) => {
@@ -754,8 +759,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               : "bg-white/95 border-slate-200 text-slate-900 shadow-xs"
           }`}
         >
-          {/* Left: 3-Line Hamburger Menu & Breadcrumb */}
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink">
+          {/* Left: 3-Line Hamburger Menu & Breadcrumb - Guaranteed shrink-0 to prevent any overlap */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <button
               onClick={() => setSidebarOpen(true)}
               className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 font-black text-xs transition-all shadow-sm shrink-0 ${
@@ -769,7 +774,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span className="font-extrabold tracking-wider text-[11px]">MENU</span>
             </button>
 
-            <div className="flex items-center gap-2 min-w-0 truncate">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAdminBack}
+              className={`h-7 px-2.5 text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm shrink-0 ${
+                isDark
+                  ? "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
+                  : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
+              }`}
+              title="Go Back (Alt + Left Arrow)"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 text-blue-500" />
+              <span className="text-[11px]">Back</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.location.reload()}
+              className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
+                isDark
+                  ? "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
+                  : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
+              }`}
+              title="Refresh Page (F5 / Ctrl + R)"
+            >
+              <RotateCw className="h-3.5 w-3.5 text-emerald-500" />
+              <span className="hidden md:inline text-[11px]">Refresh</span>
+            </Button>
+
+            <div className="flex items-center gap-2 truncate max-w-[120px] sm:max-w-xs md:max-w-sm">
               <div
                 className={`h-7 w-7 rounded-lg flex items-center justify-center font-black text-xs text-white shadow shrink-0 hidden sm:flex ${
                   brandKey === "luxury"
@@ -781,54 +816,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 PZ
               </div>
-              <div className="min-w-0 truncate">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-black tracking-tight text-slate-400 hidden xl:inline">
-                    PhoneZone ERP
-                  </span>
-                  <span className="text-xs font-bold text-slate-600 hidden xl:inline">•</span>
-                  <h2 className="text-xs sm:text-sm font-extrabold tracking-tight truncate text-cyan-300">
-                    {getTabLabel(activeTab)}
-                  </h2>
-                </div>
-              </div>
+              <h2 className="text-xs sm:text-sm font-extrabold tracking-tight truncate text-cyan-300">
+                {getTabLabel(activeTab)}
+              </h2>
             </div>
           </div>
 
-          {/* Right: High-contrast visible tool pills & theme toggle (Zero horizontal scroll) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 py-0.5 overflow-x-hidden">
-            {/* Quick Navigation: Back & Refresh for Desktop App & Web */}
-            <div className="flex items-center gap-1 border-r border-slate-700/40 pr-1.5 mr-0.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAdminBack}
-                className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
-                  isDark
-                    ? "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
-                    : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
-                }`}
-                title="Go Back (Alt + Left Arrow)"
-              >
-                <ArrowLeft className="h-3.5 w-3.5 text-blue-500" />
-                <span className="hidden lg:inline">Back</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.location.reload()}
-                className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
-                  isDark
-                    ? "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
-                    : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
-                }`}
-                title="Refresh Page (F5 / Ctrl + R)"
-              >
-                <RotateCw className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="hidden lg:inline">Refresh</span>
-              </Button>
-            </div>
+          {/* Right: High-contrast visible tool pills & theme toggle (No overlap, smooth horizontal scroll if needed) */}
+          <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 overflow-x-auto scrollbar-none min-w-0 justify-end">
 
             {/* Global Dark / Light Switch */}
             <button
@@ -869,12 +864,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Universal Scanner Trigger */}
             <UniversalScanner
+              isOpen={universalScannerOpen}
+              onOpenChange={(open) => {
+                setUniversalScannerOpen(open);
+                if (!open) setUniversalSearchQuery("");
+              }}
+              initialQuery={universalSearchQuery}
               className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
                 isDark
                   ? "bg-slate-900 border-blue-500/40 text-blue-300 hover:bg-slate-800"
                   : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
               }`}
             />
+
+            {/* Universal License Status & Device Pill */}
+            <button
+              type="button"
+              onClick={() => setLicenseModalOpen(true)}
+              className={`h-7 px-2 text-xs font-bold border rounded-md transition-all flex items-center gap-1 shadow-sm ${
+                isDark
+                  ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
+                  : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+              }`}
+              title="View License, Hardware ID (HWID) & Transfer Device"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <span>License</span>
+            </button>
 
             {/* WhatsApp Control Pill (Admin only) */}
             {isAdminOrOwner && (
@@ -924,6 +940,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
               }`}
             />
+
+            {/* Live Phone View Emulator */}
+            <a
+              href="/mobile-preview"
+              target="_blank"
+              rel="noreferrer"
+              className={`h-7 px-2 text-xs font-bold border transition-all rounded-md flex items-center gap-1 shadow-sm ${
+                isDark
+                  ? "border-cyan-800 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/60"
+                  : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"
+              }`}
+              title="Open Mobile Phone View Emulator"
+            >
+              <Smartphone className="h-3.5 w-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Phone View</span>
+            </a>
 
             {/* Back to Storefront Link */}
             {onBack && (
@@ -983,6 +1015,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     else if (action === "new_repair") handleSelectTab("repairs");
                     else if (action === "add_phone") handleSelectTab("inventory");
                     else if (action === "add_customer") handleSelectTab("customers");
+                    else if (action === "scan_imei") setUniversalScannerOpen(true);
+                    else if (action.startsWith("search_invoice:")) {
+                      setUniversalSearchQuery(action.replace("search_invoice:", ""));
+                      setUniversalScannerOpen(true);
+                    }
                   }}
                   financialYear={activeYear}
                   themeMode={themeMode}
@@ -1156,7 +1193,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {activeTab === "accounting" && isAdminOrOwner && (
                 <ErrorBoundary label="Sales Accounting">
-                  <AccountingTab />
+                  <AccountingTab
+                    financialYear={activeYear}
+                    onNavigateTab={(tab) => setActiveTab(tab)}
+                  />
                 </ErrorBoundary>
               )}
 
@@ -1217,6 +1257,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
         </main>
       </div>
+
+      {/* Universal Licensing Modal (Monitors activation & allows manual device transfer) */}
+      <LicenseActivationModal
+        forceOpen={licenseModalOpen}
+        onOpenChange={setLicenseModalOpen}
+      />
     </div>
   );
 };

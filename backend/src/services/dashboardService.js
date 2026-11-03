@@ -69,10 +69,10 @@ function extractBrand(phoneName = "") {
  * @param {string} [options.role='staff']
  * @param {boolean} [options.nocache=false]
  */
-export function getDashboardOverview({ range = "week", shop = "", fy = "", role = "staff", nocache = false } = {}) {
+export function getDashboardOverview({ range = "week", date = "", shop = "", fy = "", role = "staff", nocache = false } = {}) {
   const isAdmin = role === "admin";
   const activeFy = fy || activeFyLabel() || "";
-  const cacheKey = `${range}_${shop}_${activeFy}_${isAdmin ? "admin" : "staff"}`;
+  const cacheKey = `${range}_${date}_${shop}_${activeFy}_${isAdmin ? "admin" : "staff"}`;
 
   if (!nocache) {
     const cached = cache.get(cacheKey);
@@ -90,7 +90,7 @@ export function getDashboardOverview({ range = "week", shop = "", fy = "", role 
   const shopClause = shop && shop !== "all" ? " AND shop_id = ?" : "";
   const shopParams = shop && shop !== "all" ? [shop] : [];
 
-  // 1. Sales & Purchases: Today vs Yesterday
+  // 1. Sales & Purchases for a single target date
   const getDayMetrics = (dateStr) => {
     // Sold phones on that date (supports ISO string, YYYY-MM-DD or created_at fallback)
     const salesRow = db
@@ -130,6 +130,61 @@ export function getDashboardOverview({ range = "week", shop = "", fy = "", role 
          ${shopClause}`,
       )
       .get(dateStr, dateStr, ...shopParams) || {};
+
+    return {
+      salesAmount: Number(salesRow.sales_amount || 0),
+      phonesSold: Number(salesRow.phones_sold || 0),
+      profit: isAdmin ? Number(salesRow.profit || 0) : undefined,
+      purchasesAmount: Number(purchasesRow.purchases_amount || 0),
+      phonesBought: Number(purchasesRow.phones_bought || 0),
+      returnsCount: Number(returnsRow.returns_count || 0),
+    };
+  };
+
+  // Range metrics across multiple days (e.g. 7 days or 30 days)
+  const getRangeMetrics = (fromDate, toDate = null) => {
+    const toClause = toDate ? " AND (substr(sold_date, 1, 10) <= ? OR (sold_date IS NULL AND date(created_at) <= ?))" : "";
+    const toPurchasesClause = toDate ? " AND (substr(purchase_date, 1, 10) <= ? OR (purchase_date IS NULL AND date(created_at) <= ?))" : "";
+    const toParams = toDate ? [toDate, toDate] : [];
+
+    const salesRow = db
+      .prepare(
+        `SELECT COUNT(*) AS phones_sold,
+                COALESCE(SUM(selling_price), 0) AS sales_amount,
+                COALESCE(SUM(purchase_price), 0) AS cost_amount,
+                COALESCE(SUM(selling_price - purchase_price), 0) AS profit
+         FROM phones
+         WHERE is_sold = 1
+           AND deleted_at IS NULL
+           AND (return_status IS NULL OR return_status != 'sales_returned')
+           AND (substr(sold_date, 1, 10) >= ? OR (sold_date IS NULL AND date(created_at) >= ?))
+           ${toClause}
+           ${shopClause}`,
+      )
+      .get(fromDate, fromDate, ...toParams, ...shopParams) || {};
+
+    const purchasesRow = db
+      .prepare(
+        `SELECT COUNT(*) AS phones_bought,
+                COALESCE(SUM(purchase_price), 0) AS purchases_amount
+         FROM phones
+         WHERE deleted_at IS NULL
+           AND (return_status IS NULL OR return_status != 'purchase_returned')
+           AND (substr(purchase_date, 1, 10) >= ? OR (purchase_date IS NULL AND date(created_at) >= ?))
+           ${toPurchasesClause}
+           ${shopClause}`,
+      )
+      .get(fromDate, fromDate, ...toParams, ...shopParams) || {};
+
+    const returnsRow = db
+      .prepare(
+        `SELECT COUNT(*) AS returns_count
+         FROM returns
+         WHERE (substr(created_at, 1, 10) >= ? OR date(created_at) >= ?)
+         ${toDate ? " AND (substr(created_at, 1, 10) <= ? OR date(created_at) <= ?)" : ""}
+         ${shopClause}`,
+      )
+      .get(fromDate, fromDate, ...toParams, ...shopParams) || {};
 
     return {
       salesAmount: Number(salesRow.sales_amount || 0),
@@ -555,10 +610,56 @@ export function getDashboardOverview({ range = "week", shop = "", fy = "", role 
     topSellers,
   };
 
+  // Calculate selected period / target date metrics for the live dashboard cards
+  let periodMetrics = today;
+  let periodLabel = "Today";
+
+  if (date && date.trim()) {
+    periodMetrics = getDayMetrics(date.trim());
+    periodLabel = `Date: ${date.trim()}`;
+  } else if (range === "yesterday") {
+    periodMetrics = yesterday;
+    periodLabel = "Yesterday";
+  } else if (range === "week") {
+    const from7d = shiftDateStr(todayStr, -6);
+    periodMetrics = getRangeMetrics(from7d);
+    periodLabel = "Last 7 Days";
+  } else if (range === "month") {
+    const from30d = shiftDateStr(todayStr, -29);
+    periodMetrics = getRangeMetrics(from30d);
+    periodLabel = "Last 30 Days";
+  } else if (range === "year") {
+    const fyPurchasesRow = db
+      .prepare(
+        `SELECT COUNT(*) AS total_bought,
+                COALESCE(SUM(purchase_price), 0) AS total_spent
+         FROM phones
+         WHERE deleted_at IS NULL
+           AND (return_status IS NULL OR return_status != 'purchase_returned')
+           ${activeFy ? " AND (COALESCE(financial_year, ?) = ? OR carried_to_fy = ?)" : ""}
+           ${shopClause}`,
+      )
+      .get(...(activeFy ? [activeFy, activeFy, activeFy] : []), ...shopParams) || {};
+
+    periodMetrics = {
+      salesAmount: Number(fySalesRow.total_revenue || 0),
+      phonesSold: Number(fySalesRow.total_sold || 0),
+      profit: isAdmin ? Number(fySalesRow.total_profit || 0) : undefined,
+      purchasesAmount: Number(fyPurchasesRow.total_spent || 0),
+      phonesBought: Number(fyPurchasesRow.total_bought || 0),
+      returnsCount: 0,
+    };
+    periodLabel = `Financial Year (${activeFy || "2026-27"})`;
+  }
+
   const result = {
     generatedAt: now.toISOString(),
     timezone: "Asia/Kolkata",
     financialYear: activeFy,
+    range,
+    selectedDate: date || null,
+    periodLabel,
+    periodMetrics,
     today,
     yesterday,
     purchaseOverview,

@@ -18,6 +18,8 @@ import * as financialYears from "../services/financialYearService.js";
 import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import * as googleDrive from "../services/googleDriveService.js";
+import * as licenseService from "../services/licenseService.js";
+import { getDeviceInfo } from "../services/hardwareId.js";
 import { getDb } from "../db/index.js";
 import { newId } from "../lib/errors.js";
 import { listAuditLogs, audit } from "../services/auditService.js";
@@ -214,6 +216,19 @@ export function buildRouter() {
 
       // ---------------- public (no auth) ----------------
   r.get("/health", (_req, res) => res.json({ ok: true, offline: true, host: SERVER.host, port: SERVER.port }));
+
+  // ---------------- licensing system (public status & activation) ----------------
+  r.get("/license/status", wrap((_req, res) => res.json(licenseService.getLicenseStatus())));
+  r.get("/license/device-info", wrap((_req, res) => res.json(getDeviceInfo())));
+  r.post("/license/activate", wrap(async (req, res) => {
+    const { licenseKey, customerName, shopName } = req.body || {};
+    const result = await licenseService.activateLicense({ licenseKey, customerName, shopName });
+    res.json(result);
+  }));
+  r.post("/license/deactivate", staff, wrap(async (_req, res) => {
+    const result = await licenseService.deactivateLicense();
+    res.json(result);
+  }));
     r.get("/config", (_req, res) => {
     // PUBLIC projection only. Single source of truth = admin_settings (DB); the
     // full object (bank details, TAC mode, message templates) is served by the
@@ -477,6 +492,7 @@ export function buildRouter() {
     res.json({ id: cust.id, id_proof_type: cust.id_proof_type, id_number: cust.id_number });
   }));
   r.get("/sellers/:id/history", staff, wrap((req, res) => res.json(people.sellerHistory(req.params.id))));
+  r.get("/people/lookup", staff, wrap((req, res) => res.json(people.lookupUniversal(req.query.phone))));
 
   // ---------------- dealers (B2B Phone Suppliers) ----------------
   r.get("/dealers", staff, wrap((req, res) => res.json(dealers.listDealers({ search: req.query.search }))));
@@ -664,6 +680,7 @@ export function buildRouter() {
   }));
 
   // ---------------- invoices ----------------
+  r.get("/invoices/search", staff, wrap((req, res) => res.json(invoices.searchUnifiedInvoices(req.query.q || req.query.query || "", { limit: req.query.limit }))));
   r.get("/invoices", staff, wrap((req, res) => res.json(invoices.listInvoices(req.query.type))));
   r.post("/invoices", staff, wrap((req, res) => {
     const userShopId = req.user?.shopId || "shop_1";
@@ -689,11 +706,12 @@ export function buildRouter() {
   // ---------------- reports / exports / dashboard ----------------
   r.get("/dashboard/overview", admin, wrap((req, res) => {
     const range = req.query.range || "week";
+    const date = req.query.date || "";
     const shop = req.query.shop || (req.user?.shopId ? String(req.user.shopId) : "");
     const fy = req.query.fy || "";
     const nocache = req.query.nocache === "1" || req.query.nocache === "true";
     const role = req.user?.roles?.includes("admin") ? "admin" : (req.user?.role || "staff");
-    res.json(dashboardService.getDashboardOverview({ range, shop, fy, role, nocache }));
+    res.json(dashboardService.getDashboardOverview({ range, date, shop, fy, role, nocache }));
   }));
   r.get("/dashboard", admin, wrap((req, res) => res.json(reports.dashboard(req.query))));
   r.get("/exports/:entity.csv", staff, wrap((req, res) => {

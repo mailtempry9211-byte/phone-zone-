@@ -232,19 +232,22 @@ export const FluidCarouselTheme: React.FC<ThemeProps> = ({
 
                     {/* Phone Image Container */}
                     <div className="h-48 rounded-2xl bg-gradient-to-tr from-slate-950 to-violet-950/40 border border-violet-900/20 flex items-center justify-center overflow-hidden relative group-hover:scale-[1.02] transition-transform">
-                      {phone.image_url ? (
-                        <img
-                          src={phone.image_url}
-                          alt={phone.phone_name}
-                          className="h-44 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.6)]"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-violet-400">
-                          <Smartphone className="h-16 w-16 stroke-1 mb-2 opacity-80" />
-                          <span className="text-[11px] text-slate-500">Genuine Device</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const img = phone.product_photos?.[0] || phone.photo_url || phone.image_url;
+                        return img ? (
+                          <img
+                            src={img}
+                            alt={phone.phone_name}
+                            className="h-44 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.6)]"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-violet-400">
+                            <Smartphone className="h-16 w-16 stroke-1 mb-2 opacity-80" />
+                            <span className="text-[11px] text-slate-500">Genuine Device</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Phone Details */}

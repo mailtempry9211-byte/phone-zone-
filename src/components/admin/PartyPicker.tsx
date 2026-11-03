@@ -21,6 +21,11 @@ export interface Party {
   address?: string;
   id_proof_type?: string;
   id_number?: string;
+  seller_photo_url?: string;
+  customer_photo_url?: string;
+  photo_url?: string;
+  seller_signature_url?: string;
+  signature_url?: string;
 }
 
 interface PartyPickerProps {

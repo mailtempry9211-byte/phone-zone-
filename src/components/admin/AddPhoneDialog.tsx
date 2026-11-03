@@ -21,6 +21,7 @@ import SapathPatraModal from "./SapathPatraModal";
 import { OFFLINE } from "@/lib/data";
 import { getImeiHistory } from "@/lib/data/financialYear";
 import PartyPicker from "./PartyPicker";
+import { InterconnectedPartyLookup } from "./InterconnectedPartyLookup";
 import { fillPersonFields, type AadhaarData } from "@/lib/aadhaarParser";
 import VariantColourFields, {
   emptyChoice,
@@ -51,6 +52,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [savedSignatureFound, setSavedSignatureFound] = useState<string | null>(null);
   const [sapathPreviewOpen, setSapathPreviewOpen] = useState(false);
   const [isUploadingSellerPhoto, setIsUploadingSellerPhoto] = useState(false);
   const [isUploadingProducts, setIsUploadingProducts] = useState(false);
@@ -1943,15 +1945,22 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       role="seller"
                       open={sellerPickerOpen}
                       onOpenChange={setSellerPickerOpen}
-                      onSelect={(seller) =>
+                      onSelect={(seller) => {
+                        const sig = seller.seller_signature_url || seller.signature_url;
+                        if (sig) {
+                          setSavedSignatureFound(sig);
+                        } else {
+                          setSavedSignatureFound(null);
+                        }
                         setFormData((prev) => ({
                           ...prev,
                           seller_id: seller.id,
                           seller_name: seller.name,
                           seller_phone: seller.phone || "",
                           seller_address: seller.address || "",
-                        }))
-                      }
+                          seller_photo_url: seller.seller_photo_url || seller.photo_url || prev.seller_photo_url,
+                        }));
+                      }}
                       onClear={() =>
                         setFormData((prev) => ({
                           ...prev,
@@ -1991,6 +2000,29 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                     required
                     disabled={useExistingSeller}
                     className="mt-1"
+                  />
+                </div>
+
+                {/* Universal Cross-Entity Interconnection Banner */}
+                <div className="sm:col-span-2">
+                  <InterconnectedPartyLookup
+                    phone={formData.seller_phone}
+                    currentRole="seller"
+                    onApply={(party) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        seller_name: party.name,
+                        seller_phone: party.phone,
+                        seller_address: party.address || prev.seller_address,
+                        id_proof_type: (party.id_proof_type as any) || prev.id_proof_type,
+                        id_number: party.id_number || prev.id_number,
+                        seller_photo_url: party.photo_url || prev.seller_photo_url,
+                        seller_id: party.role === "seller" ? party.id : prev.seller_id,
+                      }));
+                      if (party.signature_url) {
+                        setSavedSignatureFound(party.signature_url);
+                      }
+                    }}
                   />
                 </div>
 
@@ -2116,6 +2148,49 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                 <p className="text-xs text-gray-500">
                   Touch/mouse signature. Appears on <strong>both</strong> Purchase Invoice &amp; Sapath Patra.
                 </p>
+
+                {/* Saved Signature Prompt if existing seller has signature on record */}
+                {savedSignatureFound && !formData.seller_signature_url && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-24 bg-white border border-purple-200 rounded p-1 flex items-center justify-center shrink-0 shadow-xs">
+                        <img
+                          src={savedSignatureFound}
+                          alt="Saved Signature"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-purple-900">Saved Seller Signature Found</p>
+                        <p className="text-[11px] text-purple-700">A signature is already saved on file for this seller. Do you want to use it?</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 px-3 text-xs bg-purple-700 hover:bg-purple-800 text-white font-bold"
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, seller_signature_url: savedSignatureFound }));
+                          toast.success("Saved signature applied to this purchase!");
+                        }}
+                      >
+                        Use Saved Signature
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2.5 text-xs text-gray-700 hover:bg-gray-100"
+                        onClick={() => {
+                          setSignatureModalOpen(true);
+                        }}
+                      >
+                        Sign New
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {formData.seller_signature_url ? (
                   <div className="p-3 bg-purple-50/40 rounded-lg border flex items-center justify-between gap-3">

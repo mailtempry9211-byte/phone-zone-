@@ -47,14 +47,14 @@ const AuthDialog = () => {
           Login
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md bg-slate-900 border border-slate-800 text-slate-100">
         <DialogHeader>
-          <DialogTitle>Admin Login</DialogTitle>
+          <DialogTitle className="text-white font-bold text-lg">Admin Login (Supabase)</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <Label htmlFor="email">Username or Email</Label>
+            <Label htmlFor="email" className="text-xs font-semibold text-slate-200">Username or Email</Label>
             <Input
               id="email"
               type="text"
@@ -63,12 +63,13 @@ const AuthDialog = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="mt-1 bg-slate-950 border-slate-700 text-white placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
+            <Label htmlFor="password" className="text-xs font-semibold text-slate-200">Password</Label>
+            <div className="relative mt-1">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -76,12 +77,13 @@ const AuthDialog = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 pr-10"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                className="absolute right-0 top-0 h-full px-3 py-2 text-slate-400 hover:text-white hover:bg-transparent"
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? (
@@ -93,11 +95,11 @@ const AuthDialog = () => {
             </div>
           </div>
 
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+          <div className="flex justify-end space-x-2 pt-2">
+            <Button type="button" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Login"}
             </Button>
           </div>

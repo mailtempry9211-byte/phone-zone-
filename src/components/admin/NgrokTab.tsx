@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,15 +50,21 @@ export default function NgrokTab() {
   const [loading, setLoading] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
+  const isDirtyRef = useRef(false);
+  const initialLoadedRef = useRef(false);
+
   const fetchStatus = async () => {
     try {
       const res = await fetch(`${LOCAL_API_BASE}/ngrok/status`, { credentials: "include" });
       if (res.ok) {
         const data: NgrokState = await res.json();
         setState(data);
-        setTokenInput(data.authtoken || "");
-        setDomainInput(data.claimedDomain || "");
-        setAutoStartInput(data.autoStart ?? true);
+        if (!initialLoadedRef.current || !isDirtyRef.current) {
+          setTokenInput(data.authtoken || "");
+          setDomainInput(data.claimedDomain || "");
+          setAutoStartInput(data.autoStart ?? true);
+          initialLoadedRef.current = true;
+        }
 
         if (data.running && data.lastUrl) {
           generateQr(data.lastUrl);
@@ -99,6 +105,7 @@ export default function NgrokTab() {
         body: JSON.stringify({ authtoken: tokenInput, claimedDomain: domainInput, autoStart: autoStartInput }),
       });
       if (!res.ok) throw new Error("Failed to save settings");
+      isDirtyRef.current = false;
       toast.success("Ngrok configuration saved");
       fetchStatus();
     } catch (err: any) {
@@ -212,7 +219,10 @@ export default function NgrokTab() {
                     id="ngrok_token"
                     type={showToken ? "text" : "password"}
                     value={tokenInput}
-                    onChange={(e) => setTokenInput(e.target.value)}
+                    onChange={(e) => {
+                      isDirtyRef.current = true;
+                      setTokenInput(e.target.value);
+                    }}
                     placeholder="e.g. 2sA19x... (from ngrok dashboard)"
                     className="pr-10 font-mono text-sm"
                   />
@@ -234,7 +244,10 @@ export default function NgrokTab() {
                   id="ngrok_domain"
                   type="text"
                   value={domainInput}
-                  onChange={(e) => setDomainInput(e.target.value.replace(/^https?:\/\//i, '').replace(/\/+$/, ''))}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    setDomainInput(e.target.value.replace(/^https?:\/\//i, '').replace(/\/+$/, ''));
+                  }}
                   onBlur={() => setDomainInput((prev) => prev.replace(/^https?:\/\//i, '').replace(/\/+$/, '').trim())}
                   placeholder="e.g. talented-wolf-primarily.ngrok-free.app"
                   className="font-mono text-sm mt-1"

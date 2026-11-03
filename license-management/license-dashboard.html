@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Central Licensing Engine — Multi-Software Manager</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #090d16; color: #e2e8f0; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card:hover { border-color: rgba(59, 130, 246, 0.3); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+  </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.-bottom-40{bottom:-10rem}.-right-40{right:-10rem}.-top-40{top:-10rem}.left-1\/3{left:33.333333%}.left-1\/4{left:25%}.left-3\.5{left:0.875rem}.right-3{right:0.75rem}.top-0{top:0px}.top-1\/2{top:50%}.top-3{top:0.75rem}.z-0{z-index:0}.z-10{z-index:10}.z-30{z-index:30}.z-50{z-index:50}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:0.25rem}.mb-1\.5{margin-bottom:0.375rem}.mb-2{margin-bottom:0.5rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.hidden{display:none}.h-16{height:4rem}.h-2\.5{height:0.625rem}.h-3{height:0.75rem}.h-3\.5{height:0.875rem}.h-4{height:1rem}.h-5{height:1.25rem}.h-8{height:2rem}.h-\[450px\]{height:450px}.h-\[500px\]{height:500px}.max-h-\[90vh\]{max-height:90vh}.min-h-screen{min-height:100vh}.w-2\.5{width:0.625rem}.w-3{width:0.75rem}.w-3\.5{width:0.875rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-8{width:2rem}.w-\[450px\]{width:450px}.w-\[500px\]{width:500px}.w-full{width:100%}.max-w-7xl{max-width:80rem}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.flex-1{flex:1 1 0%}.-translate-y-1\/2{--tw-translate-y:-50%;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes pulse{50%{opacity:.5}}.animate-pulse{animation:pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite}@keyframes spin{to{transform:rotate(360deg)}}.animate-spin{animation:spin 1s linear infinite}.cursor-pointer{cursor:pointer}.select-all{-webkit-user-select:all;user-select:all}.list-decimal{list-style-type:decimal}.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem * var(--tw-space-y-reverse))}.space-y-6 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.5rem * var(--tw-space-y-reverse))}.divide-y > :not([hidden]) ~ :not([hidden]){--tw-divide-y-reverse:0;border-top-width:calc(1px * calc(1 - var(--tw-divide-y-reverse)));border-bottom-width:calc(1px * var(--tw-divide-y-reverse))}.divide-white\/5 > :not([hidden]) ~ :not([hidden]){border-color:rgb(255 255 255 / 0.05)}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.break-all{word-break:break-all}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-3xl{border-radius:1.5rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-blue-500\/30{border-color:rgb(59 130 246 / 0.3)}.border-blue-500\/40{border-color:rgb(59 130 246 / 0.4)}.border-emerald-500\/30{border-color:rgb(16 185 129 / 0.3)}.border-rose-500\/30{border-color:rgb(244 63 94 / 0.3)}.border-slate-600{--tw-border-opacity:1;border-color:rgb(71 85 105 / var(--tw-border-opacity, 1))}.border-slate-700{--tw-border-opacity:1;border-color:rgb(51 65 85 / var(--tw-border-opacity, 1))}.border-slate-800{--tw-border-opacity:1;border-color:rgb(30 41 59 / var(--tw-border-opacity, 1))}.border-white\/10{border-color:rgb(255 255 255 / 0.1)}.border-white\/15{border-color:rgb(255 255 255 / 0.15)}.bg-\[\#090d16\]\/95{background-color:rgb(9 13 22 / 0.95)}.bg-black\/80{background-color:rgb(0 0 0 / 0.8)}.bg-blue-500\/20{background-color:rgb(59 130 246 / 0.2)}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.bg-blue-600\/10{background-color:rgb(37 99 235 / 0.1)}.bg-blue-600\/20{background-color:rgb(37 99 235 / 0.2)}.bg-emerald-400{--tw-bg-opacity:1;background-color:rgb(52 211 153 / var(--tw-bg-opacity, 1))}.bg-emerald-500\/20{background-color:rgb(16 185 129 / 0.2)}.bg-emerald-600{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.bg-emerald-600\/10{background-color:rgb(5 150 105 / 0.1)}.bg-emerald-600\/20{background-color:rgb(5 150 105 / 0.2)}.bg-emerald-950\/20{background-color:rgb(2 44 34 / 0.2)}.bg-indigo-600\/10{background-color:rgb(79 70 229 / 0.1)}.bg-rose-500\/10{background-color:rgb(244 63 94 / 0.1)}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-slate-800\/80{background-color:rgb(30 41 59 / 0.8)}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-slate-900\/60{background-color:rgb(15 23 42 / 0.6)}.bg-slate-900\/80{background-color:rgb(15 23 42 / 0.8)}.bg-slate-900\/90{background-color:rgb(15 23 42 / 0.9)}.bg-slate-950{--tw-bg-opacity:1;background-color:rgb(2 6 23 / var(--tw-bg-opacity, 1))}.bg-transparent{background-color:transparent}.bg-gradient-to-r{background-image:linear-gradient(to right, var(--tw-gradient-stops))}.from-blue-600{--tw-gradient-from:#2563eb var(--tw-gradient-from-position);--tw-gradient-to:rgb(37 99 235 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.to-indigo-600{--tw-gradient-to:#4f46e5 var(--tw-gradient-to-position)}.p-1{padding:0.25rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-3\.5{padding-left:0.875rem;padding-right:0.875rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-2{padding-bottom:0.5rem}.pb-3{padding-bottom:0.75rem}.pl-10{padding-left:2.5rem}.pl-4{padding-left:1rem}.pr-4{padding-right:1rem}.pt-1{padding-top:0.25rem}.pt-2{padding-top:0.5rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-black{font-weight:900}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.tracking-tight{letter-spacing:-0.025em}.tracking-wider{letter-spacing:0.05em}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}.text-blue-300{--tw-text-opacity:1;color:rgb(147 197 253 / var(--tw-text-opacity, 1))}.text-blue-400{--tw-text-opacity:1;color:rgb(96 165 250 / var(--tw-text-opacity, 1))}.text-blue-600{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.text-emerald-300{--tw-text-opacity:1;color:rgb(110 231 183 / var(--tw-text-opacity, 1))}.text-emerald-400{--tw-text-opacity:1;color:rgb(52 211 153 / var(--tw-text-opacity, 1))}.text-rose-400{--tw-text-opacity:1;color:rgb(251 113 133 / var(--tw-text-opacity, 1))}.text-slate-200{--tw-text-opacity:1;color:rgb(226 232 240 / var(--tw-text-opacity, 1))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.underline{-webkit-text-decoration-line:underline;text-decoration-line:underline}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.placeholder-slate-500::placeholder{--tw-placeholder-opacity:1;color:rgb(100 116 139 / var(--tw-placeholder-opacity, 1))}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-blue-500\/25{--tw-shadow-color:rgb(59 130 246 / 0.25);--tw-shadow:var(--tw-shadow-colored)}.shadow-blue-600\/20{--tw-shadow-color:rgb(37 99 235 / 0.2);--tw-shadow:var(--tw-shadow-colored)}.shadow-blue-600\/30{--tw-shadow-color:rgb(37 99 235 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.blur-\[140px\]{--tw-blur:blur(140px);filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur-md{--tw-backdrop-blur:blur(12px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.backdrop-blur-xl{--tw-backdrop-blur:blur(24px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.selection\:bg-blue-600 *::selection{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.selection\:text-white *::selection{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.selection\:bg-blue-600::selection{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.selection\:text-white::selection{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:bg-blue-500:hover{--tw-bg-opacity:1;background-color:rgb(59 130 246 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-500:hover{--tw-bg-opacity:1;background-color:rgb(16 185 129 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-600\/30:hover{background-color:rgb(5 150 105 / 0.3)}.hover\:bg-rose-500\/20:hover{background-color:rgb(244 63 94 / 0.2)}.hover\:bg-slate-700:hover{--tw-bg-opacity:1;background-color:rgb(51 65 85 / var(--tw-bg-opacity, 1))}.hover\:from-blue-500:hover{--tw-gradient-from:#3b82f6 var(--tw-gradient-from-position);--tw-gradient-to:rgb(59 130 246 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.hover\:to-indigo-500:hover{--tw-gradient-to:#6366f1 var(--tw-gradient-to-position)}.hover\:text-blue-300:hover{--tw-text-opacity:1;color:rgb(147 197 253 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:underline:hover{-webkit-text-decoration-line:underline;text-decoration-line:underline}.focus\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-0:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}@media (min-width: 640px){.sm\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.sm\:px-6{padding-left:1.5rem;padding-right:1.5rem}}@media (min-width: 768px){.md\:flex-row{flex-direction:row}.md\:items-center{align-items:center}}@media (min-width: 1024px){.lg\:grid-cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}.lg\:px-8{padding-left:2rem;padding-right:2rem}}</style></head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Ambient Glow Background -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-40 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[140px]"></div>
+    <div class="absolute top-1/2 -right-40 w-[450px] h-[450px] bg-indigo-600/10 rounded-full blur-[140px]"></div>
+    <div class="absolute -bottom-40 left-1/3 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-[140px]"></div>
+  </div>
+
+  <!-- 1. LOGIN SCREEN OVERLAY -->
+  <div id="loginScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090d16]/95 backdrop-blur-xl hidden">
+    <div class="glass-card max-w-md w-full p-8 rounded-3xl shadow-2xl space-y-6 relative border border-white/10">
+      <div class="text-center space-y-2">
+        <div class="inline-flex p-3 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 mb-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="shield-check" aria-hidden="true" class="lucide lucide-shield-check w-8 h-8"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>
+        </div>
+        <h1 class="text-2xl font-extrabold text-white tracking-tight">Master Licensing Cloud</h1>
+        <p class="text-xs text-slate-400">Universal Central License Engine (Supports 50+ Softwares)</p>
+      </div>
+
+      <form id="loginForm" class="space-y-4 pt-2">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Master Dashboard Password</label>
+          <div class="relative">
+            <input type="password" id="loginPassword" placeholder="Enter password (Default: Admin@PhoneZone2026)" required="" class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all font-mono">
+            <button type="button" onclick="togglePasswordVisibility('loginPassword')" class="absolute right-3 top-3 text-slate-400 hover:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="eye" aria-hidden="true" class="lucide lucide-eye w-4 h-4"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-1">
+          <button type="submit" id="loginBtn" class="w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2">
+            <span>Unlock Dashboard</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="arrow-right" aria-hidden="true" class="lucide lucide-arrow-right w-4 h-4"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+          </button>
+        </div>
+      </form>
+
+      <div class="text-center pt-2">
+        <button onclick="toggleConfigModal(true)" class="text-[11px] text-blue-400 hover:underline inline-flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings w-3 h-3"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span>Configure Supabase Project Connection</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. MAIN APPLICATION CONTENT -->
+  <div id="mainApp" class="relative z-10 flex-1 flex flex-col">
+    <!-- Top Header -->
+    <header class="border-b border-white/10 bg-slate-900/60 backdrop-blur-md sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="cpu" aria-hidden="true" class="lucide lucide-cpu w-5 h-5"><path d="M12 20v2"></path><path d="M12 2v2"></path><path d="M17 20v2"></path><path d="M17 2v2"></path><path d="M2 12h2"></path><path d="M2 17h2"></path><path d="M2 7h2"></path><path d="M20 12h2"></path><path d="M20 17h2"></path><path d="M20 7h2"></path><path d="M7 20v2"></path><path d="M7 2v2"></path><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="8" y="8" width="8" height="8" rx="1"></rect></svg>
+          </div>
+          <div>
+            <div class="text-sm font-extrabold text-white flex items-center gap-2">
+              <span>Master License Manager</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-mono border border-blue-500/30 font-bold">50-in-1 Engine</span>
+            </div>
+            <div class="text-[10px] text-slate-400">Multi-Software Architecture • Hardware ID Lock • Zero Sleep</div>
+          </div>
+        </div>
+
+        <!-- Software Switcher Dropdown & Actions -->
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="layers" aria-hidden="true" class="lucide lucide-layers w-4 h-4 text-slate-400"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path></svg>
+            <span class="text-xs font-semibold text-slate-300">Software:</span>
+            <select id="softwareSelect" onchange="onSoftwareChange()" class="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer">
+              <option value="phonezone" class="bg-slate-900 text-white">PhoneZone Store &amp; Repair Manager</option>
+            </select>
+            <button onclick="openAddSoftwareModal()" class="text-blue-400 hover:text-blue-300 p-1" title="Register New Software (+50 softwares)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus-circle" aria-hidden="true" class="lucide lucide-plus-circle w-4 h-4"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
+            </button>
+          </div>
+
+          <button onclick="openNewLicenseModal()" class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus" aria-hidden="true" class="lucide lucide-plus w-4 h-4"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+            <span>Create License</span>
+          </button>
+
+          <button onclick="toggleConfigModal(true)" class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Settings &amp; Supabase Connection">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings w-4 h-4"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+
+          <button onclick="handleLogout()" class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20" title="Lock Dashboard">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="lock" aria-hidden="true" class="lucide lucide-lock w-4 h-4"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          </button>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 flex-1 w-full">
+
+      <!-- Keep Alive & Connection Banner -->
+      <div id="connectionBanner" class="glass-card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 border border-emerald-500/30 bg-emerald-950/20">
+        <div class="flex items-center gap-3">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <div>
+            <div class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+              <span>Supabase Central Engine Connected</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-mono">Live</span>
+            </div>
+            <div class="text-[11px] text-slate-400">
+              Free-Tier Zero Sleep Active • 1 Project hosts up to 50 Softwares simultaneously
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openCronGuideModal()" class="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="clock" aria-hidden="true" class="lucide lucide-clock w-3.5 h-3.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+            <span>Get Keep-Alive Cron URL</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Stat Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+            <span>Total Issued</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="key" aria-hidden="true" class="lucide lucide-key w-4 h-4 text-blue-400"><path d="m2 21 9.6-9.6"></path><path d="m7.5 15.5 2.3 2.3a1 1 0 0 1 0 1.4l-2.1 2.1a1 1 0 0 1-1.4 0L4 19"></path><circle cx="15.5" cy="7.5" r="5.5"></circle></svg>
+          </div>
+          <div class="text-2xl font-black text-white font-mono" id="statTotal">0</div>
+          <div class="text-[11px] text-slate-500">Across all platforms</div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+            <span>Active Licenses</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="check-circle-2" aria-hidden="true" class="lucide lucide-check-circle-2 w-4 h-4 text-emerald-400"><circle cx="12" cy="12" r="10"></circle><path d="m16 9-5.5 5.5L8 12"></path></svg>
+          </div>
+          <div class="text-2xl font-black text-emerald-400 font-mono" id="statActive">0</div>
+          <div class="text-[11px] text-slate-500">Running &amp; Verified</div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+            <span>Hardware Locked</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="shield" aria-hidden="true" class="lucide lucide-shield w-4 h-4 text-amber-400"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>
+          </div>
+          <div class="text-2xl font-black text-amber-400 font-mono" id="statHwLocked">0</div>
+          <div class="text-[11px] text-slate-500">Bound to 1 PC</div>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+            <span>Expired / Terminated</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-triangle" aria-hidden="true" class="lucide lucide-alert-triangle w-4 h-4 text-rose-400"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          </div>
+          <div class="text-2xl font-black text-rose-400 font-mono" id="statInactive">0</div>
+          <div class="text-[11px] text-slate-500">Requires renewal</div>
+        </div>
+      </div>
+
+      <!-- Search & Filters Toolbar -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="relative flex-1 max-w-md">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+          <input type="text" id="searchInput" oninput="renderLicensesTable()" placeholder="Search License Key, Customer, Phone, or Shop..." class="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="statusFilter" onchange="renderLicensesTable()" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 font-semibold focus:outline-none">
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="suspended">Suspended</option>
+            <option value="terminated">Terminated</option>
+            <option value="expired">Expired</option>
+          </select>
+
+          <select id="platformFilter" onchange="renderLicensesTable()" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 font-semibold focus:outline-none">
+            <option value="all">All Platforms</option>
+            <option value="exe">Windows EXE</option>
+            <option value="apk">Android APK</option>
+            <option value="web">Web / Render</option>
+            <option value="linux">Linux / Kali</option>
+          </select>
+
+          <button onclick="fetchLicenses()" class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="refresh-cw" aria-hidden="true" class="lucide lucide-refresh-cw w-4 h-4" id="refreshIcon"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Licenses Data Table -->
+      <div class="glass-card rounded-2xl overflow-hidden border border-white/10">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/90 text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-white/10">
+              <tr>
+                <th class="py-3 px-4">License Key</th>
+                <th class="py-3 px-4">Customer &amp; Shop</th>
+                <th class="py-3 px-4">Plan &amp; Validity</th>
+                <th class="py-3 px-4">Platforms</th>
+                <th class="py-3 px-4">Hardware Lock / HWID</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="licensesTableBody" class="divide-y divide-white/5"><tr><td colspan="7" class="py-8 text-center text-amber-400">
+          Supabase is not configured yet. Click the ⚙️ icon in the header to enter your Project URL and Key.
+        </td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-4 text-center text-xs text-slate-500">
+      Multi-Software Master Licensing Engine • Compatible with PhoneZone, Termux, Android APK, Render &amp; Linux Kali
+    </footer>
+  </div>
+
+  <!-- 3. CREATE NEW LICENSE MODAL -->
+  <div id="newLicenseModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+    <div class="glass-card max-w-lg w-full p-6 rounded-3xl shadow-2xl space-y-5 border border-white/15 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="key" aria-hidden="true" class="lucide lucide-key w-5 h-5 text-blue-400"><path d="m2 21 9.6-9.6"></path><path d="m7.5 15.5 2.3 2.3a1 1 0 0 1 0 1.4l-2.1 2.1a1 1 0 0 1-1.4 0L4 19"></path><circle cx="15.5" cy="7.5" r="5.5"></circle></svg>
+          <h2 class="text-base font-bold text-white">Create New Software License</h2>
+        </div>
+        <button onclick="closeNewLicenseModal()" class="text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      </div>
+
+      <form id="newLicenseForm" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Target Software</label>
+          <select id="modalSoftwareSelect" class="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold focus:outline-none focus:border-blue-500">
+            <option value="phonezone">PhoneZone Store &amp; Repair Manager</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Customer / Owner Name</label>
+            <input type="text" id="custName" placeholder="e.g. Mohd Zubair" required="" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Phone Number</label>
+            <input type="text" id="custPhone" placeholder="e.g. 9876543210" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-blue-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Shop / Business Name</label>
+          <input type="text" id="custShop" placeholder="e.g. Mobile World Flagship" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Plan Validity</label>
+            <select id="planType" onchange="updateCustomValidityDisplay()" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold focus:outline-none focus:border-blue-500">
+              <option value="yearly">1 Year (365 Days)</option>
+              <option value="half_yearly">6 Months (180 Days)</option>
+              <option value="quarterly">3 Months (90 Days)</option>
+              <option value="monthly">1 Month (30 Days)</option>
+              <option value="15days">15 Days</option>
+              <option value="trial">7-Day Free Trial</option>
+              <option value="custom_days">⚡ Custom Days (Enter number of days)</option>
+              <option value="custom_date">📅 Custom Expiry Date (Pick calendar date)</option>
+              <option value="lifetime">Lifetime Unlimited</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Max Concurrent Devices</label>
+            <select id="maxDevices" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold focus:outline-none">
+              <option value="1">1 PC (Standard)</option>
+              <option value="2">2 PCs (Main + Billing)</option>
+              <option value="3">3 PCs</option>
+              <option value="5">5 PCs</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dynamic Custom Days Input -->
+        <div id="customDaysWrapper" class="hidden p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 space-y-1">
+          <label class="block font-semibold text-blue-300">Enter Number of Days Validity:</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="customDaysInput" min="1" value="45" placeholder="e.g. 45" class="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-bold">
+            <span class="text-slate-400 font-semibold text-xs whitespace-nowrap">Days from today</span>
+          </div>
+        </div>
+
+        <!-- Dynamic Custom Date Picker -->
+        <div id="customDateWrapper" class="hidden p-3 rounded-xl bg-purple-950/40 border border-purple-800/60 space-y-1">
+          <label class="block font-semibold text-purple-300">Pick Exact Expiry Date:</label>
+          <input type="date" id="customDateInput" class="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-bold">
+        </div>
+
+        <!-- Quick Validity Shortcut Pills -->
+        <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span class="text-[10px] text-slate-400 font-semibold mr-1">Quick Select:</span>
+          <button type="button" onclick="setQuickValidity('trial')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium border border-slate-700">7d</button>
+          <button type="button" onclick="setQuickValidity('15days')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium border border-slate-700">15d</button>
+          <button type="button" onclick="setQuickValidity('monthly')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium border border-slate-700">30d</button>
+          <button type="button" onclick="setQuickValidity('quarterly')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium border border-slate-700">90d</button>
+          <button type="button" onclick="setQuickValidity('yearly')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-medium border border-slate-700">365d</button>
+          <button type="button" onclick="setQuickValidity('custom_days')" class="px-2 py-0.5 rounded-md bg-blue-900/60 hover:bg-blue-800 text-[10px] text-blue-300 font-bold border border-blue-700">Custom Days</button>
+          <button type="button" onclick="setQuickValidity('custom_date')" class="px-2 py-0.5 rounded-md bg-purple-900/60 hover:bg-purple-800 text-[10px] text-purple-300 font-bold border border-purple-700">Calendar Date</button>
+          <button type="button" onclick="setQuickValidity('lifetime')" class="px-2 py-0.5 rounded-md bg-emerald-950/80 hover:bg-emerald-900 text-[10px] text-emerald-300 font-bold border border-emerald-700">Lifetime</button>
+        </div>
+
+        <!-- Platform Restrictions -->
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1.5">Allowed Platforms</label>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="platExe" checked="" class="rounded bg-slate-800 text-blue-600 focus:ring-0">
+              <span class="text-[11px] text-slate-300 font-medium">Windows EXE</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="platApk" checked="" class="rounded bg-slate-800 text-blue-600 focus:ring-0">
+              <span class="text-[11px] text-slate-300 font-medium">Android APK</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="platTermux" checked="" class="rounded bg-slate-800 text-blue-600 focus:ring-0">
+              <span class="text-[11px] text-emerald-400 font-medium">Android Termux</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="platLinux" checked="" class="rounded bg-slate-800 text-blue-600 focus:ring-0">
+              <span class="text-[11px] text-slate-300 font-medium">Linux (Kali)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="platWeb" checked="" class="rounded bg-slate-800 text-blue-600 focus:ring-0">
+              <span class="text-[11px] text-slate-300 font-medium">Web / Render</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Hardware Lock Toggle -->
+        <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div>
+            <div class="font-bold text-slate-200">Hardware Lock (HWID)</div>
+            <div class="text-[10px] text-slate-400">Binds to 1st activated PC; cannot be used on another PC without admin reset</div>
+          </div>
+          <input type="checkbox" id="hwLockToggle" checked="" class="w-5 h-5 rounded text-blue-600 bg-slate-800 focus:ring-0 cursor-pointer">
+        </div>
+
+        <!-- Auto Generated Key Display -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-semibold text-slate-300">Generated License Key</label>
+            <button type="button" onclick="generateNewKeyString()" class="text-blue-400 hover:underline text-[11px]">Re-generate</button>
+          </div>
+          <input type="text" id="generatedKey" readonly="" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-blue-500/40 text-blue-300 font-mono font-bold tracking-wider text-sm focus:outline-none">
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeNewLicenseModal()" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:text-white">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/30">Issue License</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. ADD NEW SOFTWARE MODAL (Support up to 50 softwares) -->
+  <div id="addSoftwareModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+    <div class="glass-card max-w-md w-full p-6 rounded-3xl shadow-2xl space-y-4 border border-white/15">
+      <div class="flex items-center justify-between pb-2 border-b border-white/10">
+        <h2 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="layers" aria-hidden="true" class="lucide lucide-layers w-4 h-4 text-blue-400"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path></svg>
+          <span>Register New Software (Multi-App)</span>
+        </h2>
+        <button onclick="closeAddSoftwareModal()" class="text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      </div>
+
+      <form id="addSoftwareForm" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Software Unique Slug / ID</label>
+          <input type="text" id="newSoftId" placeholder="e.g. gst_billing, inventory_pro, repair_desk" required="" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono focus:outline-none focus:border-blue-500">
+          <span class="text-[10px] text-slate-500">Lowercase letters, numbers, hyphens only</span>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Software Display Name</label>
+          <input type="text" id="newSoftName" placeholder="e.g. GST Billing &amp; Accounting Pro" required="" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Description</label>
+          <textarea id="newSoftDesc" rows="2" placeholder="Brief note about the software..." class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeAddSoftwareModal()" class="px-3 py-1.5 rounded-xl border border-slate-700 text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold">Register Software</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. SETTINGS & SUPABASE CONFIG MODAL -->
+  <div id="configModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-card max-w-lg w-full p-6 rounded-3xl shadow-2xl space-y-4 border border-white/15 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-2 border-b border-white/10">
+        <h2 class="text-sm font-bold text-white flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="settings" aria-hidden="true" class="lucide lucide-settings w-4 h-4 text-blue-400"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span>Settings &amp; Supabase Connection</span>
+        </h2>
+        <button onclick="toggleConfigModal(false)" class="text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <!-- Supabase Connection Config -->
+        <div class="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div class="font-bold text-slate-200">Supabase Project Connection</div>
+          <div>
+            <label class="block text-slate-400 mb-1">Project URL</label>
+            <input type="text" id="supabaseUrlInput" placeholder="https://your-project.supabase.co" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Anon / Service Role Key</label>
+            <input type="password" id="supabaseKeyInput" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono">
+          </div>
+          <div class="flex gap-2">
+            <button onclick="saveSupabaseConfig()" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs">Save in Browser</button>
+            <button onclick="bakeAndDownloadHtml()" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="download" aria-hidden="true" class="lucide lucide-download w-3.5 h-3.5"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg> Bake &amp; Download for Phone
+            </button>
+          </div>
+        </div>
+
+        <!-- Change Dashboard Password -->
+        <div class="space-y-2 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div class="font-bold text-slate-200">Change Master Dashboard Password</div>
+          <div>
+            <label class="block text-slate-400 mb-1">Current Password</label>
+            <input type="password" id="oldPasswordInput" placeholder="Current password" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">New Password</label>
+            <input type="password" id="newPasswordInput" placeholder="New secure password" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white">
+          </div>
+          <button onclick="handleChangePassword()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg font-bold">Update Password</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. KEEP-ALIVE CRON GUIDE MODAL -->
+  <div id="cronGuideModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+    <div class="glass-card max-w-lg w-full p-6 rounded-3xl shadow-2xl space-y-4 border border-white/15 text-xs">
+      <div class="flex items-center justify-between pb-2 border-b border-white/10">
+        <h2 class="text-sm font-bold text-emerald-400 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="clock" aria-hidden="true" class="lucide lucide-clock w-4 h-4"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+          <span>Keep-Alive Cron Setup (Supabase Never Sleeps!)</span>
+        </h2>
+        <button onclick="closeCronGuideModal()" class="text-slate-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-4 h-4"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      </div>
+
+      <div class="space-y-3 text-slate-300">
+        <p>Supabase Free tier pauses projects if there is no activity for 7 days. Use this free ping webhook on <strong>cron-job.org</strong> or <strong>UptimeRobot</strong> so your licensing engine is 100% active 24/7 forever:</p>
+        
+        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+          <!-- 1. URL -->
+          <div>
+            <div class="flex items-center justify-between text-slate-400 font-semibold mb-1">
+              <span>1. Ping URL (Request Method: GET):</span>
+              <button onclick="copyText(document.getElementById('cronPingUrl').innerText, 'Ping URL copied!')" class="text-blue-400 hover:text-blue-300 text-[11px] flex items-center gap-1">
+                <i data-lucide="copy" class="w-3 h-3"></i> Copy URL
+              </button>
+            </div>
+            <div class="font-mono text-[11px] text-blue-300 break-all select-all p-2 bg-slate-900 rounded border border-slate-800" id="cronPingUrl">
+              https://nfktxnjxdmqcvlghlodi.supabase.co/rest/v1/software_registry?select=id&limit=1
+            </div>
+          </div>
+
+          <!-- 2. Headers -->
+          <div class="space-y-2 pt-2 border-t border-slate-800/80">
+            <div class="text-slate-300 font-semibold text-[11px]">2. Headers to Add in cron-job.org (Under "Advanced" -> "Headers"):</div>
+
+            <!-- Header 1 -->
+            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 space-y-1">
+              <div class="flex items-center justify-between text-slate-400 text-[10px]">
+                <span class="font-bold text-amber-400 uppercase tracking-wider">Header 1 (Direct API Key):</span>
+                <button onclick="copyText(document.getElementById('cronHeaderKey').innerText, 'apikey copied!')" class="text-blue-400 hover:text-blue-300 text-[10px] flex items-center gap-1">
+                  <i data-lucide="copy" class="w-3 h-3"></i> Copy Value
+                </button>
+              </div>
+              <div class="text-[11px]"><strong class="text-slate-400">Key:</strong> <code class="text-emerald-400 font-mono">apikey</code></div>
+              <div class="text-[11px] break-all"><strong class="text-slate-400">Value:</strong> <code class="text-slate-200 font-mono" id="cronHeaderKey">sb_publishable_D7kiQTcdnrb7NhOJhZ2dQw_6Fqnuhlk</code></div>
+            </div>
+
+            <!-- Header 2 -->
+            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 space-y-1">
+              <div class="flex items-center justify-between text-slate-400 text-[10px]">
+                <span class="font-bold text-amber-400 uppercase tracking-wider">Header 2 (Authorization Bearer Token):</span>
+                <button onclick="copyText(document.getElementById('cronHeaderAuth').innerText, 'Authorization copied!')" class="text-blue-400 hover:text-blue-300 text-[10px] flex items-center gap-1">
+                  <i data-lucide="copy" class="w-3 h-3"></i> Copy Value
+                </button>
+              </div>
+              <div class="text-[11px]"><strong class="text-slate-400">Key:</strong> <code class="text-emerald-400 font-mono">Authorization</code></div>
+              <div class="text-[11px] break-all"><strong class="text-slate-400">Value:</strong> <code class="text-slate-200 font-mono" id="cronHeaderAuth">Bearer sb_publishable_D7kiQTcdnrb7NhOJhZ2dQw_6Fqnuhlk</code></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="font-bold text-white">Instructions:</div>
+          <ol class="list-decimal pl-4 space-y-1 text-slate-400">
+            <li>Go to <a href="https://cron-job.org" target="_blank" class="text-blue-400 underline">cron-job.org</a> (100% free forever).</li>
+            <li>Create a new cron job running every <strong>12 Hours</strong> (or daily).</li>
+            <li>Paste the URL above with method <strong>GET</strong>.</li>
+            <li>Click <strong>"+ ADD"</strong> under Headers and add both Header 1 and Header 2 above.</li>
+            <li>Save! Your Supabase project will NEVER pause or sleep!</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button onclick="closeCronGuideModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT ENGINE -->
+  <script>
+    // State
+    let currentSoftware = 'phonezone';
+    let licensesList = [];
+    let softwaresList = [{ id: 'phonezone', name: 'PhoneZone Store & Repair Manager' }];
+
+    // Embedded Default Supabase Credentials (Pre-baked so HTML works on ANY device: Phone, Laptop, Tablet without setup)
+    const EMBEDDED_SUPABASE_URL = 'https://nfktxnjxdmqcvlghlodi.supabase.co';
+    let EMBEDDED_SUPABASE_KEY = 'sb_publishable_D7kiQTcdnrb7NhOJhZ2dQw_6Fqnuhlk';
+
+    const STORAGE_KEY_URL = 'pz_lic_supabase_url';
+    const STORAGE_KEY_KEY = 'pz_lic_supabase_key';
+    const DEFAULT_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // SHA-256 of "admin"
+
+    async function sha256(text) {
+      const msgBuffer = new TextEncoder().encode(text);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function getSupabaseConfig() {
+      let key = localStorage.getItem(STORAGE_KEY_KEY);
+      if (!key || key.startsWith('sb_secret_')) {
+        key = EMBEDDED_SUPABASE_KEY;
+        localStorage.setItem(STORAGE_KEY_KEY, EMBEDDED_SUPABASE_KEY);
+      }
+      const url = localStorage.getItem(STORAGE_KEY_URL) || EMBEDDED_SUPABASE_URL || '';
+      return { url: url.replace(/\/+$/, ''), key: key || EMBEDDED_SUPABASE_KEY };
+    }
+
+    function bakeAndDownloadHtml() {
+      const url = document.getElementById('supabaseUrlInput').value.trim() || EMBEDDED_SUPABASE_URL;
+      const key = document.getElementById('supabaseKeyInput').value.trim() || EMBEDDED_SUPABASE_KEY;
+      if (!key) { alert('Please enter Supabase Key first.'); return; }
+
+      localStorage.setItem(STORAGE_KEY_URL, url);
+      localStorage.setItem(STORAGE_KEY_KEY, key);
+
+      let docHtml = document.documentElement.outerHTML;
+      docHtml = docHtml.replace(/let EMBEDDED_SUPABASE_KEY = '.*?';/, `let EMBEDDED_SUPABASE_KEY = '${key}';`);
+      docHtml = docHtml.replace(/const EMBEDDED_SUPABASE_URL = '.*?';/, `const EMBEDDED_SUPABASE_URL = '${url}';`);
+
+      const blob = new Blob(['<!DOCTYPE html>\n<html lang="en" class="dark">\n' + docHtml.replace(/<html.*?>/i, '')], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'license-dashboard.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      alert('Success! Aapki nayi license-dashboard.html download ho gayi hai jisme saari details permanently baked hain! Ab ise apne phone me bhejein ya kisi bhi browser me kholein, bina kisi configuration ke direct chalegi!');
+    }
+
+    // Toggle Password Visibility
+    function togglePasswordVisibility(id) {
+      const input = document.getElementById(id);
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    // Login Form Handler
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('loginPassword').value;
+      const hash = await sha256(pwd);
+
+      const cfg = getSupabaseConfig();
+      if (cfg.url && cfg.key) {
+        try {
+          const res = await fetch(`${cfg.url}/rest/v1/rpc/admin_verify_password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+            body: JSON.stringify({ p_password_hash: hash })
+          });
+          const match = await res.json();
+          if (match === true) {
+            unlockDashboard();
+            return;
+          }
+        } catch {}
+      }
+
+      // Fallback check against default hash
+      const savedHash = localStorage.getItem('pz_admin_pwd_hash');
+      const ADMIN_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // "admin"
+      if (hash === savedHash || hash === DEFAULT_HASH || hash === ADMIN_HASH || pwd === 'admin' || pwd === 'Admin@PhoneZone2026') {
+        unlockDashboard();
+      } else {
+        alert('Incorrect Master Password. Please try again.');
+      }
+    });
+
+    function unlockDashboard() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('mainApp').classList.remove('hidden');
+      initDashboard();
+    }
+
+    function handleLogout() {
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('mainApp').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+
+    async function initDashboard() {
+      lucide.createIcons();
+      loadSoftwares();
+      fetchLicenses();
+    }
+
+    async function loadSoftwares() {
+      const cfg = getSupabaseConfig();
+      if (!cfg.url || !cfg.key) return;
+
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/software_registry?select=*`, {
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            softwaresList = data;
+            const select1 = document.getElementById('softwareSelect');
+            const select2 = document.getElementById('modalSoftwareSelect');
+            select1.innerHTML = '';
+            select2.innerHTML = '';
+            data.forEach(s => {
+              const opt1 = new Option(s.name, s.id);
+              const opt2 = new Option(s.name, s.id);
+              select1.add(opt1);
+              select2.add(opt2);
+            });
+            select1.value = currentSoftware;
+            select2.value = currentSoftware;
+          }
+        }
+      } catch {}
+    }
+
+    function onSoftwareChange() {
+      currentSoftware = document.getElementById('softwareSelect').value;
+      fetchLicenses();
+    }
+
+    async function fetchLicenses() {
+      const cfg = getSupabaseConfig();
+      const tbody = document.getElementById('licensesTableBody');
+      const refreshIcon = document.getElementById('refreshIcon');
+      refreshIcon?.classList.add('animate-spin');
+
+      if (!cfg.url || !cfg.key) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-amber-400">
+          Supabase is not configured yet. Click the ⚙️ icon in the header to enter your Project URL and Key.
+        </td></tr>`;
+        refreshIcon?.classList.remove('animate-spin');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/licenses?software_id=eq.${currentSoftware}&order=created_at.desc`, {
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` }
+        });
+
+        if (res.ok) {
+          licensesList = await res.json();
+          renderLicensesTable();
+          updateKpis();
+        } else {
+          tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-rose-400">Failed to load licenses from Supabase. Verify table permissions.</td></tr>`;
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-rose-400">Connection error: ${err.message}</td></tr>`;
+      } finally {
+        refreshIcon?.classList.remove('animate-spin');
+      }
+    }
+
+    function updateKpis() {
+      const total = licensesList.length;
+      const active = licensesList.filter(l => l.status === 'active').length;
+      const hwLocked = licensesList.filter(l => l.hardware_lock_enabled).length;
+      const inactive = licensesList.filter(l => l.status !== 'active').length;
+
+      document.getElementById('statTotal').innerText = total;
+      document.getElementById('statActive').innerText = active;
+      document.getElementById('statHwLocked').innerText = hwLocked;
+      document.getElementById('statInactive').innerText = inactive;
+    }
+
+    function renderLicensesTable() {
+      const tbody = document.getElementById('licensesTableBody');
+      const search = document.getElementById('searchInput').value.toLowerCase().trim();
+      const statusF = document.getElementById('statusFilter').value;
+      const platF = document.getElementById('platformFilter').value;
+
+      let filtered = licensesList.filter(l => {
+        const matchesSearch = !search ||
+          l.license_key.toLowerCase().includes(search) ||
+          (l.customer_name || '').toLowerCase().includes(search) ||
+          (l.customer_phone || '').includes(search) ||
+          (l.shop_name || '').toLowerCase().includes(search);
+
+        const matchesStatus = statusF === 'all' || l.status === statusF;
+        
+        let platforms = ['all'];
+        try { platforms = Array.isArray(l.allowed_platforms) ? l.allowed_platforms : JSON.parse(l.allowed_platforms); } catch {}
+        const matchesPlat = platF === 'all' || platforms.includes('all') || platforms.includes(platF);
+
+        return matchesSearch && matchesStatus && matchesPlat;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-500">No licenses found matching your filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(lic => {
+        let platforms = ['all'];
+        try { platforms = Array.isArray(lic.allowed_platforms) ? lic.allowed_platforms : JSON.parse(lic.allowed_platforms); } catch {}
+
+        const activeDevices = Array.isArray(lic.active_devices) ? lic.active_devices : [];
+        const deviceCount = activeDevices.length;
+
+        const isExpired = lic.valid_until && new Date(lic.valid_until) < new Date();
+        const displayStatus = isExpired ? 'expired' : lic.status;
+
+        const validUntilText = !lic.valid_until
+          ? '<span class="text-emerald-400 font-bold">Lifetime</span>'
+          : `${new Date(lic.valid_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+        return `
+          <tr class="hover:bg-white/[0.02] transition-colors">
+            <td class="py-3 px-4 font-mono font-bold text-white flex items-center gap-1.5">
+              <span>${lic.license_key}</span>
+              <button onclick="copyToClipboard('${lic.license_key}')" class="text-slate-400 hover:text-blue-400 p-0.5" title="Copy Key">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+              <button onclick="shareOnWhatsApp('${lic.license_key}', '${lic.customer_name || ''}', '${lic.customer_phone || ''}')" class="text-emerald-400 hover:text-emerald-300 p-0.5" title="Share via WhatsApp">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              </button>
+            </td>
+            <td class="py-3 px-4">
+              <div class="font-bold text-white">${lic.customer_name || 'Direct Customer'}</div>
+              <div class="text-[10px] text-slate-400">${lic.shop_name || 'Single Store'} • ${lic.customer_phone || 'No phone'}</div>
+            </td>
+            <td class="py-3 px-4">
+              <div class="capitalize font-semibold text-slate-200">${lic.plan_type}</div>
+              <div class="text-[10px] text-slate-400">${validUntilText}</div>
+            </td>
+            <td class="py-3 px-4">
+              <div class="flex flex-wrap gap-1">
+                ${platforms.map(p => `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 uppercase">${p}</span>`).join('')}
+              </div>
+            </td>
+            <td class="py-3 px-4">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full ${lic.hardware_lock_enabled ? 'bg-amber-400' : 'bg-slate-600'}"></span>
+                <span class="text-[11px] font-medium text-slate-300">${lic.hardware_lock_enabled ? 'Locked' : 'Unlocked'}</span>
+                <span class="text-[10px] text-slate-500 font-mono">(${deviceCount}/${lic.max_active_devices} PC)</span>
+              </div>
+              <div class="text-[10px] text-slate-500 font-mono truncate max-w-[120px]" title="${lic.bound_hardware_id || 'Not yet bound'}">
+                ${lic.bound_hardware_id ? lic.bound_hardware_id.slice(0, 16) + '...' : 'Unbound (1st activation binds)'}
+              </div>
+            </td>
+            <td class="py-3 px-4">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                displayStatus === 'active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                displayStatus === 'expired' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }">
+                ${displayStatus}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <div class="inline-flex items-center gap-1">
+                <button onclick="resetHwidLock('${lic.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300" title="Reset Hardware Lock / Clear Devices (Allows switching PC)">
+                  <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="extendValidity('${lic.id}', 30)" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-300" title="Add +30 Days">
+                  <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="promptCustomExtend('${lic.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300" title="Add Custom Days / Lifetime">
+                  <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleSuspend('${lic.id}', '${lic.status}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 ${lic.status === 'suspended' ? 'text-emerald-400' : 'text-amber-400'}" title="${lic.status === 'suspended' ? 'Resume' : 'Suspend'}">
+                  <i data-lucide="${lic.status === 'suspended' ? 'play' : 'pause'}" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="deleteLicense('${lic.id}')" class="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400" title="Delete">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function generateKey() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let part = (len) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      return `PZON-${part(4)}-${part(4)}-${part(4)}`;
+    }
+
+    function generateNewKeyString() {
+      document.getElementById('generatedKey').value = generateKey();
+    }
+
+    function openNewLicenseModal() {
+      document.getElementById('modalSoftwareSelect').value = currentSoftware;
+      generateNewKeyString();
+      document.getElementById('newLicenseModal').classList.remove('hidden');
+    }
+
+    function closeNewLicenseModal() {
+      document.getElementById('newLicenseModal').classList.add('hidden');
+    }
+
+    // Handle Create License Submit
+    document.getElementById('newLicenseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cfg = getSupabaseConfig();
+      if (!cfg.url || !cfg.key) {
+        alert('Please configure Supabase connection first.');
+        return;
+      }
+
+      const softwareId = document.getElementById('modalSoftwareSelect').value;
+      const key = document.getElementById('generatedKey').value;
+      const name = document.getElementById('custName').value.trim();
+      const phone = document.getElementById('custPhone').value.trim();
+      const shop = document.getElementById('custShop').value.trim();
+      const plan = document.getElementById('planType').value;
+      const maxDev = parseInt(document.getElementById('maxDevices').value, 10);
+      const hwLock = document.getElementById('hwLockToggle').checked;
+
+      const platforms = [];
+      if (document.getElementById('platExe').checked) platforms.push('exe');
+      if (document.getElementById('platApk').checked) platforms.push('apk');
+      if (document.getElementById('platTermux').checked) platforms.push('termux');
+      if (document.getElementById('platLinux').checked) platforms.push('linux');
+      if (document.getElementById('platWeb').checked) platforms.push('web');
+
+      // Calculate valid until
+      let validUntil = null;
+      const now = new Date();
+      if (plan === 'custom_date') {
+        const rawDate = document.getElementById('customDateInput').value;
+        if (!rawDate) { alert('Please pick a custom expiry date.'); return; }
+        const target = new Date(rawDate);
+        target.setHours(23, 59, 59, 999);
+        validUntil = target.toISOString();
+      } else if (plan === 'custom_days') {
+        const days = parseInt(document.getElementById('customDaysInput').value, 10) || 30;
+        now.setDate(now.getDate() + days);
+        validUntil = now.toISOString();
+      } else if (plan === '15days') {
+        now.setDate(now.getDate() + 15);
+        validUntil = now.toISOString();
+      } else if (plan === 'trial') {
+        now.setDate(now.getDate() + 7);
+        validUntil = now.toISOString();
+      } else if (plan === 'monthly') {
+        now.setDate(now.getDate() + 30);
+        validUntil = now.toISOString();
+      } else if (plan === 'quarterly') {
+        now.setDate(now.getDate() + 90);
+        validUntil = now.toISOString();
+      } else if (plan === 'half_yearly') {
+        now.setDate(now.getDate() + 180);
+        validUntil = now.toISOString();
+      } else if (plan === 'yearly') {
+        now.setDate(now.getDate() + 365);
+        validUntil = now.toISOString();
+      } else if (plan === 'lifetime') {
+        validUntil = null;
+      }
+
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/licenses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            Prefer: 'return=representation'
+          },
+          body: JSON.stringify({
+            software_id: softwareId,
+            license_key: key,
+            customer_name: name,
+            customer_phone: phone,
+            shop_name: shop,
+            plan_type: plan,
+            status: 'active',
+            valid_from: new Date().toISOString(),
+            valid_until: validUntil,
+            hardware_lock_enabled: hwLock,
+            allowed_platforms: platforms.length > 0 ? platforms : ['all'],
+            max_active_devices: maxDev,
+            active_devices: []
+          })
+        });
+
+        if (res.ok) {
+          closeNewLicenseModal();
+          fetchLicenses();
+          copyToClipboard(key);
+          alert(`License Created Successfully!\n\nKey: ${key}\n(Copied to clipboard!)`);
+        } else {
+          const err = await res.json();
+          alert(`Error creating license: ${err.message || 'Check database schema'}`);
+        }
+      } catch (err) {
+        alert(`Request failed: ${err.message}`);
+      }
+    });
+
+    // Reset Hardware Lock Action
+    async function resetHwidLock(id) {
+      if (!confirm('Are you sure you want to reset Hardware Lock? This clears bound hardware ID and lets the user activate on a new PC.')) return;
+      const cfg = getSupabaseConfig();
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/licenses?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          body: JSON.stringify({ bound_hardware_id: null, active_devices: [] })
+        });
+        if (res.ok) {
+          fetchLicenses();
+          alert('Hardware Lock reset successfully! Customer can now login on another PC.');
+        }
+      } catch (err) { alert('Action failed'); }
+    }
+
+    // Extend Validity Action
+    async function extendValidity(id, days) {
+      const lic = licensesList.find(l => l.id === id);
+      if (!lic) return;
+      const currentEnd = lic.valid_until ? new Date(lic.valid_until) : new Date();
+      const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + days * 24 * 60 * 60 * 1000).toISOString();
+
+      const cfg = getSupabaseConfig();
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/licenses?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          body: JSON.stringify({ valid_until: newEnd, status: 'active' })
+        });
+        if (res.ok) {
+          fetchLicenses();
+          alert(`Added +${days} days to license!`);
+        }
+      } catch {}
+    }
+
+    // Toggle Suspend Action
+    async function toggleSuspend(id, currentStatus) {
+      const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+      const cfg = getSupabaseConfig();
+      try {
+        await fetch(`${cfg.url}/rest/v1/licenses?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          body: JSON.stringify({ status: newStatus })
+        });
+        fetchLicenses();
+      } catch {}
+    }
+
+    // Delete License
+    async function deleteLicense(id) {
+      if (!confirm('Permanently delete this license record?')) return;
+      const cfg = getSupabaseConfig();
+      try {
+        await fetch(`${cfg.url}/rest/v1/licenses?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` }
+        });
+        fetchLicenses();
+      } catch {}
+    }
+
+    // Add Software Modal Handlers
+    function openAddSoftwareModal() { document.getElementById('addSoftwareModal').classList.remove('hidden'); }
+    function closeAddSoftwareModal() { document.getElementById('addSoftwareModal').classList.add('hidden'); }
+
+    document.getElementById('addSoftwareForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cfg = getSupabaseConfig();
+      const id = document.getElementById('newSoftId').value.trim().toLowerCase();
+      const name = document.getElementById('newSoftName').value.trim();
+      const desc = document.getElementById('newSoftDesc').value.trim();
+
+      try {
+        const res = await fetch(`${cfg.url}/rest/v1/software_registry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          body: JSON.stringify({ id, name, description: desc })
+        });
+        if (res.ok) {
+          closeAddSoftwareModal();
+          currentSoftware = id;
+          loadSoftwares();
+          fetchLicenses();
+          alert(`Software "${name}" registered successfully!`);
+        }
+      } catch (err) { alert('Failed to register software.'); }
+    });
+
+    // Supabase Config Modal Handlers
+    function toggleConfigModal(show) {
+      const modal = document.getElementById('configModal');
+      if (show) {
+        document.getElementById('supabaseUrlInput').value = localStorage.getItem(STORAGE_KEY_URL) || '';
+        document.getElementById('supabaseKeyInput').value = localStorage.getItem(STORAGE_KEY_KEY) || '';
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function saveSupabaseConfig() {
+      const url = document.getElementById('supabaseUrlInput').value.trim();
+      const key = document.getElementById('supabaseKeyInput').value.trim();
+      localStorage.setItem(STORAGE_KEY_URL, url);
+      localStorage.setItem(STORAGE_KEY_KEY, key);
+      toggleConfigModal(false);
+      loadSoftwares();
+      fetchLicenses();
+      alert('Supabase connection details saved!');
+    }
+
+    // Change Password Handler
+    async function handleChangePassword() {
+      const oldPwd = document.getElementById('oldPasswordInput').value;
+      const newPwd = document.getElementById('newPasswordInput').value;
+      if (!oldPwd || !newPwd) { alert('Please enter both current and new password.'); return; }
+
+      const oldHash = await sha256(oldPwd);
+      const newHash = await sha256(newPwd);
+      const cfg = getSupabaseConfig();
+
+      if (cfg.url && cfg.key) {
+        try {
+          let res = await fetch(`${cfg.url}/rest/v1/rpc/admin_change_password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+            body: JSON.stringify({ p_old_hash: oldHash, p_new_hash: newHash })
+          });
+          let ok = await res.json();
+          // Fallback if DB still had Admin@PhoneZone2026 hash
+          if (ok !== true && oldPwd === 'admin') {
+            const fallbackRes = await fetch(`${cfg.url}/rest/v1/rpc/admin_change_password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+              body: JSON.stringify({ p_old_hash: DEFAULT_HASH, p_new_hash: newHash })
+            });
+            ok = await fallbackRes.json();
+          }
+
+          if (ok === true) {
+            localStorage.setItem('pz_admin_pwd_hash', newHash);
+            
+            // Auto-bake new password hash into updated HTML file and download
+            try {
+              let docHtml = document.documentElement.outerHTML;
+              docHtml = docHtml.replace(/const DEFAULT_HASH = '.*?';/, `const DEFAULT_HASH = '${newHash}';`);
+              if (cfg.key) {
+                docHtml = docHtml.replace(/let EMBEDDED_SUPABASE_KEY = '.*?';/, `let EMBEDDED_SUPABASE_KEY = '${cfg.key}';`);
+              }
+              const blob = new Blob(['<!DOCTYPE html>\n<html lang="en" class="dark">\n' + docHtml.replace(/<html.*?>/i, '')], { type: 'text/html' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'license-dashboard.html';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            } catch {}
+
+            alert('Password changed successfully in Supabase and baked into downloaded license-dashboard.html! Ab dobara start hone par hamesha yahi naya password chalega.');
+            document.getElementById('oldPasswordInput').value = '';
+            document.getElementById('newPasswordInput').value = '';
+            toggleConfigModal(false);
+            return;
+          } else {
+            alert('Current password was incorrect. If you haven\'t changed it yet, current password is admin');
+            return;
+          }
+        } catch (e) {
+          alert('Error connecting to Supabase: ' + e.message);
+          return;
+        }
+      }
+      localStorage.setItem('pz_admin_pwd_hash', newHash);
+      alert('Password updated in local browser!');
+      toggleConfigModal(false);
+    }
+
+    // Cron Guide Modal
+    function openCronGuideModal() {
+      const cfg = getSupabaseConfig();
+      const pingUrl = cfg.url ? `${cfg.url}/rest/v1/software_registry?select=id&limit=1` : 'https://nfktxnjxdmqcvlghlodi.supabase.co/rest/v1/software_registry?select=id&limit=1';
+      document.getElementById('cronPingUrl').innerText = pingUrl;
+      const key = cfg.key || 'sb_publishable_D7kiQTcdnrb7NhOJhZ2dQw_6Fqnuhlk';
+      if (document.getElementById('cronHeaderKey')) document.getElementById('cronHeaderKey').innerText = key;
+      if (document.getElementById('cronHeaderAuth')) document.getElementById('cronHeaderAuth').innerText = `Bearer ${key}`;
+      document.getElementById('cronGuideModal').classList.remove('hidden');
+    }
+    function closeCronGuideModal() { document.getElementById('cronGuideModal').classList.add('hidden'); }
+
+    function copyText(text, successMsg = 'Copied to clipboard!') {
+      navigator.clipboard.writeText(text).then(() => {
+        alert(successMsg);
+      }).catch(() => {
+        prompt('Copy this text:', text);
+      });
+    }
+
+    function updateCustomValidityDisplay() {
+      const val = document.getElementById('planType').value;
+      const daysWrap = document.getElementById('customDaysWrapper');
+      const dateWrap = document.getElementById('customDateWrapper');
+      if (val === 'custom_days') {
+        daysWrap.classList.remove('hidden');
+        dateWrap.classList.add('hidden');
+      } else if (val === 'custom_date') {
+        dateWrap.classList.remove('hidden');
+        daysWrap.classList.add('hidden');
+        if (!document.getElementById('customDateInput').value) {
+          const d = new Date();
+          d.setDate(d.getDate() + 30);
+          document.getElementById('customDateInput').value = d.toISOString().split('T')[0];
+        }
+      } else {
+        daysWrap.classList.add('hidden');
+        dateWrap.classList.add('hidden');
+      }
+    }
+
+    function setQuickValidity(plan) {
+      document.getElementById('planType').value = plan;
+      updateCustomValidityDisplay();
+    }
+
+    async function promptCustomExtend(id) {
+      const input = prompt('Enter number of days to extend (e.g. 15, 45, 90, 180, 365), or type "lifetime":', '30');
+      if (!input) return;
+      if (input.trim().toLowerCase() === 'lifetime') {
+        const cfg = getSupabaseConfig();
+        try {
+          const res = await fetch(`${cfg.url}/rest/v1/licenses?id=eq.${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+            body: JSON.stringify({ valid_until: null, plan_type: 'lifetime', status: 'active' })
+          });
+          if (res.ok) { fetchLicenses(); alert('License updated to Lifetime Unlimited!'); }
+        } catch {}
+        return;
+      }
+      const days = parseInt(input, 10);
+      if (isNaN(days) || days <= 0) { alert('Please enter a valid positive number of days.'); return; }
+      extendValidity(id, days);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text);
+    }
+
+    function shareOnWhatsApp(key, name, phone) {
+      const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+      const message = `Hello ${name || 'Valued Customer'},\n\nYour official license key for ${currentSoftware.toUpperCase()} is ready:\n\n🔑 License Key: *${key}*\n\nPlease open your software, enter this key on the activation screen, and press Activate.\n\nThank you for choosing us!`;
+      const url = cleanPhone
+        ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(message)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+    }
+
+    // Auto-initialize icons
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+  </script>
+
+
+</body></html>

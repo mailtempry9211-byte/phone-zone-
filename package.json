@@ -13,12 +13,17 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "apk:sync": "npm run build && npx cap sync android",
+    "apk:build": "npm run apk:sync && cd android && gradlew assembleRelease",
     "electron:dev": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder --dir",
     "installer:build": "npm run build && electron-builder --win",
     "portable:build": "npm run build && electron-builder --win portable --x64"
   },
   "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/cli": "8.6.0",
+    "@capacitor/core": "8.6.0",
     "@hookform/resolvers": "^3.9.0",
     "@lovable.dev/mcp-js": "^0.25.0",
     "@ngrok/ngrok": "^1.7.0",
@@ -136,8 +141,7 @@
         "from": "dist",
         "to": "dist",
         "filter": [
-          "**/*",
-          "!ocr/*.wasm.js"
+          "**/*"
         ]
       },
       {
@@ -169,7 +173,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PhoneZone"
+      "shortcutName": "PhoneZone",
+      "deleteAppDataOnUninstall": true
     }
   },
   "allowScripts": {

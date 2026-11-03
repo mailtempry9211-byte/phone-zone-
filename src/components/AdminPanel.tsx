@@ -91,18 +91,21 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
   // Require Supabase authentication for admin access
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 text-slate-100 p-8 rounded-2xl shadow-2xl w-full max-w-md">
           <div className="flex items-center mb-6">
-            <Button variant="ghost" onClick={onBack} className="p-0 mr-4">
+            <Button variant="ghost" size="sm" onClick={onBack} className="text-slate-400 hover:text-white p-1.5 mr-3 rounded-lg">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h2 className="text-2xl font-bold">Admin Login</h2>
+            <div>
+              <h2 className="text-2xl font-black text-white tracking-tight">Admin Login</h2>
+              <p className="text-xs text-slate-400">PhoneZone Management Console</p>
+            </div>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <Label htmlFor="email">Username or Email</Label>
+              <Label htmlFor="email" className="text-xs font-bold text-slate-200">Username or Email</Label>
               <Input
                 id="email"
                 type="text"
@@ -112,15 +115,16 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoginPending}
                 required
+                className="mt-1 bg-slate-950 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-xs font-bold text-slate-200">Password</Label>
                 <button
                   type="button"
                   onClick={() => setForgotDialogOpen(true)}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:underline cursor-pointer"
+                  className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:underline cursor-pointer"
                 >
                   Forgot Password? (पासवर्ड भूल गए?)
                 </button>
@@ -133,20 +137,21 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoginPending}
                 required
+                className="mt-1 bg-slate-950 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoginPending}>
+            <Button type="submit" className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold h-10 shadow-lg shadow-cyan-600/20" disabled={isLoginPending}>
               {isLoginPending ? "Signing in..." : "Sign in"}
             </Button>
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-slate-400 text-center font-medium">
               {isOfflineMode()
-                ? "Signing in to the local PhoneZone backend..."
-                : "Signing in to PhoneZone via Supabase..."}
+                ? "Signing in to local PhoneZone secure database"
+                : "Signing in to PhoneZone via Supabase Auth"}
             </p>
           </form>
           
-          <div className="mt-4 pt-4 border-t">
-            <p className="text-sm text-gray-600 mb-2">Or sign in with Supabase Auth:</p>
+          <div className="mt-4 pt-4 border-t border-slate-800">
+            <p className="text-xs text-slate-400 mb-2">Or sign in with Supabase Auth:</p>
             <AuthDialog />
           </div>
 

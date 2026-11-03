@@ -214,16 +214,15 @@ export const PurchaseDashboardView: React.FC<PurchaseDashboardViewProps> = ({
                         )}
                       </td>
                       <td className="py-2.5 text-center font-bold">
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] px-2.5 py-0.5 font-bold font-mono transition-colors ${
+                        <span
+                          className={`inline-flex items-center justify-center min-w-[34px] px-2.5 py-0.5 rounded-full text-xs font-black font-mono border transition-colors ${
                             isLight
-                              ? "bg-slate-100 border-slate-300 text-slate-800"
-                              : "bg-slate-800/90 border-slate-700 text-cyan-300 shadow-xs"
+                              ? "bg-slate-100 border-slate-400 text-slate-900 shadow-xs"
+                              : "bg-cyan-500/20 border-cyan-400/80 text-cyan-300 shadow-xs"
                           }`}
                         >
                           {m.units_purchased}x
-                        </Badge>
+                        </span>
                       </td>
                       <td className="py-2.5 text-right font-bold text-emerald-400">
                         {formatINR(m.avg_purchase_price)}

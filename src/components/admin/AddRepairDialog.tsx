@@ -19,6 +19,7 @@ import ImeiScanButton from "./ImeiScanButton";
 import AadhaarScanButton from "./AadhaarScanButton";
 import RepairShareModal from "./RepairShareModal";
 import RepairContactPickerDialog, { type ContactItem } from "./RepairContactPickerDialog";
+import { InterconnectedPartyLookup } from "./InterconnectedPartyLookup";
 import { useTacLookup } from "@/hooks/useTacLookup";
 
 interface AddRepairDialogProps {
@@ -402,6 +403,18 @@ export const AddRepairDialog: React.FC<AddRepairDialogProps> = ({
                 />
               </div>
             </div>
+
+            {/* Universal Cross-Entity Interconnection Banner */}
+            <InterconnectedPartyLookup
+              phone={customerPhone}
+              currentRole="repair"
+              onApply={(party) => {
+                if (party.name) setCustomerName(party.name);
+                if (party.address) setCustomerAddress(party.address);
+                if (party.id_number) setIdNumber(party.id_number);
+                if (party.id_proof_type) setIdProofType(party.id_proof_type);
+              }}
+            />
           </div>
 
           {/* Section 2: Device */}

@@ -95,7 +95,10 @@ const SoldTab = () => {
         phone.phone_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
         phone.imei_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        phone.customers?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone as any).invoice_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone as any).batch_sale_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (phone.customers?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((phone.customers as any)?.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (phone.variant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (phone.colour || '').toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -301,7 +304,7 @@ const SoldTab = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search sold phones..."
+            placeholder="Search sold phones, invoice no (SAL-...), IMEI, customer..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -577,6 +580,7 @@ const SoldTab = () => {
         productCount={invoicePhone?.product_photos?.length || 0}
         purchaseCount={invoicePhone?.purchase_documents?.length || 0}
         saleCount={invoicePhone?.sale_documents?.length || (invoicePhone?.payment_proof_photos && invoicePhone?.payment_proof_photos.some((p: string) => p.includes('sale-documents')) ? invoicePhone?.payment_proof_photos?.length : 0)}
+        paymentProofCount={invoicePhone?.payment_proof_photos?.length || 0}
         baseAmount={Number(invoicePhone?.selling_price || 0)}
         onGenerate={(custom) => {
           if (!invoicePhone) return;
