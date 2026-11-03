@@ -1,0 +1,10 @@
+{
+	"appId": "com.phonezone.app",
+	"appName": "PhoneZone Store & Repair Manager",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true
+	}
+}
