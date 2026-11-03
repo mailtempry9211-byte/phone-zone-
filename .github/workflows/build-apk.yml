@@ -42,7 +42,12 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log || {
+            echo "::error file=android/build.gradle::$(grep -E '(FAILURE|FAILED|Error:|error:|exception)' ../gradle_build.log | tail -n 5)"
+            echo "=== FULL GRADLE ERROR LOG ==="
+            cat ../gradle_build.log | tail -n 120
+            exit 1
+          }
           cd ..
           echo "=== Built APK files ==="
           find android/app/build/outputs -name "*.apk" || ls -la android/app/build/outputs/apk/debug/
@@ -54,4 +59,13 @@ jobs:
           path: android/app/build/outputs/**/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload Build Log (Diagnostic)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle_build.log
+          if-no-files-found: ignore
+
 
