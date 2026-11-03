@@ -41,18 +41,16 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_output.txt || {
-            echo "## Gradle Build Error" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 60 ../gradle_output.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1
-          }
-
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cd ..
+          echo "=== Built APK files ==="
+          find android/app/build/outputs -name "*.apk" || ls -la android/app/build/outputs/apk/debug/
 
       - name: Upload PhoneZone APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PhoneZone-Android-App-Debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/**/*.apk
+          if-no-files-found: error
           retention-days: 30
+
