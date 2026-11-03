@@ -42,10 +42,16 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build.log 2>&1 || {
+            ERR_MSG=$(tail -n 15 build.log | tr '\n' ' ')
+            echo "::error file=android/build.gradle,title=Gradle Details::$ERR_MSG"
+            cat build.log | tail -n 60
+            cp build.log ../gradle_build.txt
+            exit 1
+          }
           cd ..
           mkdir -p build-artifacts
-          find android -name "*.apk" -exec cp {} build-artifacts/ \;
+          find android -name "*.apk" -exec cp -v {} build-artifacts/ \; || true
           echo "=== Copied APK Artifacts ==="
           ls -la build-artifacts/
 
@@ -56,13 +62,15 @@ jobs:
           path: build-artifacts/*.apk
           retention-days: 30
 
-
       - name: Upload Build Log (Diagnostic)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-build-log
-          path: gradle_build.log
+          path: |
+            android/build.log
+            gradle_build.txt
           if-no-files-found: ignore
+
 
 
