@@ -1,0 +1,6 @@
+
+android/gradlew text eol=lf
+run-linux.sh text eol=lf
+run-termux.sh text eol=lf
+license-management/launchers/run-linux.sh text eol=lf
+license-management/launchers/run-termux.sh text eol=lf
