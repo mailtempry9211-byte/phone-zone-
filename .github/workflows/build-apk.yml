@@ -42,23 +42,20 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle_build.log || {
-            echo "::error file=android/build.gradle::$(grep -E '(FAILURE|FAILED|Error:|error:|exception)' ../gradle_build.log | tail -n 5)"
-            echo "=== FULL GRADLE ERROR LOG ==="
-            cat ../gradle_build.log | tail -n 120
-            exit 1
-          }
+          ./gradlew assembleDebug --no-daemon --stacktrace
           cd ..
-          echo "=== Built APK files ==="
-          find android/app/build/outputs -name "*.apk" || ls -la android/app/build/outputs/apk/debug/
+          mkdir -p build-artifacts
+          find android -name "*.apk" -exec cp {} build-artifacts/ \;
+          echo "=== Copied APK Artifacts ==="
+          ls -la build-artifacts/
 
       - name: Upload PhoneZone APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PhoneZone-Android-App-Debug
-          path: android/app/build/outputs/**/*.apk
-          if-no-files-found: error
+          path: build-artifacts/*.apk
           retention-days: 30
+
 
       - name: Upload Build Log (Diagnostic)
         if: always()
