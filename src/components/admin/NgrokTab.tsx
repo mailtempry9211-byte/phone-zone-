@@ -21,7 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { LOCAL_API_BASE } from "@/lib/data/config";
+import { LOCAL_API_BASE } from "@/lib/data";
 
 interface NgrokState {
   authtoken: string;

@@ -28,7 +28,7 @@ import {
   Radio,
   Power,
 } from "lucide-react";
-import { LOCAL_API_BASE } from "@/lib/data/config";
+import { LOCAL_API_BASE } from "@/lib/data";
 
 export const OpenWaUniversalControl: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [open, setOpen] = useState(false);

@@ -27,7 +27,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { LOCAL_API_BASE } from "@/lib/data/config";
+import { LOCAL_API_BASE } from "@/lib/data";
 
 export const NgrokUniversalControl: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [open, setOpen] = useState(false);

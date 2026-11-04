@@ -69,18 +69,22 @@
 ## ⚠️ Render Common Errors & 100% Working Fixes
 
 ### Error 1: "Exited with status 1 while building your code (Node 24 / Vite Not Found)"
-- **कारण (यही पहला एरर आया था)**:
+- **कारण**:
   1. Render ने अपने आप **Node.js 24.22.1** चुन लिया था। Node 24 में Linux के लिए `better-sqlite3` और `sharp` के प्रीबिल्ट बाइनरी नहीं होते, जिससे npm install फ़ेल हो जाता है।
   2. `NODE_ENV=production` सेट होने पर npm install बाय डिफ़ॉल्ट `vite` और `typescript` को छोड़ देता है।
-- **100% परमानेंट समाधान (कोड में लागू कर दिया गया है)**:
+- **100% परमानेंट समाधान**:
   1. हमने रिपॉज़िटरी में `.node-version` और `.nvmrc` फ़ाइल बनाकर Node 20.18.0 फ़िक्स कर दिया है।
-  2. `package.json` में `vite`, `typescript`, `tailwindcss` को सीधे कोर `dependencies` में डाल दिया है ताकि production मोड में भी कभी मिस न हों।
-  3. **आपको Render पर सिर्फ 2 चीज़ें करनी हैं**:
-     - **Build Command**: `npm run render:build` (या `npm install --include=dev && cd backend && npm install && cd .. && npm run build`)
-     - **Environment Variable में जोड़ें**:
-       - **Key**: `NODE_VERSION`
-       - **Value**: `20.18.0`
-     - इसके बाद Render के Deploy पेज पर जाकर **"Clear build cache & deploy"** या **"Manual Deploy -> Deploy latest commit"** दबाएँ। बिल्ड बिना किसी एरर के 100% पास हो जाएगा!
+  2. `package.json` में `vite`, `typescript`, `tailwindcss` को सीधे कोर `dependencies` में डाल दिया है।
+  3. Environment Variables में `NODE_VERSION` = `20.18.0` रखें और Build Command में `npm run render:build` रखें।
+
+---
+
+### Error 2: "Rollup failed to resolve import src/lib/data/config"
+- **कारण**: Linux (Render) पर केस-सेंसिटिव पाथ और एक्सटेंशन रिज़ॉल्वर के कारण Rollup को `@/lib/data/config` की फ़ाइल सीधे नहीं मिल रही थी।
+- **100% परमानेंट समाधान**:
+  1. सारे इम्पोर्ट्स को सेंट्रलाइज़्ड `@/lib/data` (जिसमें `index.ts` मौजूद है) में बदल दिया गया है।
+  2. `vite.config.ts` में एक्सटेंशन लिस्ट `[".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"]` जोड़ दी गई है।
+  3. अब Linux और Windows दोनों पर Rollup 100% बिना किसी रुकावट के तुरंत फ़ाइलें रिज़ॉल्व कर लेता है।
 
 ---
 

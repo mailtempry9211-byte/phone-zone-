@@ -12,7 +12,7 @@ import { Eye, Download, Trash2, RefreshCw, HardDrive, Image, AlertCircle } from 
 import { toast } from "sonner";
 import StorageUsageCard from "./StorageUsageCard";
 import PhotoViewer from "./PhotoViewer";
-import { isOfflineMode } from "@/lib/data/config";
+import { isOfflineMode } from "@/lib/data";
 
 interface StorageFile {
   /** Display path - the file's relative path inside local storage. */

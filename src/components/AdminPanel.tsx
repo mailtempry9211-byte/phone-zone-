@@ -14,7 +14,7 @@ import { useFinancialYear } from "@/hooks/useFinancialYear";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { createOfflineSupabase } from "@/lib/data/offlineSupabase";
 import { supabase } from "@/integrations/supabase/client";
-import { isOfflineMode } from "@/lib/data/config";
+import { isOfflineMode } from "@/lib/data";
 
 // Lazy-load AdminDashboard so unauthenticated users or public visitors never download it
 const AdminDashboard = React.lazy(() => import("./admin/AdminDashboard"));

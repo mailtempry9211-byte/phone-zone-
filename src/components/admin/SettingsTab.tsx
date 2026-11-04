@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { isOfflineMode } from "@/lib/data/config";
+import { isOfflineMode } from "@/lib/data";
 import { compressImage } from "@/utils/imageCompression";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

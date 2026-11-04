@@ -2,7 +2,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { isOfflineMode } from '@/lib/data/config';
+import { isOfflineMode } from '@/lib/data';
 
 interface AuthContextType {
   user: User | null;
