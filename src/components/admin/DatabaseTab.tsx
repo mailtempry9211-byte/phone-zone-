@@ -14,6 +14,7 @@ import JSZip from 'jszip';
 import StorageManagementCard from "./StorageManagementCard";
 import { GoogleDriveBackupCard } from "./GoogleDriveBackupCard";
 import { DataRetentionCard } from "./DataRetentionCard";
+import { CloudQuotaMonitorCard } from "./CloudQuotaMonitorCard";
 
 interface Message {
   id: string;
@@ -1418,6 +1419,9 @@ section h2 {
 
       {/* Google Drive Cloud Backup */}
       <GoogleDriveBackupCard />
+
+      {/* Cloud & Database Free-Tier Live Monitor */}
+      <CloudQuotaMonitorCard />
 
       {/* 2+1 Year Auto-Backup & Retention Purge */}
       <DataRetentionCard />

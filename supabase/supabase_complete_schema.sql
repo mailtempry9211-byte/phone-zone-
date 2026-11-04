@@ -319,8 +319,65 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- 5. STORAGE BUCKETS CONFIGURATION
+-- 6. LIVE QUOTA MONITOR RPC (Database 500 MB, Storage 1 GB, Table Counts)
 -- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.get_supabase_quota_metrics()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    db_size_bytes bigint := 0;
+    storage_size_bytes bigint := 0;
+    storage_files_count bigint := 0;
+    phones_count bigint := 0;
+    repairs_count bigint := 0;
+    audit_count bigint := 0;
+BEGIN
+    -- Real Database size in bytes
+    SELECT pg_database_size(current_database()) INTO db_size_bytes;
+
+    -- Real Storage size from storage.objects in bytes
+    SELECT 
+        COALESCE(SUM((metadata->>'size')::bigint), 0),
+        COUNT(*)
+    INTO storage_size_bytes, storage_files_count
+    FROM storage.objects;
+
+    -- Row counts
+    SELECT COUNT(*) INTO phones_count FROM public.phones;
+    SELECT COUNT(*) INTO repairs_count FROM public.repair_jobs;
+    SELECT COUNT(*) INTO audit_count FROM public.audit_logs;
+
+    RETURN jsonb_build_object(
+        'database', jsonb_build_object(
+            'usedBytes', db_size_bytes,
+            'limitBytes', 524288000, -- 500 MB
+            'usedMb', round((db_size_bytes::numeric / (1024 * 1024)), 2),
+            'limitMb', 500,
+            'percentage', round(((db_size_bytes::numeric / 524288000) * 100), 1)
+        ),
+        'storage', jsonb_build_object(
+            'usedBytes', storage_size_bytes,
+            'limitBytes', 1048576000, -- 1 GB
+            'usedMb', round((storage_size_bytes::numeric / (1024 * 1024)), 2),
+            'limitMb', 1000,
+            'fileCount', storage_files_count,
+            'percentage', round(((storage_size_bytes::numeric / 1048576000) * 100), 1)
+        ),
+        'bandwidth', jsonb_build_object(
+            'limitMb', 2000,
+            'status', 'healthy'
+        ),
+        'tableCounts', jsonb_build_object(
+            'phones', phones_count,
+            'repairJobs', repairs_count,
+            'auditLogs', audit_count
+        )
+    );
+END;
+$$;
+
 INSERT INTO storage.buckets (id, name, public)
 VALUES 
     ('phonezone-uploads', 'phonezone-uploads', true),

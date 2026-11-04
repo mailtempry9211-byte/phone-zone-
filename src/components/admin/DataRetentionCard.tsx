@@ -70,14 +70,14 @@ export const DataRetentionCard: React.FC = () => {
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <Database className="h-5 w-5 text-amber-500" />
-                2+1 Year Data Retention & Auto-Purge
+                2 Financial Years Active Data & 3rd Year Auto-Purge
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Maintains 2 Active Financial Years + 1 Archival Year. Automatically purges data older than 3 years to maximize database speed and comply with free-tier cloud limits.
+                Maintains 2 Active Financial Years 100% Live. Automatically creates a verified full backup snapshot and purges data entering the 3rd year or older.
               </p>
             </div>
             <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 font-mono text-xs w-fit">
-              Policy: 2+1 FY Active
+              Policy: 2 Years Live + 3rd Year Backup & Purge
             </Badge>
           </div>
         </CardHeader>

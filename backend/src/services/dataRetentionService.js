@@ -21,28 +21,31 @@ import { audit } from "./auditService.js";
 import { logger } from "../lib/logger.js";
 
 /**
- * Calculates cutoff date for 2+1 financial years (3 years back from current April 1).
+ * Calculates cutoff date for data retention.
+ * By default: Keeps exactly 2 Active Financial Years (Current FY + 1 Previous FY).
+ * Any data in the 3rd year or older (before 2 completed FYs) is purged after backup.
  */
-export function getPurgeCutoffDate() {
+export function getPurgeCutoffDate(keepYears = 2) {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0-indexed (April is 3)
 
-  // Determine current financial year start
+  // Determine current financial year start (April 1st)
   const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
 
-  // 2+1 years = 3 years before current FY start
-  const cutoffYear = fyStartYear - 3;
+  // Keep `keepYears` active: e.g. for keepYears = 2, cutoff is 2 years back from current FY start
+  const cutoffYear = fyStartYear - keepYears;
   const cutoffDate = `${cutoffYear}-04-01T00:00:00.000Z`;
-  return { cutoffDate, cutoffYear, fyStartYear };
+  const activeFys = `${cutoffYear}-${String(cutoffYear + 1).slice(2)} to ${fyStartYear}-${String(fyStartYear + 1).slice(2)}`;
+  return { cutoffDate, cutoffYear, fyStartYear, keepYears, activeFys };
 }
 
 /**
  * Preview how many records will be purged without making any changes.
  */
-export function previewPurge() {
+export function previewPurge(keepYears = 2) {
   const db = getDb();
-  const { cutoffDate, cutoffYear } = getPurgeCutoffDate();
+  const { cutoffDate, cutoffYear, activeFys } = getPurgeCutoffDate(keepYears);
 
   const eligibleSoldPhones = db
     .prepare(
@@ -68,8 +71,9 @@ export function previewPurge() {
 
   return {
     cutoffDate,
-    cutoffYear: `FY ${cutoffYear - 1}-${String(cutoffYear).slice(2)} & older`,
-    retentionPolicy: "2 Active Years + 1 Archival Year (Purging data > 3 years old)",
+    cutoffYear: `FY ${cutoffYear - 1}-${String(cutoffYear).slice(2)} & older (3rd Year+)`,
+    activeWindow: `Keeping 2 Active Financial Years (${activeFys})`,
+    retentionPolicy: "2 Active Financial Years Kept 100% Live. 3rd Year & Older Safely Backed Up & Purged.",
     counts: {
       soldPhones: eligibleSoldPhones,
       repairJobs: eligibleRepairJobs,
@@ -83,10 +87,10 @@ export function previewPurge() {
 /**
  * Executes verified backup first, then purges old data, and vacuums database.
  */
-export async function execute2Plus1Purge({ actorUserId = null, forceCloudUpload = true } = {}) {
+export async function execute2Plus1Purge({ actorUserId = null, forceCloudUpload = true, keepYears = 2 } = {}) {
   const db = getDb();
-  const preview = previewPurge();
-  const { cutoffDate } = getPurgeCutoffDate();
+  const preview = previewPurge(keepYears);
+  const { cutoffDate, activeFys } = getPurgeCutoffDate(keepYears);
 
   logger.info("Starting 2+1 Year Purge. Creating mandatory pre-purge backup snapshot...");
 

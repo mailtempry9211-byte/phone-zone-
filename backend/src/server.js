@@ -148,6 +148,18 @@ if (isMain) {
     import("./services/tacService.js")
       .then((m) => m.ensureEmbeddedTacLoaded().catch((err) => logger.warn("TAC auto-load error", err)))
       .catch(() => {});
+
+    // Automated keep-alive pinger for Render / cloud hosting (pings /api/health every 10 min)
+    const keepAliveUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+    if (keepAliveUrl) {
+      const pingTarget = `${keepAliveUrl.replace(/\/$/, "")}/api/health`;
+      setInterval(async () => {
+        try {
+          await fetch(pingTarget);
+          logger.info(`Keep-alive ping sent to ${pingTarget}`);
+        } catch (_err) {}
+      }, 10 * 60 * 1000); // 10 minutes
+    }
   });
   const shutdown = () => {
     server.close(() => {

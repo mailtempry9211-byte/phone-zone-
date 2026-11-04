@@ -19,6 +19,7 @@ import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import * as googleDrive from "../services/googleDriveService.js";
 import * as retention from "../services/dataRetentionService.js";
+import { getLiveQuotaMetrics } from "../services/quotaService.js";
 import * as licenseService from "../services/licenseService.js";
 import { getDeviceInfo } from "../services/hardwareId.js";
 import { getDb } from "../db/index.js";
@@ -215,8 +216,15 @@ export function buildRouter() {
   const r = express.Router();
   r.use(remoteGuard);
 
-      // ---------------- public (no auth) ----------------
-  r.get("/health", (_req, res) => res.json({ ok: true, offline: true, host: SERVER.host, port: SERVER.port }));
+  // ---------------- public keepalive & health (no auth) ----------------
+  r.get("/health", wrap(async (_req, res) => {
+    // Touch database to keep Supabase or SQLite active and prevent 7-day pause
+    try {
+      getDb().prepare("SELECT 1").get();
+    } catch (_e) {}
+    res.json({ ok: true, offline: true, host: SERVER.host, port: SERVER.port, uptime: Math.round(process.uptime()) });
+  }));
+  r.get("/ping", (_req, res) => res.json({ pong: true, time: Date.now() }));
 
   // ---------------- licensing system (public status & activation) ----------------
   r.get("/license/status", wrap((_req, res) => res.json(licenseService.getLicenseStatus())));
@@ -795,6 +803,11 @@ export function buildRouter() {
     enforce(backupLimiter, req);
     const result = await retention.execute2Plus1Purge({ actorUserId: req.user?.id });
     res.json(result);
+  }));
+
+  // ---------------- live cloud quota monitor (Supabase / Render / Local) ----------------
+  r.get("/system/quota", requireAuth, wrap((_req, res) => {
+    res.json(getLiveQuotaMetrics());
   }));
 
   // ---------------- audit note endpoint ----------------
