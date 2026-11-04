@@ -778,7 +778,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               variant="outline"
               size="sm"
               onClick={handleAdminBack}
-              className={`h-7 px-2.5 text-xs font-bold border transition-all flex items-center gap-1.5 shadow-sm shrink-0 ${
+              className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
                   : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
@@ -786,7 +786,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               title="Go Back (Alt + Left Arrow)"
             >
               <ArrowLeft className="h-3.5 w-3.5 text-blue-500" />
-              <span className="text-[11px]">Back</span>
+              <span className="hidden md:inline text-[11px]">Back</span>
             </Button>
 
             <Button
@@ -801,7 +801,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               title="Refresh Page (F5 / Ctrl + R)"
             >
               <RotateCw className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="hidden md:inline text-[11px]">Refresh</span>
+              <span className="hidden lg:inline text-[11px]">Refresh</span>
             </Button>
 
             {/* Global Company / Store Branch Switcher (Always prominent, never hidden or overlapped) */}
@@ -809,9 +809,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <ShopSwitcher isDark={isDark} />
             </div>
 
-            <div className="flex items-center gap-2 truncate max-w-[120px] sm:max-w-xs md:max-w-sm shrink-0">
+            <div className="flex items-center gap-1.5 truncate max-w-[100px] sm:max-w-xs shrink-0">
               <div
-                className={`h-7 w-7 rounded-lg flex items-center justify-center font-black text-xs text-white shadow shrink-0 hidden sm:flex ${
+                className={`h-6 w-6 rounded-md flex items-center justify-center font-black text-[10px] text-white shadow shrink-0 hidden sm:flex ${
                   brandKey === "luxury"
                     ? "bg-gradient-to-tr from-amber-600 via-yellow-500 to-amber-300 text-black shadow-amber-500/20"
                     : brandKey === "neon"
@@ -827,13 +827,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Right: High-contrast visible tool pills & theme toggle (No overlap, smooth horizontal scroll if needed) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 overflow-x-auto scrollbar-none min-w-0 ml-auto">
+          {/* Right: High-contrast visible tool pills & theme toggle (Guaranteed ZERO horizontal scroll) */}
+          <div className="flex items-center gap-1 py-0.5 min-w-0 ml-auto shrink-0">
 
             {/* Global Dark / Light Switch */}
             <button
               onClick={toggleThemeMode}
-              className={`h-7 px-2 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 shadow-sm ${
+              className={`h-7 px-2 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "bg-slate-900 border-slate-700 text-amber-300 hover:bg-slate-800"
                   : "bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200"
@@ -843,12 +843,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {isDark ? (
                 <>
                   <Sun className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                  <span className="hidden md:inline text-[11px]">Light</span>
+                  <span className="hidden 2xl:inline text-[11px]">Light</span>
                 </>
               ) : (
                 <>
                   <Moon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                  <span className="hidden md:inline text-[11px]">Dark</span>
+                  <span className="hidden 2xl:inline text-[11px]">Dark</span>
                 </>
               )}
             </button>
@@ -856,7 +856,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Financial Year Switcher (Admin only) */}
             {isAdminOrOwner && (
               <FinancialYearSwitcher
-                className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                   isDark
                     ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
                     : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
@@ -872,7 +872,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 if (!open) setUniversalSearchQuery("");
               }}
               initialQuery={universalSearchQuery}
-              className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+              className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "bg-slate-900 border-blue-500/40 text-blue-300 hover:bg-slate-800"
                   : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
@@ -883,7 +883,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={() => setLicenseModalOpen(true)}
-              className={`h-7 px-2 text-xs font-bold border rounded-md transition-all flex items-center gap-1 shadow-sm ${
+              className={`h-7 px-1.5 text-xs font-bold border rounded-md transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
                   : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
@@ -891,14 +891,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               title="View License, Hardware ID (HWID) & Transfer Device"
             >
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-              <span>License</span>
+              <span className="hidden xl:inline">License</span>
             </button>
 
             {/* WhatsApp Control Pill (Admin only) */}
             {isAdminOrOwner && (
-              <div className="hidden sm:block">
+              <div className="hidden sm:block shrink-0">
                 <OpenWaUniversalControl
-                  className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
                     isDark
                       ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
                       : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
@@ -909,9 +909,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Ngrok Control Pill (Admin only) */}
             {isAdminOrOwner && (
-              <div className="hidden lg:block">
+              <div className="hidden lg:block shrink-0">
                 <NgrokUniversalControl
-                  className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
                     isDark
                       ? "bg-slate-900 border-sky-500/40 text-sky-300 hover:bg-slate-800"
                       : "bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100"
@@ -922,10 +922,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Storage Usage Pill (Admin only) */}
             {isAdminOrOwner && (
-              <div className="hidden 2xl:block">
+              <div className="hidden 2xl:block shrink-0">
                 <StorageUsageCard
                   compact
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border transition-all ${
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-xs font-semibold border transition-all ${
                     isDark
                       ? "bg-slate-900 border-slate-700 text-slate-200"
                       : "bg-white border-slate-200 text-slate-700 shadow-xs"
@@ -936,7 +936,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Password Change Dialog */}
             <PasswordChangeDialog
-              className={`h-7 px-2 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+              className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
                   : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
@@ -948,7 +948,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               href="/mobile-preview"
               target="_blank"
               rel="noreferrer"
-              className={`h-7 px-2 text-xs font-bold border transition-all rounded-md flex items-center gap-1 shadow-sm ${
+              className={`h-7 px-1.5 text-xs font-bold border transition-all rounded-md flex items-center gap-1 shadow-sm shrink-0 ${
                 isDark
                   ? "border-cyan-800 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/60"
                   : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"
@@ -956,7 +956,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               title="Open Mobile Phone View Emulator"
             >
               <Smartphone className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Phone View</span>
+              <span className="hidden 2xl:inline">Phone</span>
             </a>
 
             {/* Back to Storefront Link */}
@@ -965,14 +965,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={onBack}
-                className={`h-7 px-2 text-xs font-bold border transition-all ${
+                title="Storefront"
+                className={`h-7 px-1.5 text-xs font-bold border transition-all shrink-0 ${
                   isDark
                     ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
                     : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
                 }`}
               >
-                <Store className="h-3.5 w-3.5 mr-1 text-teal-500" />
-                <span className="hidden xl:inline">Storefront</span>
+                <Store className="h-3.5 w-3.5 text-teal-500" />
+                <span className="hidden 2xl:inline ml-1">Store</span>
               </Button>
             )}
 
@@ -983,14 +984,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 size="sm"
                 onClick={onOpenLogout}
                 title="Logout"
-                className={`h-7 px-2.5 text-xs font-bold border transition-all ${
+                className={`h-7 px-2 text-xs font-bold border transition-all shrink-0 ${
                   isDark
                     ? "border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-100"
                     : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
                 }`}
               >
-                <LogOut className="h-3.5 w-3.5 mr-1 text-rose-400" />
-                <span>Logout</span>
+                <LogOut className="h-3.5 w-3.5 sm:mr-1 text-rose-400" />
+                <span className="hidden sm:inline">Logout</span>
               </Button>
             )}
           </div>

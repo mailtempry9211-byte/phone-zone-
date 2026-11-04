@@ -371,22 +371,22 @@ ${itemsText}
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="border-b pb-3">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 text-slate-100 border border-slate-800 shadow-2xl">
+        <DialogHeader className="border-b border-slate-800 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-sky-800">
-                <Building2 className="h-6 w-6 text-sky-600" />
+              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-sky-400">
+                <Building2 className="h-6 w-6 text-sky-400" />
                 B2B Bulk Purchase Invoice (संयुक्त डीलर बिल)
               </DialogTitle>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Invoice <strong>{invoiceNumber}</strong> • Date: <strong>{purchaseDate}</strong> • Dealer:{" "}
-                <strong>{dealer.shop_name}</strong>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Invoice <strong className="text-slate-200">{invoiceNumber}</strong> • Date: <strong className="text-slate-200">{purchaseDate}</strong> • Dealer:{" "}
+                <strong className="text-slate-200">{dealer.shop_name}</strong>
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-300 text-xs py-1 px-2.5">
-                <ShieldCheck className="h-3.5 w-3.5 mr-1 text-sky-600" />
+              <Badge variant="outline" className="bg-sky-950/80 text-sky-300 border-sky-700 text-xs py-1 px-2.5">
+                <ShieldCheck className="h-3.5 w-3.5 mr-1 text-sky-400" />
                 B2B Commercial Tax Invoice
               </Badge>
             </div>
@@ -394,70 +394,70 @@ ${itemsText}
         </DialogHeader>
 
         {isLoading ? (
-          <div className="py-12 text-center text-gray-500 text-sm">Loading batch purchase invoice...</div>
+          <div className="py-12 text-center text-slate-400 text-sm">Loading batch purchase invoice...</div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-1">
             {/* Dealer & Buyer Header Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3 bg-slate-50 border rounded-lg text-xs space-y-1">
-                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Wholesale Supplier (विक्रेता)</div>
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs space-y-1">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Wholesale Supplier (विक्रेता)</div>
                 <div className="flex items-start gap-3">
                   {dealer.photo_url ? (
                     <img
                       src={dealer.photo_url}
                       alt="Dealer Photo"
-                      className="w-12 h-12 rounded-full object-cover border-2 border-sky-300 flex-shrink-0"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-sky-400 flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-sky-950 border border-sky-700 flex items-center justify-center text-sky-300 font-bold flex-shrink-0">
                       {dealer.shop_name?.charAt(0) || "D"}
                     </div>
                   )}
                   <div>
-                    <div className="font-bold text-sm text-gray-900">{dealer.shop_name}</div>
-                    <div className="text-gray-600">Proprietor: {dealer.proprietor_name}</div>
-                    <div className="text-gray-600">Phone: {dealer.phone}</div>
-                    <div className="text-gray-500 font-mono text-[11px]">
+                    <div className="font-bold text-sm text-slate-100">{dealer.shop_name}</div>
+                    <div className="text-slate-300">Proprietor: {dealer.proprietor_name}</div>
+                    <div className="text-slate-300">Phone: {dealer.phone}</div>
+                    <div className="text-slate-400 font-mono text-[11px]">
                       GST/PAN: {dealer.gst_number || dealer.pan_number || "Commercial Dealer"}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-sky-50/50 border border-sky-200 rounded-lg text-xs space-y-1">
-                <div className="text-[11px] font-bold text-sky-700 uppercase tracking-wide">Buyer / Store (खरीदार)</div>
-                <div className="font-bold text-sm text-gray-900">{shop.business_name || "PHONEZONE"}</div>
-                <div className="text-gray-600">{shop.address || "Sitapur, Uttar Pradesh"}</div>
-                <div className="text-gray-600">Phone: {shop.phone_primary || "N/A"}</div>
-                <div className="text-gray-500 font-mono text-[11px]">GST: {shop.gst_number || shop.gst_in || "N/A"}</div>
+              <div className="p-3 bg-sky-950/30 border border-sky-800/60 rounded-lg text-xs space-y-1">
+                <div className="text-[11px] font-bold text-sky-400 uppercase tracking-wide">Buyer / Store (खरीदार)</div>
+                <div className="font-bold text-sm text-slate-100">{shop.business_name || "PHONEZONE"}</div>
+                <div className="text-slate-300">{shop.address || "Sitapur, Uttar Pradesh"}</div>
+                <div className="text-slate-300">Phone: {shop.phone_primary || "N/A"}</div>
+                <div className="text-slate-400 font-mono text-[11px]">GST: {shop.gst_number || shop.gst_in || "N/A"}</div>
               </div>
             </div>
 
             {/* Quick Metrics Bar */}
-            <div className="grid grid-cols-3 gap-3 p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg text-center">
+            <div className="grid grid-cols-3 gap-3 p-3 bg-emerald-950/30 border border-emerald-800/60 rounded-lg text-center">
               <div>
-                <div className="text-[11px] text-gray-500">Total Phones</div>
-                <div className="text-lg font-bold text-gray-900">{totalPhones} Units</div>
+                <div className="text-[11px] text-slate-400">Total Phones</div>
+                <div className="text-lg font-bold text-slate-100">{totalPhones} Units</div>
               </div>
               <div>
-                <div className="text-[11px] text-gray-500">Payment Mode</div>
-                <div className="text-lg font-bold text-sky-700 uppercase">{paymentMethod}</div>
+                <div className="text-[11px] text-slate-400">Payment Mode</div>
+                <div className="text-lg font-bold text-sky-400 uppercase">{paymentMethod}</div>
               </div>
               <div>
-                <div className="text-[11px] text-gray-500">Total Batch Amount</div>
-                <div className="text-lg font-bold text-emerald-700">₹{totalAmount.toLocaleString("en-IN")}</div>
+                <div className="text-[11px] text-slate-400">Total Batch Amount</div>
+                <div className="text-lg font-bold text-emerald-400">₹{totalAmount.toLocaleString("en-IN")}</div>
               </div>
             </div>
 
             {/* Devices Table */}
-            <div className="border rounded-lg overflow-hidden">
-              <div className="bg-slate-100 px-3 py-2 text-xs font-bold text-gray-700 border-b flex items-center justify-between">
+            <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950">
+              <div className="bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 border-b border-slate-800 flex items-center justify-between">
                 <span>Phones In This Batch ({phones.length})</span>
-                <span className="text-[11px] text-gray-500 font-normal">All items covered under single batch invoice</span>
+                <span className="text-[11px] text-slate-400 font-normal">All items covered under single batch invoice</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-50 border-b">
+                  <thead className="bg-slate-900 border-b border-slate-800 text-slate-300">
                     <tr>
                       <th className="py-2 px-3 text-left w-10">#</th>
                       <th className="py-2 px-3 text-left">Device Details</th>
@@ -467,7 +467,7 @@ ${itemsText}
                       <th className="py-2 px-3 text-right">Cost (₹)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-800">
                     {phones.map((p, idx) => {
                       const feats = Array.isArray(p.features) ? p.features.join(", ") : (p.features || "");
                       const accessories = [
@@ -477,25 +477,25 @@ ${itemsText}
                       ].filter(Boolean).join(" + ") || "Device Only";
 
                       return (
-                        <tr key={p.id || idx} className="hover:bg-slate-50/60">
-                          <td className="py-2 px-3 font-semibold text-gray-500">{idx + 1}</td>
+                        <tr key={p.id || idx} className="hover:bg-slate-900/60">
+                          <td className="py-2 px-3 font-semibold text-slate-400">{idx + 1}</td>
                           <td className="py-2 px-3">
-                            <div className="font-semibold text-gray-900">
+                            <div className="font-semibold text-slate-100">
                               {p.brand || p.phone_name} {p.model}
                             </div>
-                            <div className="text-[11px] text-gray-500">
+                            <div className="text-[11px] text-slate-400">
                               {p.variant || ""} {p.colour ? `• ${p.colour}` : ""}
                             </div>
-                            {feats && <div className="text-[10px] text-sky-600 mt-0.5">✨ {feats}</div>}
+                            {feats && <div className="text-[10px] text-sky-400 mt-0.5">✨ {feats}</div>}
                           </td>
-                          <td className="py-2 px-3 font-mono text-[11px]">{p.imei_number || p.imei}</td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-sky-300">{p.imei_number || p.imei}</td>
                           <td className="py-2 px-3 capitalize">
-                            <Badge variant="outline" className="text-[10px] py-0">
+                            <Badge variant="outline" className="text-[10px] py-0 border-slate-700 bg-slate-900 text-slate-300">
                               {p.condition || "good"}
                             </Badge>
                           </td>
-                          <td className="py-2 px-3 text-gray-600">{accessories}</td>
-                          <td className="py-2 px-3 text-right font-bold text-gray-900">
+                          <td className="py-2 px-3 text-slate-300">{accessories}</td>
+                          <td className="py-2 px-3 text-right font-bold text-slate-100">
                             ₹{Number(p.purchase_price || 0).toLocaleString("en-IN")}
                           </td>
                         </tr>
@@ -507,36 +507,36 @@ ${itemsText}
             </div>
 
             {/* Signatures Preview */}
-            <div className="grid grid-cols-2 gap-4 p-3 border rounded-lg bg-slate-50/50">
+            <div className="grid grid-cols-2 gap-4 p-3 border border-slate-800 rounded-lg bg-slate-950">
               <div className="text-center">
-                <div className="text-[11px] text-gray-500 mb-1">Dealer Authorized Signature</div>
-                <div className="h-14 border border-dashed rounded bg-white flex items-center justify-center p-1">
+                <div className="text-[11px] text-slate-400 mb-1">Dealer Authorized Signature</div>
+                <div className="h-14 border border-dashed border-slate-700 rounded bg-slate-900 flex items-center justify-center p-1">
                   {dealer.signature_url ? (
                     <img src={dealer.signature_url} alt="Dealer Signature" className="max-h-12 object-contain" />
                   ) : (
-                    <span className="text-[11px] text-gray-400 italic">Signature on file</span>
+                    <span className="text-[11px] text-slate-500 italic">Signature on file</span>
                   )}
                 </div>
-                <div className="text-xs font-semibold mt-1">{dealer.proprietor_name}</div>
+                <div className="text-xs font-semibold text-slate-200 mt-1">{dealer.proprietor_name}</div>
               </div>
               <div className="text-center">
-                <div className="text-[11px] text-gray-500 mb-1">Buyer Store Seal &amp; Sign</div>
-                <div className="h-14 border border-dashed rounded bg-white flex items-center justify-center p-1">
+                <div className="text-[11px] text-slate-400 mb-1">Buyer Store Seal &amp; Sign</div>
+                <div className="h-14 border border-dashed border-slate-700 rounded bg-slate-900 flex items-center justify-center p-1">
                   {shop.signature_url ? (
                     <img src={shop.signature_url} alt="Shop Signature" className="max-h-12 object-contain" />
                   ) : (
-                    <span className="text-xs font-bold text-sky-700">{shop.business_name || "PHONEZONE"}</span>
+                    <span className="text-xs font-bold text-sky-400">{shop.business_name || "PHONEZONE"}</span>
                   )}
                 </div>
-                <div className="text-xs font-semibold mt-1">For {shop.business_name || "PHONEZONE"}</div>
+                <div className="text-xs font-semibold text-slate-200 mt-1">For {shop.business_name || "PHONEZONE"}</div>
               </div>
             </div>
 
             {/* WhatsApp Dispatch Mode Selector */}
-            <div className="p-3 bg-emerald-50/70 border border-emerald-300 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="p-3 bg-emerald-950/30 border border-emerald-800/60 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                  <Share2 className="h-4 w-4 text-emerald-600" />
+                <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Share2 className="h-4 w-4 text-emerald-400" />
                   WhatsApp Delivery Options (व्हाट्सएप भेजने का तरीका चुनें)
                 </div>
                 <div className="text-[11px] text-emerald-700">

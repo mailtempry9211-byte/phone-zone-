@@ -335,15 +335,16 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
         type="button"
         variant="outline"
         size="sm"
-        className={className || "h-8 px-2.5 text-xs font-semibold bg-slate-900 border border-blue-500/40 text-blue-300 hover:bg-slate-800 hover:text-blue-200 shadow-sm flex items-center gap-1.5 transition-all"}
+        className={className || "h-7 px-2 text-xs font-semibold bg-slate-900 border border-blue-500/40 text-blue-300 hover:bg-slate-800 hover:text-blue-200 shadow-sm flex items-center gap-1 transition-all"}
+        title="Universal Scanner (Barcode / QR / OCR / Search)"
         onClick={() => {
           setModalOpen(true);
           setUnmatchedResult(null);
           setManualCode("");
         }}
       >
-        <QrCode className="h-4 w-4 text-blue-600" />
-        <span>Universal Scan</span>
+        <QrCode className="h-3.5 w-3.5 text-blue-400" />
+        <span className="hidden xl:inline">Scan</span>
       </Button>
 
       {/* Hidden File Inputs for Native Camera and Upload */}

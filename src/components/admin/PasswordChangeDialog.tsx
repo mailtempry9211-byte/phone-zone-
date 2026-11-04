@@ -64,10 +64,11 @@ const PasswordChangeDialog: React.FC<{ className?: string }> = ({ className = ""
         <Button
           variant="outline"
           size="sm"
-          className={className || "h-8 px-2.5 text-xs font-semibold bg-slate-900 border border-slate-700 text-slate-100 hover:bg-slate-800 hover:text-white transition-all shadow-sm flex items-center gap-1.5"}
+          className={className || "h-7 px-2 text-xs font-semibold bg-slate-900 border border-slate-700 text-slate-100 hover:bg-slate-800 hover:text-white transition-all shadow-sm flex items-center gap-1"}
+          title="Change Admin Password"
         >
           <Settings className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-          <span>Change Password</span>
+          <span className="hidden xl:inline">Password</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">

@@ -273,15 +273,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto bg-slate-900 text-slate-100 border border-slate-800 shadow-2xl">
         <DialogHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-blue-600" />
-              <DialogTitle className="text-xl font-bold">{job.job_no}</DialogTitle>
-              <Badge className="text-xs uppercase">{job.status}</Badge>
+              <Wrench className="h-5 w-5 text-sky-400" />
+              <DialogTitle className="text-xl font-bold text-slate-100">{job.job_no}</DialogTitle>
+              <Badge className="text-xs uppercase bg-sky-950/80 text-sky-300 border border-sky-700/60">{job.status}</Badge>
               {job.board_replaced === 1 && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant="destructive" className="text-xs bg-rose-950/80 text-rose-300 border border-rose-700/60">
                   <AlertTriangle className="w-3 h-3 mr-1" />
                   Motherboard Replaced
                 </Badge>
@@ -292,30 +292,30 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
               <Button
                 size="sm"
                 variant="outline"
-                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                className="border-sky-700 bg-sky-950/40 text-sky-300 hover:bg-sky-900/60"
                 onClick={() => {
                   setDocModalType("jobsheet");
                   setDocModalOpen(true);
                 }}
               >
-                <FileText className="w-4 h-4 mr-1 text-blue-600" />
+                <FileText className="w-4 h-4 mr-1 text-sky-400" />
                 Job Sheet
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                className="border-emerald-700 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60"
                 onClick={() => {
                   setDocModalType("invoice");
                   setDocModalOpen(true);
                 }}
               >
-                <Receipt className="w-4 h-4 mr-1 text-emerald-600" />
+                <Receipt className="w-4 h-4 mr-1 text-emerald-400" />
                 Invoice
               </Button>
               <Button
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
                 onClick={() => {
                   setDocModalType(job.status === "delivered" ? "delivered" : job.status === "ready" ? "ready" : "invoice");
                   setDocModalOpen(true);
@@ -328,7 +328,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                  className="text-amber-300 border-amber-700/60 bg-amber-950/40 hover:bg-amber-900/60"
                   onClick={() => { setReworkOpen(true); setReworkReason(""); }}
                 >
                   <RotateCcw className="w-4 h-4 mr-1.5" />
@@ -342,31 +342,31 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
         {/* Content sections */}
         <div className="space-y-4 pt-2">
           {/* Section 1: Customer & Device summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 p-3 rounded-lg border text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-sm text-slate-200">
             <div>
-              <div className="font-semibold text-gray-700 mb-1">Customer</div>
-              <div><b>Name:</b> {job.customer_name || "-"}</div>
-              <div><b>Phone:</b> {job.customer_phone || "-"}</div>
-              <div><b>Address:</b> {job.customer_address || "-"}</div>
+              <div className="font-bold text-sky-400 mb-1">Customer</div>
+              <div><span className="text-slate-400">Name:</span> <strong className="text-slate-100">{job.customer_name || "-"}</strong></div>
+              <div><span className="text-slate-400">Phone:</span> <strong className="text-sky-300">{job.customer_phone || "-"}</strong></div>
+              <div><span className="text-slate-400">Address:</span> <strong className="text-slate-200">{job.customer_address || "-"}</strong></div>
             </div>
             <div>
-              <div className="font-semibold text-gray-700 mb-1">Device & Issue</div>
-              <div><b>Device:</b> {job.device_brand} {job.device_model}</div>
-              <div><b>IMEI:</b> <span className="font-mono">{job.imei}</span></div>
-              <div><b>Problem:</b> {job.problem}</div>
-              {job.passcode_note && <div><b>Passcode:</b> {job.passcode_note}</div>}
-              <div><b>Accessories:</b> {job.accessories_received || "None"}</div>
+              <div className="font-bold text-sky-400 mb-1">Device & Issue</div>
+              <div><span className="text-slate-400">Device:</span> <strong className="text-slate-100">{job.device_brand} {job.device_model}</strong></div>
+              <div><span className="text-slate-400">IMEI:</span> <span className="font-mono text-sky-400">{job.imei}</span></div>
+              <div><span className="text-slate-400">Problem:</span> <strong className="text-amber-400">{job.problem}</strong></div>
+              {job.passcode_note && <div><span className="text-slate-400">Passcode:</span> <strong className="text-slate-200">{job.passcode_note}</strong></div>}
+              <div><span className="text-slate-400">Accessories:</span> <strong className="text-slate-200">{job.accessories_received || "None"}</strong></div>
             </div>
 
             {/* Service Warranty Controls (Internal Tracking Only) */}
-            <div className="sm:col-span-2 pt-2 border-t mt-1 flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded border">
+            <div className="sm:col-span-2 pt-2 border-t border-slate-800 mt-1 flex flex-wrap items-center justify-between gap-2 bg-slate-900 p-2.5 rounded border border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700 text-xs">Internal Warranty (Shop Only):</span>
+                <span className="font-semibold text-slate-300 text-xs">Internal Warranty (Shop Only):</span>
                 {(() => {
                   const wDays = Number(job.warranty_days || 0);
                   if (wDays <= 0) {
                     return (
-                      <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
+                      <Badge variant="outline" className="text-slate-400 border-slate-700 bg-slate-800 font-medium text-xs">
                         ❌ OFF (No Warranty)
                       </Badge>
                     );
@@ -375,11 +375,11 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                   const diffDays = Math.floor((Date.now() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
                   const daysRemaining = Math.max(0, wDays - diffDays);
                   return daysRemaining > 0 ? (
-                    <Badge className="bg-blue-600 text-white font-semibold hover:bg-blue-700 text-xs shadow-xs">
+                    <Badge className="bg-blue-600 text-white font-semibold hover:bg-blue-500 text-xs shadow-xs">
                       🛡️ {daysRemaining} Days Active (of {wDays}d)
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-gray-500 border-gray-300 font-medium text-xs">
+                    <Badge variant="outline" className="text-slate-400 border-slate-700 bg-slate-800 font-medium text-xs">
                       ⏱️ Expired ({wDays}d passed)
                     </Badge>
                   );
@@ -390,7 +390,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                  className="h-7 text-xs text-sky-400 hover:text-sky-300 hover:bg-slate-800"
                   onClick={() => {
                     setEditWarrantyDays(String(Number(job.warranty_days) > 0 ? job.warranty_days : 30));
                     setIsEditingWarranty(true);
@@ -404,7 +404,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50"
+                      className="h-7 text-xs border-rose-700/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60"
                       disabled={savingWarranty}
                       onClick={() => handleUpdateWarranty(0)}
                     >
@@ -416,15 +416,15 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                     <Input
                       type="number"
                       min="1"
-                      className="w-20 h-7 text-xs bg-white"
+                      className="w-20 h-7 text-xs bg-slate-800 border-slate-700 text-slate-100"
                       placeholder="Days"
                       value={editWarrantyDays}
                       onChange={(e) => setEditWarrantyDays(e.target.value)}
                     />
-                    <span className="text-xs text-gray-500">Days</span>
+                    <span className="text-xs text-slate-400">Days</span>
                     <Button
                       size="sm"
-                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
                       disabled={savingWarranty}
                       onClick={() => {
                         const days = Math.max(1, parseInt(editWarrantyDays, 10) || 30);
@@ -436,7 +436,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-xs"
+                      className="h-7 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                       onClick={() => setIsEditingWarranty(false)}
                     >
                       Cancel
@@ -448,23 +448,23 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
           </div>
 
           {/* Section 2: Move Status */}
-          <div className="border rounded-lg p-3 bg-white space-y-2">
-            <div className="font-semibold text-xs text-gray-600 uppercase tracking-wide">
+          <div className="border border-slate-800 rounded-lg p-3 bg-slate-950 space-y-2">
+            <div className="font-bold text-xs text-slate-300 uppercase tracking-wide">
               Update Repair Status
             </div>
 
             {/* Status Update Immediate Action Banner */}
             {pendingStatusPrompt && (
-              <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+              <div className="bg-emerald-950/40 border border-emerald-800 p-3 rounded-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                   <div>
-                    <div className="font-semibold text-emerald-900 text-xs">
+                    <div className="font-semibold text-emerald-300 text-xs">
                       {pendingStatusPrompt === "ready"
                         ? "📱 Device marked READY! Send pickup notification to customer?"
                         : "🎉 Device marked DELIVERED! Send Thank-You & 5-Star Review link?"}
                     </div>
-                    <div className="text-[11px] text-emerald-700">
+                    <div className="text-[11px] text-emerald-400/80">
                       {pendingStatusPrompt === "ready"
                         ? "Send invoice PDF, total balance due, and store address directly to customer WhatsApp."
                         : "Ask for 5-star customer review, feedback, and provide service warranty confirmation."}
@@ -474,7 +474,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs font-semibold shadow-sm"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white h-7 text-xs font-semibold shadow-sm"
                     onClick={() => {
                       setDocModalType(pendingStatusPrompt);
                       setDocModalOpen(true);
@@ -487,7 +487,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs text-gray-500 hover:text-gray-700"
+                    className="h-7 text-xs text-slate-400 hover:text-slate-200"
                     onClick={() => setPendingStatusPrompt(null)}
                   >
                     Dismiss
@@ -503,7 +503,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                   type="button"
                   size="sm"
                   variant={job.status === opt.value ? "default" : "outline"}
-                  className={job.status === opt.value ? "bg-blue-600 text-white font-medium" : "text-xs"}
+                  className={job.status === opt.value ? "bg-blue-600 text-white font-medium hover:bg-blue-500" : "text-xs border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"}
                   disabled={updatingStatus}
                   onClick={() => handleStatusChange(opt.value)}
                 >
@@ -516,61 +516,61 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                 placeholder="Optional status update note..."
                 value={statusNote}
                 onChange={(e) => setStatusNote(e.target.value)}
-                className="text-xs h-8"
+                className="text-xs h-8 bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
               />
             </div>
           </div>
 
           {/* Section 3: Parts & Labour items */}
-          <div className="border rounded-lg p-3 bg-white space-y-3">
-            <div className="flex justify-between items-center border-b pb-2">
-              <span className="font-semibold text-sm text-gray-800">Parts & Labour Breakdown</span>
-              <span className="font-semibold text-sm text-emerald-700">
+          <div className="border border-slate-800 rounded-lg p-3 bg-slate-950 space-y-3">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="font-bold text-sm text-slate-200">Parts & Labour Breakdown</span>
+              <span className="font-bold text-sm text-emerald-400">
                 Total: ₹{job.final_price || job.parts_cost + job.labour_cost || 0}
               </span>
             </div>
 
             {job.items && job.items.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border">
-                  <thead className="bg-gray-100 text-gray-700">
+              <div className="overflow-x-auto rounded border border-slate-800">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-900 text-slate-300 border-b border-slate-800">
                     <tr>
-                      <th className="p-2 border">Kind</th>
-                      <th className="p-2 border">Description</th>
-                      <th className="p-2 border text-center">Qty</th>
-                      <th className="p-2 border text-right">Unit Price</th>
-                      <th className="p-2 border text-right">Total</th>
+                      <th className="p-2 border-r border-slate-800">Kind</th>
+                      <th className="p-2 border-r border-slate-800">Description</th>
+                      <th className="p-2 border-r border-slate-800 text-center">Qty</th>
+                      <th className="p-2 border-r border-slate-800 text-right">Unit Price</th>
+                      <th className="p-2 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-800 bg-slate-950">
                     {job.items.map((it: any) => (
-                      <tr key={it.id} className="border-b">
-                        <td className="p-2 border capitalize font-medium">{it.kind}</td>
-                        <td className="p-2 border">
+                      <tr key={it.id} className="hover:bg-slate-900/60">
+                        <td className="p-2 border-r border-slate-800 capitalize font-medium text-slate-300">{it.kind}</td>
+                        <td className="p-2 border-r border-slate-800 text-slate-200">
                           {it.description}
                           {it.is_board === 1 && (
-                            <span className="ml-1 text-red-600 font-bold">[MOTHERBOARD]</span>
+                            <span className="ml-1 text-rose-400 font-bold">[MOTHERBOARD]</span>
                           )}
                         </td>
-                        <td className="p-2 border text-center">{it.qty}</td>
-                        <td className="p-2 border text-right">₹{it.unit_price}</td>
-                        <td className="p-2 border text-right font-medium">₹{it.unit_price * it.qty}</td>
+                        <td className="p-2 border-r border-slate-800 text-center text-slate-300">{it.qty}</td>
+                        <td className="p-2 border-r border-slate-800 text-right text-slate-300">₹{it.unit_price}</td>
+                        <td className="p-2 text-right font-medium text-emerald-400">₹{it.unit_price * it.qty}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <div className="text-xs text-gray-500 italic py-1">No parts or labour logged yet.</div>
+              <div className="text-xs text-slate-400 italic py-1">No parts or labour logged yet.</div>
             )}
 
             {/* Add Item mini-form */}
-            <form onSubmit={handleAddItem} className="pt-2 border-t space-y-2">
-              <div className="text-xs font-semibold text-gray-700">Add Part / Labour Item</div>
+            <form onSubmit={handleAddItem} className="pt-2 border-t border-slate-800 space-y-2">
+              <div className="text-xs font-bold text-slate-300">Add Part / Labour Item</div>
               <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
                 <div>
                   <select
-                    className="w-full h-8 border rounded px-1.5 bg-white text-xs"
+                    className="w-full h-8 border border-slate-700 rounded px-1.5 bg-slate-900 text-slate-100 text-xs"
                     value={itemKind}
                     onChange={(e: any) => setItemKind(e.target.value)}
                   >
@@ -581,7 +581,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                 <div className="sm:col-span-2">
                   <Input
                     placeholder="Description (e.g. Display Assembly)"
-                    className="h-8 text-xs"
+                    className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
                     value={itemDesc}
                     onChange={(e) => setItemDesc(e.target.value)}
                     required
@@ -591,7 +591,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                   <Input
                     type="number"
                     placeholder="Price (₹)"
-                    className="h-8 text-xs"
+                    className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
                     value={itemPrice}
                     onChange={(e) => setItemPrice(e.target.value)}
                     required
@@ -601,7 +601,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                   <Button
                     type="submit"
                     size="sm"
-                    className="w-full h-8 text-xs bg-blue-600 hover:bg-blue-700"
+                    className="w-full h-8 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold"
                     disabled={addingItem}
                   >
                     <Plus className="w-3.5 h-3.5 mr-1" /> Add
@@ -616,7 +616,7 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                     checked={isBoard}
                     onCheckedChange={(c) => setIsBoard(!!c)}
                   />
-                  <Label htmlFor="chk-board" className="text-xs text-red-600 font-semibold cursor-pointer">
+                  <Label htmlFor="chk-board" className="text-xs text-rose-400 font-semibold cursor-pointer">
                     This part is a Motherboard / Logic Board Replacement
                   </Label>
                 </div>
@@ -626,19 +626,19 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
 
           {/* Section 4: Status History Timeline */}
           {job.status_log && job.status_log.length > 0 && (
-            <div className="border rounded-lg p-3 bg-gray-50 space-y-2 text-xs">
-              <div className="font-semibold text-gray-700 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" />
+            <div className="border border-slate-800 rounded-lg p-3 bg-slate-950 space-y-2 text-xs">
+              <div className="font-bold text-slate-300 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-sky-400" />
                 Status Timeline
               </div>
               <div className="space-y-1.5 max-h-36 overflow-y-auto">
                 {job.status_log.map((log: any) => (
-                  <div key={log.id} className="flex items-center justify-between bg-white p-1.5 rounded border">
+                  <div key={log.id} className="flex items-center justify-between bg-slate-900 border border-slate-800 p-1.5 rounded">
                     <div>
-                      <span className="font-semibold uppercase text-blue-700 mr-2">{log.status}</span>
-                      <span className="text-gray-600">{log.note || ""}</span>
+                      <span className="font-semibold uppercase text-sky-400 mr-2">{log.status}</span>
+                      <span className="text-slate-300">{log.note || ""}</span>
                     </div>
-                    <span className="text-gray-400 text-[11px]">
+                    <span className="text-slate-400 text-[11px]">
                       {new Date(log.at).toLocaleString("en-IN")}
                     </span>
                   </div>
@@ -648,18 +648,18 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
           )}
           {/* Rework Modal */}
           {reworkOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-lg p-5 max-w-md w-full shadow-2xl border space-y-3">
-                <div className="flex items-center gap-2 text-amber-700 font-bold text-base">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div className="bg-slate-900 text-slate-100 rounded-lg p-5 max-w-md w-full shadow-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-base">
                   <RotateCcw className="h-5 w-5" />
                   Return Device for Warranty Rework
                 </div>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-slate-300">
                   Customer has brought back <strong>{job.device_brand} {job.device_model}</strong> ({job.job_no}) under warranty. Enter the repeat issue or customer complaint to create a priority Rework Job.
                 </p>
                 <form onSubmit={handleCreateRework} className="space-y-3 pt-1">
                   <div>
-                    <Label htmlFor="rework_reason" className="text-xs font-semibold">
+                    <Label htmlFor="rework_reason" className="text-xs font-semibold text-slate-300">
                       Customer Complaint / Reason for Return *
                     </Label>
                     <Input
@@ -669,14 +669,14 @@ export const RepairDetailDialog: React.FC<RepairDetailDialogProps> = ({
                       onChange={(e) => setReworkReason(e.target.value)}
                       required
                       autoFocus
-                      className="text-xs mt-1"
+                      className="text-xs mt-1 bg-slate-800 border-slate-700 text-slate-100"
                     />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setReworkOpen(false)}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setReworkOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800">
                       Cancel
                     </Button>
-                    <Button type="submit" size="sm" disabled={isSubmittingRework} className="bg-amber-600 hover:bg-amber-700 text-white">
+                    <Button type="submit" size="sm" disabled={isSubmittingRework} className="bg-amber-600 hover:bg-amber-500 text-white font-semibold">
                       {isSubmittingRework ? "Creating Rework..." : "Confirm Rework Job"}
                     </Button>
                   </div>

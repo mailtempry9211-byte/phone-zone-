@@ -525,21 +525,21 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
-        <DialogHeader className="border-b pb-3">
+      <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-900 text-slate-100 border border-slate-800 shadow-2xl">
+        <DialogHeader className="border-b border-slate-800 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-sky-700">
-                <Building2 className="h-6 w-6" />
+              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-sky-400">
+                <Building2 className="h-6 w-6 text-sky-400" />
                 B2B Bulk Phone Purchase (डीलर से मल्टीपल फोन्स खरीद)
               </DialogTitle>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5">
                 Add multiple pre-owned or stock phones in a single batch transaction from a registered dealer.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-300 text-xs py-1 px-2.5 flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-sky-600" />
+              <Badge variant="outline" className="bg-sky-950/80 text-sky-300 border-sky-700 text-xs py-1 px-2.5 flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-sky-400" />
                 Sapath Patra: B2B Commercial Exempt
               </Badge>
             </div>
@@ -549,53 +549,53 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
         {createdBatch ? (
           /* Post-Creation Success View */
           <div className="py-6 flex flex-col items-center justify-center space-y-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+            <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-700/60 flex items-center justify-center text-emerald-400">
               <CheckCircle2 className="h-10 w-10" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Batch Purchase Recorded Successfully!</h3>
-              <p className="text-sm text-gray-600">
-                Batch Invoice <strong>{createdBatch.invoiceNumber}</strong> with {createdBatch.totalPhones} phones has been entered into inventory.
+              <h3 className="text-lg font-bold text-slate-100">Batch Purchase Recorded Successfully!</h3>
+              <p className="text-sm text-slate-300">
+                Batch Invoice <strong className="text-sky-400">{createdBatch.invoiceNumber}</strong> with {createdBatch.totalPhones} phones has been entered into inventory.
               </p>
             </div>
 
-            <Card className="w-full max-w-md bg-slate-50 border-slate-200">
+            <Card className="w-full max-w-md bg-slate-950 border-slate-800">
               <CardContent className="p-4 text-left space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Dealer:</span>
-                  <span className="font-semibold text-gray-900">{createdBatch.dealer?.shop_name}</span>
+                  <span className="text-slate-400">Dealer:</span>
+                  <span className="font-semibold text-slate-100">{createdBatch.dealer?.shop_name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Proprietor:</span>
-                  <span className="font-semibold text-gray-900">{createdBatch.dealer?.proprietor_name}</span>
+                  <span className="text-slate-400">Proprietor:</span>
+                  <span className="font-semibold text-slate-100">{createdBatch.dealer?.proprietor_name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Total Phones:</span>
-                  <span className="font-semibold text-gray-900">{createdBatch.totalPhones} units</span>
+                  <span className="text-slate-400">Total Phones:</span>
+                  <span className="font-semibold text-slate-100">{createdBatch.totalPhones} units</span>
                 </div>
-                <div className="flex justify-between border-t pt-1.5">
-                  <span className="text-gray-500 font-bold">Total Amount:</span>
-                  <span className="font-bold text-emerald-600 text-sm">₹{Number(createdBatch.totalAmount).toLocaleString("en-IN")}</span>
+                <div className="flex justify-between border-t border-slate-800 pt-1.5">
+                  <span className="text-slate-400 font-bold">Total Amount:</span>
+                  <span className="font-bold text-emerald-400 text-sm">₹{Number(createdBatch.totalAmount).toLocaleString("en-IN")}</span>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              <Button onClick={handlePrintBatchInvoice} className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs h-9">
+              <Button onClick={handlePrintBatchInvoice} className="bg-slate-800 hover:bg-slate-700 text-white gap-1.5 text-xs h-9 border border-slate-700">
                 <Printer className="h-4 w-4" /> Print / Save PDF
               </Button>
-              <Button onClick={() => handleShareBatchWhatsApp("text_only")} variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 gap-1.5 text-xs h-9">
+              <Button onClick={() => handleShareBatchWhatsApp("text_only")} variant="outline" className="text-emerald-300 border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-900/60 gap-1.5 text-xs h-9">
                 <Share2 className="h-4 w-4" /> Send Text Only
               </Button>
-              <Button onClick={() => handleShareBatchWhatsApp("pdf_only")} variant="outline" className="text-sky-700 border-sky-300 hover:bg-sky-50 gap-1.5 text-xs h-9">
+              <Button onClick={() => handleShareBatchWhatsApp("pdf_only")} variant="outline" className="text-sky-300 border-sky-700/60 bg-sky-950/40 hover:bg-sky-900/60 gap-1.5 text-xs h-9">
                 <FileText className="h-4 w-4" /> Send PDF Only
               </Button>
-              <Button onClick={() => handleShareBatchWhatsApp("both")} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-9 font-semibold shadow-sm">
+              <Button onClick={() => handleShareBatchWhatsApp("both")} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 text-xs h-9 font-semibold shadow-sm">
                 <Share2 className="h-4 w-4" /> Send Both (PDF + Text)
               </Button>
               <Button
                 variant="outline"
-                className="text-xs h-9"
+                className="text-xs h-9 border-slate-700 text-slate-300 hover:bg-slate-800"
                 onClick={() => {
                   setCreatedBatch(null);
                   onOpenChange(false);
@@ -609,59 +609,59 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
           /* Batch Entry Form */
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 py-2">
             {/* Dealer & Batch Metadata */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3 rounded-lg border border-slate-800">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <Label className="text-xs font-semibold text-gray-700">Select Registered Dealer *</Label>
+                  <Label className="text-xs font-semibold text-slate-300">Select Registered Dealer *</Label>
                   <button
                     type="button"
                     onClick={() => setQuickAddDealerOpen(true)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] font-bold text-sky-400 hover:text-sky-300 hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="h-3 w-3" /> Add New Dealer
                   </button>
                 </div>
                 <Select value={selectedDealerId} onValueChange={setSelectedDealerId}>
-                  <SelectTrigger className="h-9 bg-white">
+                  <SelectTrigger className="h-9 bg-slate-900 border-slate-700 text-slate-100">
                     <SelectValue placeholder="Choose a Dealer..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
                     {dealers.map((d: any) => (
-                      <SelectItem key={d.id} value={d.id}>
+                      <SelectItem key={d.id} value={d.id} className="hover:bg-slate-800 focus:bg-slate-800 text-slate-100">
                         {d.shop_name} ({d.proprietor_name}) - {d.phone}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {activeDealer && (
-                  <p className="text-[11px] text-gray-500 mt-1">
+                  <p className="text-[11px] text-slate-400 mt-1">
                     GST: {activeDealer.gst_number || "N/A"} • Phone: {activeDealer.phone}
                   </p>
                 )}
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-gray-700">Purchase Date</Label>
+                <Label className="text-xs font-semibold text-slate-300">Purchase Date</Label>
                 <Input
                   type="date"
                   value={purchaseDate}
                   onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="mt-1 h-9 bg-white"
+                  className="mt-1 h-9 bg-slate-900 border-slate-700 text-slate-100"
                 />
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-gray-700">Payment Mode</Label>
+                <Label className="text-xs font-semibold text-slate-300">Payment Mode</Label>
                 <Select value={defaultPaymentMethod} onValueChange={setDefaultPaymentMethod}>
-                  <SelectTrigger className="mt-1 h-9 bg-white">
+                  <SelectTrigger className="mt-1 h-9 bg-slate-900 border-slate-700 text-slate-100">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UPI">UPI</SelectItem>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Bank Transfer">Bank Transfer (NEFT/RTGS)</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                    <SelectItem value="Credit / Khata">Credit (खता / Udhar)</SelectItem>
+                  <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <SelectItem value="UPI" className="hover:bg-slate-800">UPI</SelectItem>
+                    <SelectItem value="Cash" className="hover:bg-slate-800">Cash</SelectItem>
+                    <SelectItem value="Bank Transfer" className="hover:bg-slate-800">Bank Transfer (NEFT/RTGS)</SelectItem>
+                    <SelectItem value="Cheque" className="hover:bg-slate-800">Cheque</SelectItem>
+                    <SelectItem value="Credit / Khata" className="hover:bg-slate-800">Credit (खता / Udhar)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -670,10 +670,10 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
             {/* Multi-phone Cards List */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-                  <Smartphone className="h-4 w-4 text-sky-600" /> Phones In This Batch ({phoneRows.length})
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                  <Smartphone className="h-4 w-4 text-sky-400" /> Phones In This Batch ({phoneRows.length})
                 </h4>
-                <Button size="sm" variant="outline" onClick={addRow} className="h-8 gap-1 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium">
+                <Button size="sm" variant="outline" onClick={addRow} className="h-8 gap-1 text-xs border-sky-700 bg-sky-950/40 text-sky-300 hover:bg-sky-900/60 font-medium">
                   <Plus className="h-3.5 w-3.5" /> Add Phone (+ Row)
                 </Button>
               </div>
@@ -682,12 +682,12 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                 {phoneRows.map((row, index) => (
                   <div
                     key={row.id}
-                    className="border rounded-lg p-3 bg-white hover:border-sky-300 transition-all space-y-2 shadow-sm"
+                    className="border border-slate-800 rounded-lg p-3 bg-slate-950 hover:border-sky-500 transition-all space-y-2 shadow-sm"
                   >
                     {/* Top Row: IMEI + Scanner, Brand, Model, Specs, Condition, Price */}
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Index badge */}
-                      <div className="font-bold text-xs text-sky-800 bg-sky-50 py-1.5 px-2.5 rounded shrink-0">
+                      <div className="font-bold text-xs text-sky-300 bg-sky-950/80 border border-sky-800 py-1.5 px-2.5 rounded shrink-0">
                         #{index + 1}
                       </div>
 
@@ -699,15 +699,15 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                             maxLength={15}
                             value={row.imei}
                             onChange={(e) => handleImeiChange(index, e.target.value)}
-                            className={`h-8 text-xs font-mono font-semibold ${
-                              row.imei.length === 15 ? "border-emerald-500 bg-emerald-50/30 text-emerald-900" : ""
+                            className={`h-8 text-xs font-mono font-semibold bg-slate-900 border-slate-700 text-slate-100 ${
+                              row.imei.length === 15 ? "border-emerald-500 bg-emerald-950/40 text-emerald-300" : ""
                             }`}
                           />
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="h-8 px-2 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 shrink-0"
+                            className="h-8 px-2 text-xs border-sky-700 bg-sky-950/40 text-sky-300 hover:bg-sky-900/60 shrink-0"
                             title="Scan IMEI Barcode or read with OCR"
                             onClick={() => setScanningRowIndex(index)}
                           >
@@ -739,7 +739,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                           placeholder="Brand *"
                           value={row.brand}
                           onChange={(e) => updateRow(index, "brand", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100"
                         />
                       </div>
 
@@ -749,7 +749,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                           placeholder="Model (e.g. iPhone 13) *"
                           value={row.model}
                           onChange={(e) => updateRow(index, "model", e.target.value)}
-                          className="h-8 text-xs font-medium"
+                          className="h-8 text-xs font-medium bg-slate-900 border-slate-700 text-slate-100"
                         />
                       </div>
 
@@ -759,7 +759,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                           placeholder="Variant"
                           value={row.variant}
                           onChange={(e) => updateRow(index, "variant", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100"
                         />
                       </div>
                       <div className="w-24 shrink-0">
@@ -767,7 +767,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                           placeholder="Colour"
                           value={row.colour}
                           onChange={(e) => updateRow(index, "colour", e.target.value)}
-                          className="h-8 text-xs"
+                          className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100"
                         />
                       </div>
 
@@ -777,14 +777,14 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                           value={row.condition}
                           onValueChange={(val) => updateRow(index, "condition", val)}
                         >
-                          <SelectTrigger className="h-8 text-xs">
+                          <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-700 text-slate-100">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="excellent">Excellent</SelectItem>
-                            <SelectItem value="good">Good</SelectItem>
-                            <SelectItem value="fair">Fair</SelectItem>
-                            <SelectItem value="needs_repair">Needs Repair</SelectItem>
+                          <SelectContent className="bg-slate-900 border-slate-800 text-slate-100">
+                            <SelectItem value="excellent" className="hover:bg-slate-800">Excellent</SelectItem>
+                            <SelectItem value="good" className="hover:bg-slate-800">Good</SelectItem>
+                            <SelectItem value="fair" className="hover:bg-slate-800">Fair</SelectItem>
+                            <SelectItem value="needs_repair" className="hover:bg-slate-800">Needs Repair</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -792,13 +792,13 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                       {/* Purchase Price - Spacious, bold, clearly readable */}
                       <div className="w-32 sm:w-36 shrink-0">
                         <div className="relative flex items-center">
-                          <span className="absolute left-2.5 text-xs font-bold text-gray-500">₹</span>
+                          <span className="absolute left-2.5 text-xs font-bold text-slate-400">₹</span>
                           <Input
                             type="number"
                             placeholder="Cost Price *"
                             value={row.purchase_price || ""}
                             onChange={(e) => updateRow(index, "purchase_price", Number(e.target.value))}
-                            className="h-8 pl-6 pr-2 text-xs font-bold text-gray-900 border-2 border-emerald-300 focus:border-emerald-600 bg-emerald-50/20"
+                            className="h-8 pl-6 pr-2 text-xs font-bold text-emerald-400 border-2 border-emerald-700/80 focus:border-emerald-500 bg-slate-900"
                           />
                         </div>
                       </div>
@@ -809,7 +809,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                         variant="ghost"
                         size="sm"
                         onClick={() => removeRow(index)}
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                        className="h-8 w-8 p-0 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 shrink-0"
                         title="Remove phone from batch"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -817,25 +817,25 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                     </div>
 
                     {/* Sub-bar: Accessories Checkboxes + Features field + Photos */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t text-xs bg-slate-50/70 p-2.5 rounded">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800 text-xs bg-slate-900/60 p-2.5 rounded">
                       {/* Bill / Box / Charger Checkboxes */}
                       <div className="flex items-center gap-3">
-                        <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide">Included:</span>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                        <span className="font-semibold text-slate-400 text-[11px] uppercase tracking-wide">Included:</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 select-none">
                           <Checkbox
                             checked={row.bill_available}
                             onCheckedChange={(c) => updateRow(index, "bill_available", !!c)}
                           />
                           <span>Bill</span>
                         </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 select-none">
                           <Checkbox
                             checked={row.box_available}
                             onCheckedChange={(c) => updateRow(index, "box_available", !!c)}
                           />
                           <span>Box</span>
                         </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-gray-700 select-none">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 select-none">
                           <Checkbox
                             checked={row.charger_available}
                             onCheckedChange={(c) => updateRow(index, "charger_available", !!c)}
@@ -846,12 +846,12 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
 
                       {/* Features input with quick-add chips */}
                       <div className="flex items-center gap-1.5 flex-1 max-w-md min-w-[240px]">
-                        <span className="font-semibold text-gray-700 text-[11px] uppercase tracking-wide shrink-0">Features:</span>
+                        <span className="font-semibold text-slate-400 text-[11px] uppercase tracking-wide shrink-0">Features:</span>
                         <Input
                           placeholder="e.g. All Original, Battery 88% (Homepage Display)"
                           value={row.features || ""}
                           onChange={(e) => updateRow(index, "features", e.target.value)}
-                          className="h-7 text-xs bg-white font-medium"
+                          className="h-7 text-xs bg-slate-900 border-slate-700 text-slate-100 font-medium"
                         />
                         <div className="flex items-center gap-1 shrink-0">
                           <button
@@ -862,7 +862,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                                 updateRow(index, "features", [...current, "All Original"].join(", "));
                               }
                             }}
-                            className="text-[10px] bg-emerald-100 text-emerald-800 hover:bg-emerald-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                            className="text-[10px] bg-emerald-950/80 text-emerald-300 hover:bg-emerald-900 border border-emerald-700/60 px-1.5 py-0.5 rounded font-medium transition-colors"
                             title="Add 'All Original' tag for homepage"
                           >
                             + All Original
@@ -875,7 +875,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                                 updateRow(index, "features", [...current, "100% Genuine"].join(", "));
                               }
                             }}
-                            className="text-[10px] bg-sky-100 text-sky-800 hover:bg-sky-200 px-1.5 py-0.5 rounded font-medium transition-colors"
+                            className="text-[10px] bg-sky-950/80 text-sky-300 hover:bg-sky-900 border border-sky-700/60 px-1.5 py-0.5 rounded font-medium transition-colors"
                           >
                             + Genuine
                           </button>
@@ -893,11 +893,11 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                             disabled={uploadingRowIndex === index}
                             onChange={(e) => handleRowPhotoUpload(index, e)}
                           />
-                          <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100 transition-colors">
+                          <div className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border border-sky-700 text-sky-300 bg-sky-950/60 hover:bg-sky-900/60 transition-colors">
                             {uploadingRowIndex === index ? (
-                              <><Loader2 className="h-3 w-3 animate-spin text-sky-600" /> Uploading...</>
+                              <><Loader2 className="h-3 w-3 animate-spin text-sky-400" /> Uploading...</>
                             ) : (
-                              <><Camera className="h-3.5 w-3.5 text-sky-600" /> 📷 Photos ({row.product_photos?.length || 0}/4)</>
+                              <><Camera className="h-3.5 w-3.5 text-sky-400" /> 📷 Photos ({row.product_photos?.length || 0}/4)</>
                             )}
                           </div>
                         </label>
@@ -905,12 +905,12 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                         {row.product_photos && row.product_photos.length > 0 && (
                           <div className="flex items-center gap-1.5">
                             {row.product_photos.map((url, pIdx) => (
-                              <div key={pIdx} className="relative group w-7 h-7 rounded border overflow-hidden shrink-0">
+                              <div key={pIdx} className="relative group w-7 h-7 rounded border border-slate-700 overflow-hidden shrink-0">
                                 <img src={url} alt="Phone photo" className="w-full h-full object-cover" />
                                 <button
                                   type="button"
                                   onClick={() => removeRowPhoto(index, pIdx)}
-                                  className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                  className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                                   title="Remove photo"
                                 >
                                   <X className="h-3 w-3" />
@@ -927,14 +927,14 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
             </div>
 
             {/* Batch Totals & Footer Info */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-sky-50/50 rounded-lg border border-sky-100">
-              <div className="text-xs text-gray-600">
-                <span>Total Items: <strong>{phoneRows.length} phones</strong></span> • 
-                <span className="ml-2">All phones will be marked as <Badge className="bg-sky-100 text-sky-800 border-sky-200 text-[10px] ml-1">🏢 B2B Dealer Stock</Badge></span>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800">
+              <div className="text-xs text-slate-400">
+                <span>Total Items: <strong className="text-slate-200">{phoneRows.length} phones</strong></span> • 
+                <span className="ml-2">All phones will be marked as <Badge className="bg-sky-950 text-sky-300 border-sky-700 text-[10px] ml-1">🏢 B2B Dealer Stock</Badge></span>
               </div>
               <div className="text-right">
-                <span className="text-xs text-gray-500 mr-2">Total Batch Amount:</span>
-                <span className="text-lg font-bold text-sky-900">
+                <span className="text-xs text-slate-400 mr-2">Total Batch Amount:</span>
+                <span className="text-lg font-bold text-emerald-400">
                   ₹{totalBatchAmount.toLocaleString("en-IN")}
                 </span>
               </div>
@@ -943,18 +943,18 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
         )}
 
         {!createdBatch && (
-          <DialogFooter className="border-t pt-3 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="border-t border-slate-800 pt-3 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-400 hover:text-slate-200 hover:bg-slate-800">
               Cancel
             </Button>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={addRow} className="gap-1 border-dashed">
+              <Button variant="outline" onClick={addRow} className="gap-1 border-dashed border-slate-700 text-slate-200 hover:bg-slate-800">
                 <Plus className="h-4 w-4" /> Add Row
               </Button>
               <Button
                 onClick={() => purchaseMutation.mutate()}
                 disabled={purchaseMutation.isPending || !selectedDealerId}
-                className="bg-sky-600 hover:bg-sky-700 text-white min-w-[200px]"
+                className="bg-sky-600 hover:bg-sky-500 text-white min-w-[200px]"
               >
                 {purchaseMutation.isPending ? "Processing Batch..." : `Submit Batch (${phoneRows.length} Phones)`}
               </Button>
@@ -972,10 +972,10 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
           if (!o) setScanningRowIndex(null);
         }}
       >
-        <DialogContent className="max-w-md z-[100]">
+        <DialogContent className="max-w-md z-[100] bg-slate-900 text-slate-100 border border-slate-800">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-sky-800">
-              <ScanLine className="h-4 w-4 text-sky-600" />
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-sky-400">
+              <ScanLine className="h-4 w-4 text-sky-400" />
               Scan IMEI for Batch Row #{scanningRowIndex + 1}
             </DialogTitle>
           </DialogHeader>
@@ -990,7 +990,7 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
                 }
               }}
             />
-            <p className="text-xs text-muted-foreground text-center max-w-xs">
+            <p className="text-xs text-slate-400 text-center max-w-xs">
               Barcode scan karein ya box/sticker ki photo le kar OCR se IMEI extract karein. TAC database specs auto-fill kar dega.
             </p>
           </div>
@@ -999,69 +999,69 @@ ${phoneRows.map((p, i) => `${i + 1}. ${p.brand} ${p.model} (${p.imei}) - ₹${Nu
     )}
     {/* Quick Register New Dealer Modal */}
     <Dialog open={quickAddDealerOpen} onOpenChange={setQuickAddDealerOpen}>
-      <DialogContent className="max-w-md bg-white text-slate-900 z-[120]">
+      <DialogContent className="max-w-md bg-slate-900 text-slate-100 border border-slate-800 z-[120] shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900">
-            <Building2 className="h-4 w-4 text-blue-600" />
+          <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-100">
+            <Building2 className="h-4 w-4 text-sky-400" />
             Quick Register Dealer / B2B Supplier
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleQuickAddDealer} className="space-y-3 pt-1">
           <div>
-            <Label className="text-xs font-semibold text-slate-700">Shop / Firm Name *</Label>
+            <Label className="text-xs font-semibold text-slate-300">Shop / Firm Name *</Label>
             <Input
               value={newDealerForm.shop_name}
               onChange={(e) => setNewDealerForm({ ...newDealerForm, shop_name: e.target.value })}
               placeholder="e.g. Apex Mobile Wholesale"
               required
-              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+              className="mt-1 h-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
             />
           </div>
           <div>
-            <Label className="text-xs font-semibold text-slate-700">Proprietor / Contact Person *</Label>
+            <Label className="text-xs font-semibold text-slate-300">Proprietor / Contact Person *</Label>
             <Input
               value={newDealerForm.proprietor_name}
               onChange={(e) => setNewDealerForm({ ...newDealerForm, proprietor_name: e.target.value })}
               placeholder="e.g. Rajesh Sharma"
               required
-              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+              className="mt-1 h-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
             />
           </div>
           <div>
-            <Label className="text-xs font-semibold text-slate-700">Mobile Phone *</Label>
+            <Label className="text-xs font-semibold text-slate-300">Mobile Phone *</Label>
             <Input
               value={newDealerForm.phone}
               onChange={(e) => setNewDealerForm({ ...newDealerForm, phone: e.target.value })}
               placeholder="10-digit mobile number"
               required
-              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+              className="mt-1 h-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
             />
           </div>
           <div>
-            <Label className="text-xs font-semibold text-slate-700">GST / PAN (Optional)</Label>
+            <Label className="text-xs font-semibold text-slate-300">GST / PAN (Optional)</Label>
             <Input
               value={newDealerForm.gst_number}
               onChange={(e) => setNewDealerForm({ ...newDealerForm, gst_number: e.target.value })}
               placeholder="e.g. 09AAACA1234A1Z5"
-              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+              className="mt-1 h-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
             />
           </div>
           <div>
-            <Label className="text-xs font-semibold text-slate-700">Address / City (Optional)</Label>
+            <Label className="text-xs font-semibold text-slate-300">Address / City (Optional)</Label>
             <Input
               value={newDealerForm.address}
               onChange={(e) => setNewDealerForm({ ...newDealerForm, address: e.target.value })}
               placeholder="Market name or city"
-              className="mt-1 h-9 bg-slate-50 border-slate-300 text-slate-900"
+              className="mt-1 h-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t">
-            <Button type="button" variant="outline" size="sm" onClick={() => setQuickAddDealerOpen(false)}>
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <Button type="button" variant="outline" size="sm" onClick={() => setQuickAddDealerOpen(false)} className="border-slate-700 text-slate-300 hover:bg-slate-800">
               Cancel
             </Button>
-            <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-bold" disabled={quickAddingDealer}>
+            <Button type="submit" size="sm" className="bg-sky-600 hover:bg-sky-500 text-white font-bold" disabled={quickAddingDealer}>
               {quickAddingDealer ? "Saving..." : "Save & Select Dealer"}
             </Button>
           </div>

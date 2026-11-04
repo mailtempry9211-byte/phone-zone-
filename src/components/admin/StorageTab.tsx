@@ -436,15 +436,42 @@ const StorageTab = () => {
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-2">
                         {isImageFile(file.name) ? (
-                          <Image className="h-4 w-4 mr-2 text-blue-500" />
+                          <div
+                            onClick={() => {
+                              setSelectedPhotos([getFileUrl(file)]);
+                              setPhotoViewerOpen(true);
+                            }}
+                            className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-850 shrink-0 cursor-pointer group shadow-sm hover:ring-2 hover:ring-sky-500 transition-all"
+                            title="Click to view full photo"
+                          >
+                            <img
+                              src={getFileUrl(file)}
+                              alt="thumbnail"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = "none";
+                                const parent = (e.currentTarget as HTMLElement).parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector(".thumb-fallback");
+                                  if (fallback) fallback.classList.remove("hidden");
+                                }
+                              }}
+                            />
+                            <div className="thumb-fallback hidden absolute inset-0 flex items-center justify-center bg-slate-800 text-sky-400">
+                              <Image className="h-5 w-5" />
+                            </div>
+                          </div>
                         ) : (
-                          <HardDrive className="h-4 w-4 mr-2 text-gray-500" />
+                          <div className="w-11 h-11 rounded-lg flex items-center justify-center bg-slate-800 border border-slate-700 text-slate-400 shrink-0">
+                            <HardDrive className="h-5 w-5" />
+                          </div>
                         )}
-                        <div>
-                          <div className="font-medium">{file.name.split('/').pop()}</div>
-                          <div className="text-xs text-muted-foreground">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-100 truncate">{file.name.split('/').pop()}</div>
+                          <div className="text-xs text-slate-400 truncate">
                             {file.owner ? `${file.owner} · ` : ''}{file.name.split('/').slice(0, -1).join('/')}/
                           </div>
                         </div>

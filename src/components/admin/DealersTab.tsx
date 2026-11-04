@@ -769,37 +769,37 @@ export const DealersTab: React.FC = () => {
 
       {/* Dealer Purchase History Dialog */}
       <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
-        <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto bg-slate-900 text-slate-100 border border-slate-800 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center justify-between">
+            <DialogTitle className="text-base font-bold flex items-center justify-between text-slate-100">
               <div className="flex items-center gap-2">
-                <History className="h-5 w-5 text-sky-600" />
+                <History className="h-5 w-5 text-sky-400" />
                 Purchase History: {selectedDealer?.shop_name} ({selectedDealer?.proprietor_name})
               </div>
               {selectedDealer?.photo_url && (
                 <img
                   src={selectedDealer.photo_url}
                   alt="Dealer"
-                  className="w-8 h-8 rounded-full object-cover border border-sky-300 mr-6"
+                  className="w-8 h-8 rounded-full object-cover border border-sky-400 mr-6"
                 />
               )}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
-              <div className="text-xs text-gray-500">
-                Total Phones Supplied: <strong>{dealerDetails?.phones?.length || 0}</strong> • Wholesale Batches:{" "}
-                <strong>{dealerDetails?.batches?.length || 0}</strong>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+              <div className="text-xs text-slate-400">
+                Total Phones Supplied: <strong className="text-slate-200">{dealerDetails?.phones?.length || 0}</strong> • Wholesale Batches:{" "}
+                <strong className="text-slate-200">{dealerDetails?.batches?.length || 0}</strong>
               </div>
 
               {/* Subtabs for Batches vs All Devices */}
-              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-md text-xs">
+              <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-md text-xs border border-slate-700">
                 <Button
                   size="sm"
                   variant={historySubTab === "batches" ? "default" : "ghost"}
                   onClick={() => setHistorySubTab("batches")}
-                  className={`h-7 text-xs px-2.5 ${historySubTab === "batches" ? "bg-sky-600 text-white shadow-sm" : "text-gray-600"}`}
+                  className={`h-7 text-xs px-2.5 ${historySubTab === "batches" ? "bg-sky-600 text-white shadow-sm hover:bg-sky-500" : "text-slate-300 hover:text-white hover:bg-slate-700"}`}
                 >
                   <Receipt className="h-3.5 w-3.5 mr-1" />
                   Wholesale Batches ({dealerDetails?.batches?.length || 0})
@@ -808,7 +808,7 @@ export const DealersTab: React.FC = () => {
                   size="sm"
                   variant={historySubTab === "phones" ? "default" : "ghost"}
                   onClick={() => setHistorySubTab("phones")}
-                  className={`h-7 text-xs px-2.5 ${historySubTab === "phones" ? "bg-sky-600 text-white shadow-sm" : "text-gray-600"}`}
+                  className={`h-7 text-xs px-2.5 ${historySubTab === "phones" ? "bg-sky-600 text-white shadow-sm hover:bg-sky-500" : "text-slate-300 hover:text-white hover:bg-slate-700"}`}
                 >
                   <Smartphone className="h-3.5 w-3.5 mr-1" />
                   All Devices ({dealerDetails?.phones?.length || 0})
@@ -818,31 +818,31 @@ export const DealersTab: React.FC = () => {
 
             {historySubTab === "batches" ? (
               /* Batches Table with Batch Invoice Generation */
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950">
                 <Table>
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-xs">Purchase Date</TableHead>
-                      <TableHead className="text-xs">Invoice Number</TableHead>
-                      <TableHead className="text-center text-xs">Phones In Batch</TableHead>
-                      <TableHead className="text-xs">Payment Mode</TableHead>
-                      <TableHead className="text-right text-xs">Total Amount</TableHead>
-                      <TableHead className="text-center text-xs">B2B Batch Invoice</TableHead>
+                  <TableHeader className="bg-slate-900 border-b border-slate-800">
+                    <TableRow className="border-slate-800 hover:bg-transparent">
+                      <TableHead className="text-xs text-slate-300 font-bold">Purchase Date</TableHead>
+                      <TableHead className="text-xs text-slate-300 font-bold">Invoice Number</TableHead>
+                      <TableHead className="text-center text-xs text-slate-300 font-bold">Phones In Batch</TableHead>
+                      <TableHead className="text-xs text-slate-300 font-bold">Payment Mode</TableHead>
+                      <TableHead className="text-right text-xs text-slate-300 font-bold">Total Amount</TableHead>
+                      <TableHead className="text-center text-xs text-slate-300 font-bold">B2B Batch Invoice</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {dealerDetails?.batches && dealerDetails.batches.length > 0 ? (
                       dealerDetails.batches.map((batch: any) => (
-                        <TableRow key={batch.id} className="text-xs hover:bg-slate-50/80">
-                          <TableCell className="font-medium">{batch.purchase_date}</TableCell>
-                          <TableCell className="font-mono font-bold text-sky-800">{batch.invoice_number}</TableCell>
+                        <TableRow key={batch.id} className="text-xs border-b border-slate-800/80 hover:bg-slate-900/60">
+                          <TableCell className="font-medium text-slate-300">{batch.purchase_date}</TableCell>
+                          <TableCell className="font-mono font-bold text-sky-400">{batch.invoice_number}</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="bg-sky-50 text-sky-700 font-semibold text-[11px]">
+                            <Badge variant="outline" className="bg-sky-950/60 text-sky-300 border-sky-800/80 font-semibold text-[11px]">
                               {batch.total_phones} Units
                             </Badge>
                           </TableCell>
-                          <TableCell className="capitalize">{batch.payment_method || "Cash"}</TableCell>
-                          <TableCell className="text-right font-bold text-gray-900">
+                          <TableCell className="capitalize text-slate-300">{batch.payment_method || "Cash"}</TableCell>
+                          <TableCell className="text-right font-bold text-emerald-400">
                             ₹{Number(batch.total_amount).toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell className="text-center">
@@ -853,10 +853,10 @@ export const DealersTab: React.FC = () => {
                                 setActiveBatchId(batch.id);
                                 setShowBatchInvoiceModal(true);
                               }}
-                              className="h-7 text-xs gap-1 border-sky-300 text-sky-700 hover:bg-sky-50 font-semibold"
-                              title="View &amp; Print combined B2B Batch Invoice"
+                              className="h-7 text-xs gap-1 border-sky-600 bg-sky-950/40 text-sky-300 hover:bg-sky-900/60 hover:text-white font-semibold"
+                              title="View & Print combined B2B Batch Invoice"
                             >
-                              <FileText className="h-3.5 w-3.5 text-sky-600" />
+                              <FileText className="h-3.5 w-3.5 text-sky-400" />
                               View Batch Bill
                             </Button>
                           </TableCell>
@@ -864,7 +864,7 @@ export const DealersTab: React.FC = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-6 text-gray-400 text-xs">
+                        <TableCell colSpan={6} className="text-center py-6 text-slate-500 text-xs">
                           No wholesale batch transactions recorded yet.
                         </TableCell>
                       </TableRow>
@@ -874,33 +874,33 @@ export const DealersTab: React.FC = () => {
               </div>
             ) : (
               /* Individual Phones Table */
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950">
                 <Table>
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-xs">Date</TableHead>
-                      <TableHead className="text-xs">Model &amp; Variant</TableHead>
-                      <TableHead className="text-xs">IMEI</TableHead>
-                      <TableHead className="text-xs">Condition</TableHead>
-                      <TableHead className="text-right text-xs">Cost</TableHead>
-                      <TableHead className="text-center text-xs">Status</TableHead>
-                      <TableHead className="text-center text-xs">Batch Invoice</TableHead>
+                  <TableHeader className="bg-slate-900 border-b border-slate-800">
+                    <TableRow className="border-slate-800 hover:bg-transparent">
+                      <TableHead className="text-xs text-slate-300 font-bold">Date</TableHead>
+                      <TableHead className="text-xs text-slate-300 font-bold">Model & Variant</TableHead>
+                      <TableHead className="text-xs text-slate-300 font-bold">IMEI</TableHead>
+                      <TableHead className="text-xs text-slate-300 font-bold">Condition</TableHead>
+                      <TableHead className="text-right text-xs text-slate-300 font-bold">Cost</TableHead>
+                      <TableHead className="text-center text-xs text-slate-300 font-bold">Status</TableHead>
+                      <TableHead className="text-center text-xs text-slate-300 font-bold">Batch Invoice</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {dealerDetails?.phones && dealerDetails.phones.length > 0 ? (
                       dealerDetails.phones.map((p: any) => (
-                        <TableRow key={p.id} className="text-xs">
-                          <TableCell>{p.purchase_date}</TableCell>
-                          <TableCell className="font-semibold">{p.phone_name} {p.model} {p.variant || ""}</TableCell>
-                          <TableCell className="font-mono text-[11px]">{p.imei_number}</TableCell>
-                          <TableCell className="capitalize">{p.condition}</TableCell>
-                          <TableCell className="text-right font-bold">₹{Number(p.purchase_price).toLocaleString("en-IN")}</TableCell>
+                        <TableRow key={p.id} className="text-xs border-b border-slate-800/80 hover:bg-slate-900/60">
+                          <TableCell className="text-slate-300">{p.purchase_date}</TableCell>
+                          <TableCell className="font-semibold text-slate-100">{p.phone_name} {p.model} {p.variant || ""}</TableCell>
+                          <TableCell className="font-mono text-[11px] text-sky-400">{p.imei_number}</TableCell>
+                          <TableCell className="capitalize text-slate-300">{p.condition}</TableCell>
+                          <TableCell className="text-right font-bold text-slate-200">₹{Number(p.purchase_price).toLocaleString("en-IN")}</TableCell>
                           <TableCell className="text-center">
                             {p.is_sold ? (
-                              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700/50 text-[10px]">Sold</Badge>
+                              <Badge className="bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 text-[10px]">Sold</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-blue-700 bg-blue-50 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-700/50 text-[10px]">In Stock</Badge>
+                              <Badge variant="outline" className="text-sky-300 bg-sky-950/80 border border-sky-700/60 text-[10px]">In Stock</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-center">
@@ -912,21 +912,21 @@ export const DealersTab: React.FC = () => {
                                   setActiveBatchId(p.batch_purchase_id);
                                   setShowBatchInvoiceModal(true);
                                 }}
-                                className="h-6 text-[11px] px-2 text-sky-700 hover:bg-sky-50"
+                                className="h-6 text-[11px] px-2 text-sky-400 hover:bg-sky-950 hover:text-sky-200"
                                 title="Open B2B Batch Invoice"
                               >
                                 <FileText className="h-3 w-3 mr-1" />
                                 Batch Bill
                               </Button>
                             ) : (
-                              <span className="text-gray-400 text-[11px]">-</span>
+                              <span className="text-slate-500 text-[11px]">-</span>
                             )}
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-6 text-gray-400 text-xs">
+                        <TableCell colSpan={7} className="text-center py-6 text-slate-500 text-xs">
                           No purchase transactions recorded with this dealer yet.
                         </TableCell>
                       </TableRow>
