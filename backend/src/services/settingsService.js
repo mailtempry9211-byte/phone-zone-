@@ -27,11 +27,12 @@ const WRITABLE_COLUMNS = [
   "bank_name", "account_holder_name", "account_number", "ifsc_code",
   "udyam_verified", "google_business_verified", "show_google_business",
   "tac_fetch_mode", "whatsapp_channel",
+  "evolution_api_url", "evolution_api_key", "evolution_instance_name",
   "homepage_theme", "homepage_config", "repair_services_catalog",
 ];
 
 const TAC_FETCH_MODES = new Set(["ask", "auto", "off"]);
-const WHATSAPP_CHANNELS = new Set(["click_to_chat", "openwa", "chrome_extension"]);
+const WHATSAPP_CHANNELS = new Set(["click_to_chat", "openwa", "evolution_api", "chrome_extension"]);
 
 const empty = (v) => (v === undefined || v === null ? "" : String(v));
 
@@ -88,6 +89,9 @@ export function getSettings() {
     // IMEI / TAC engine: what to do when a TAC is not in the local database.
     tacFetchMode: TAC_FETCH_MODES.has(row?.tac_fetch_mode) ? row.tac_fetch_mode : "ask",
     whatsappChannel: WHATSAPP_CHANNELS.has(row?.whatsapp_channel) ? row.whatsapp_channel : "click_to_chat",
+    evolutionApiUrl: empty(row?.evolution_api_url),
+    evolutionApiKey: empty(row?.evolution_api_key),
+    evolutionInstanceName: empty(row?.evolution_instance_name) || "phonezone",
     repairServices: (() => {
       try {
         if (row?.repair_services_catalog) {
@@ -123,7 +127,7 @@ export function saveSettings(updates, userId) {
     updates.whatsapp_channel = "openwa";
   }
   if (updates.whatsapp_channel !== undefined && !WHATSAPP_CHANNELS.has(updates.whatsapp_channel)) {
-    throw badRequest("whatsapp_channel must be click_to_chat or openwa.");
+    throw badRequest("whatsapp_channel must be click_to_chat, openwa, or evolution_api.");
   }
   if (updates.instagram !== undefined) {
     updates.instagram = empty(updates.instagram).trim();

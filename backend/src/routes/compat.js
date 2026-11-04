@@ -351,8 +351,13 @@ export function buildCompatRouter(staff, canRead = staff) {
         sellers: r.seller_id ? (sellerOf.get(r.seller_id) || null) : null,
       })));
     } else if (t === "sellers") {
+      const pCols = columnsOf("phones");
+      const imei2Part = pCols.includes("imei2_number") ? "imei2_number" : "NULL as imei2_number";
+      const photoPart = pCols.includes("seller_photo_url") ? "seller_photo_url" : "NULL as seller_photo_url";
+      const sigPart = pCols.includes("seller_signature_url") ? "seller_signature_url" : "NULL as seller_signature_url";
+      const dtPart = pCols.includes("purchase_date") ? "purchase_date" : "NULL as purchase_date";
       const phonesOf = db.prepare(
-        "SELECT id, phone_name, model, purchase_price, selling_price, is_sold, imei_number, imei2_number, variant, colour, condition, seller_photo_url, seller_signature_url, purchase_date FROM phones WHERE seller_id = ? AND deleted_at IS NULL"
+        `SELECT id, phone_name, model, purchase_price, selling_price, is_sold, imei_number, ${imei2Part}, variant, colour, condition, ${photoPart}, ${sigPart}, ${dtPart} FROM phones WHERE seller_id = ? AND deleted_at IS NULL`
       );
       res.json(rows.map((s) => {
         const phs = phonesOf.all(s.id);

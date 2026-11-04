@@ -74,7 +74,10 @@ const SellerSelectDialog = ({ open, onOpenChange, onSellerSelect }: SellerSelect
           </Button>
 
           {isLoading ? (
-            <div className="text-center py-8">Loading sellers...</div>
+            <div className="flex flex-col items-center justify-center py-10 space-y-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Loading sellers list...</p>
+            </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {filteredSellers.map((seller) => (

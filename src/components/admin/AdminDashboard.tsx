@@ -804,7 +804,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span className="hidden md:inline text-[11px]">Refresh</span>
             </Button>
 
-            <div className="flex items-center gap-2 truncate max-w-[120px] sm:max-w-xs md:max-w-sm">
+            {/* Global Company / Store Branch Switcher (Always prominent, never hidden or overlapped) */}
+            <div className="shrink-0">
+              <ShopSwitcher isDark={isDark} />
+            </div>
+
+            <div className="flex items-center gap-2 truncate max-w-[120px] sm:max-w-xs md:max-w-sm shrink-0">
               <div
                 className={`h-7 w-7 rounded-lg flex items-center justify-center font-black text-xs text-white shadow shrink-0 hidden sm:flex ${
                   brandKey === "luxury"
@@ -823,7 +828,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           {/* Right: High-contrast visible tool pills & theme toggle (No overlap, smooth horizontal scroll if needed) */}
-          <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 overflow-x-auto scrollbar-none min-w-0 justify-end">
+          <div className="flex items-center gap-1 sm:gap-1.5 py-0.5 overflow-x-auto scrollbar-none min-w-0 ml-auto">
 
             {/* Global Dark / Light Switch */}
             <button
@@ -858,9 +863,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 }`}
               />
             )}
-
-            {/* Global Company / Store Branch Switcher */}
-            <ShopSwitcher isDark={isDark} />
 
             {/* Universal Scanner Trigger */}
             <UniversalScanner

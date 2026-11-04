@@ -9,6 +9,8 @@ import { unauthorized, badRequest } from "../lib/errors.js";
 import { sessionUser } from "../services/authService.js";
 import * as waService from "../services/waService.js";
 import * as openWaService from "../services/openWaService.js";
+import * as evolutionWa from "../services/evolutionWaService.js";
+import { getRawSettings } from "../services/settingsService.js";
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -196,28 +198,49 @@ export function buildWaRouter(staffAuth, adminAuth) {
     let textResult = null;
     let pdfResult = null;
 
-    // 1. Send text receipt / invoice summary first
-    if (textToSend) {
-      try {
-        textResult = await openWaService.sendTextMessage({
+    const currentChannel = getRawSettings()?.whatsapp_channel || "click_to_chat";
+    const useEvolution = channel === "evolution_api" || currentChannel === "evolution_api";
+
+    if (useEvolution) {
+      if (textToSend) {
+        try {
+          textResult = await evolutionWa.sendEvolutionText({ phone, message: textToSend });
+        } catch (_err) {}
+      }
+      if (pdfBuf) {
+        try {
+          pdfResult = await evolutionWa.sendEvolutionMedia({
+            phone,
+            mediaBase64: pdfBuf.toString("base64"),
+            filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
+            caption: "",
+          });
+        } catch (_err) {}
+      }
+    } else {
+      // 1. Send text receipt / invoice summary first
+      if (textToSend) {
+        try {
+          textResult = await openWaService.sendTextMessage({
+            phone,
+            message: textToSend,
+            channel: channel || "sales",
+          });
+        } catch (err) {
+          // If text sending had an issue, continue to attempt PDF
+        }
+      }
+
+      // 2. Send PDF document
+      if (pdfBuf) {
+        pdfResult = await openWaService.sendDocumentMessage({
           phone,
-          message: textToSend,
+          pdfBuffer: pdfBuf,
+          filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
+          caption: "", // text already sent cleanly above
           channel: channel || "sales",
         });
-      } catch (err) {
-        // If text sending had an issue, continue to attempt PDF
       }
-    }
-
-    // 2. Send PDF document
-    if (pdfBuf) {
-      pdfResult = await openWaService.sendDocumentMessage({
-        phone,
-        pdfBuffer: pdfBuf,
-        filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
-        caption: "", // text already sent cleanly above
-        channel: channel || "sales",
-      });
     }
 
     if (textResult || pdfResult) {
@@ -274,6 +297,21 @@ export function buildWaRouter(staffAuth, adminAuth) {
       textResult,
       pdfResult,
     });
+  }));
+
+  // ---------------- Evolution API endpoints ----------------
+  r.get("/evolution/status", staffAuth, wrap(async (_req, res) => {
+    res.json(await evolutionWa.checkEvolutionStatus());
+  }));
+
+  r.post("/evolution/test", staffAuth, wrap(async (req, res) => {
+    const { phone, message } = req.body || {};
+    if (!phone) throw badRequest("Recipient phone number is required.");
+    const result = await evolutionWa.sendEvolutionText({
+      phone,
+      message: message || "Hello from PhoneZone! Your Evolution API / WPPConnect WhatsApp gateway is connected and active.",
+    });
+    res.json(result);
   }));
 
   return r;

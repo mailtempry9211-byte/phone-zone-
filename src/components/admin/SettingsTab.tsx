@@ -10,13 +10,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2 } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { EvolutionApiGuideModal } from "./EvolutionApiGuideModal";
 
 const SettingsTab = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [masterPassword, setMasterPassword] = useState("");
   const [isResettingSetup, setIsResettingSetup] = useState(false);
+  const [showEvolutionGuide, setShowEvolutionGuide] = useState(false);
+  const [isTestingEvolution, setIsTestingEvolution] = useState(false);
+  const [evolutionTestPhone, setEvolutionTestPhone] = useState("");
+  const [evolutionCheckStatus, setEvolutionCheckStatus] = useState<any>(null);
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading } = useQuery({
@@ -95,6 +100,9 @@ const SettingsTab = () => {
     ifsc_code: "",
     whatsapp_number: "",
     whatsapp_channel: "click_to_chat",
+    evolution_api_url: "",
+    evolution_api_key: "",
+    evolution_instance_name: "phonezone",
     tac_fetch_mode: "ask",
   });
 
@@ -126,6 +134,9 @@ const SettingsTab = () => {
         ifsc_code: settings.ifsc_code || "",
         whatsapp_number: settings.whatsapp_number || "",
         whatsapp_channel: (settings as any).whatsapp_channel || "click_to_chat",
+        evolution_api_url: (settings as any).evolution_api_url || "",
+        evolution_api_key: (settings as any).evolution_api_key || "",
+        evolution_instance_name: (settings as any).evolution_instance_name || "phonezone",
         tac_fetch_mode: settings.tac_fetch_mode || "ask",
       });
     }
@@ -167,6 +178,9 @@ const SettingsTab = () => {
           ifsc_code: formData.ifsc_code,
           whatsapp_number: formData.whatsapp_number,
           whatsapp_channel: formData.whatsapp_channel || "click_to_chat",
+          evolution_api_url: formData.evolution_api_url,
+          evolution_api_key: formData.evolution_api_key,
+          evolution_instance_name: formData.evolution_instance_name,
           tac_fetch_mode: formData.tac_fetch_mode || "ask",
         }),
       });
@@ -1021,21 +1035,26 @@ const SettingsTab = () => {
             {[
               {
                 value: "click_to_chat",
-                label: "Click-to-Chat (wa.me URL) — Recommended for Mobile / APK / Desktop",
-                hint: "Direct link to WhatsApp. Works immediately on mobile phones, tablets and PCs with zero server setup. Supports native PDF file sharing on Android.",
+                label: "Click-to-Chat (wa.me URL) — Manual WhatsApp App",
+                hint: "Direct link to WhatsApp. Opens official WhatsApp app on phone/PC with pre-filled message. Zero server setup required.",
+              },
+              {
+                value: "evolution_api",
+                label: "Evolution API / WPPConnect — 100% Free 24/7 Cloud Gateway (Recommended for Mobile APK & PC)",
+                hint: "Sends automated WhatsApp invoices & PDF bills in background without opening apps. Ideal for standalone mobile APK and 24/7 persistent dispatch without battery drain.",
               },
               {
                 value: "openwa",
-                label: "OpenWA Gateway API — Automated Background Dispatch (Recommended)",
-                hint: "Sends messages directly in background via the local OpenWA WhatsApp server configured in Marketing tab without manual interaction.",
+                label: "OpenWA Gateway API — Desktop Engine (PC EXE Only)",
+                hint: "Local Chromium browser engine on PC. Runs locally inside Electron desktop EXE.",
               },
             ].map(({ value, label, hint }) => (
               <label
                 key={value}
                 className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                   formData.whatsapp_channel === value
-                    ? "border-emerald-600 bg-emerald-50/50"
-                    : "border-gray-200 hover:bg-gray-50"
+                    ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 dark:border-emerald-500"
+                    : "border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50"
                 }`}
               >
                 <input
@@ -1047,12 +1066,181 @@ const SettingsTab = () => {
                   className="mt-1 h-4 w-4 text-emerald-600 cursor-pointer"
                 />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-gray-900">{label}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{hint}</div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">{label}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{hint}</div>
                 </div>
               </label>
             ))}
           </div>
+
+          {/* EVOLUTION API / WPPCONNECT CONFIGURATION PANEL */}
+          {formData.whatsapp_channel === "evolution_api" && (
+            <div className="p-4 bg-sky-50/80 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800 rounded-xl space-y-3.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="font-bold text-xs text-sky-950 dark:text-sky-100 flex items-center gap-1.5">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Evolution API / WPPConnect Gateway Configuration
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setShowEvolutionGuide(true)}
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1 shadow-xs"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" /> शुरुआती गाइड (Noob Guide)
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    Server URL *
+                  </Label>
+                  <Input
+                    placeholder="https://my-evo.onrender.com"
+                    value={formData.evolution_api_url}
+                    onChange={(e) => setFormData((p) => ({ ...p, evolution_api_url: e.target.value.trim() }))}
+                    className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                  />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Your Render/VPS Evolution API URL</p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    API Key *
+                  </Label>
+                  <Input
+                    type="password"
+                    placeholder="e.g. PhoneZone2026MasterKey"
+                    value={formData.evolution_api_key}
+                    onChange={(e) => setFormData((p) => ({ ...p, evolution_api_key: e.target.value.trim() }))}
+                    className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                  />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Secret Authentication Key</p>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    Instance Name
+                  </Label>
+                  <Input
+                    placeholder="phonezone"
+                    value={formData.evolution_instance_name}
+                    onChange={(e) => setFormData((p) => ({ ...p, evolution_instance_name: e.target.value.trim() }))}
+                    className="mt-1 h-8 text-xs font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                  />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Instance identifier (default: phonezone)</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-sky-200 dark:border-sky-800">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isTestingEvolution || !formData.evolution_api_url}
+                  className="h-7 text-xs border-sky-300 dark:border-sky-700 font-bold"
+                  onClick={async () => {
+                    setIsTestingEvolution(true);
+                    try {
+                      // Attempt backend check or direct check
+                      const evoUrl = formData.evolution_api_url.replace(/\/+$/, "");
+                      const evoKey = formData.evolution_api_key;
+                      const evoInstance = formData.evolution_instance_name || "phonezone";
+
+                      let res;
+                      try {
+                        res = await fetch(`/api/wa/evolution/status`);
+                      } catch {
+                        res = await fetch(`${evoUrl}/instance/connectionState/${encodeURIComponent(evoInstance)}`, {
+                          headers: { apikey: evoKey },
+                        });
+                      }
+                      const data = await res.json().catch(() => ({}));
+                      setEvolutionCheckStatus(data);
+                      if (data.connected || data.state === "open" || data?.instance?.state === "open") {
+                        toast.success("Evolution API is ONLINE and WhatsApp is Connected!");
+                      } else {
+                        toast.warning(`Server responded: ${data.state || data.message || "Instance not connected yet. Please scan QR code in Evolution API dashboard."}`);
+                      }
+                    } catch (err: any) {
+                      toast.error(`Connection failed: ${err.message || "Network error"}`);
+                    } finally {
+                      setIsTestingEvolution(false);
+                    }
+                  }}
+                >
+                  {isTestingEvolution ? "Checking Status..." : "Test Connection Status"}
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Enter phone number to test"
+                    value={evolutionTestPhone}
+                    onChange={(e) => setEvolutionTestPhone(e.target.value)}
+                    className="h-7 w-44 text-xs font-mono bg-white dark:bg-slate-900"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!evolutionTestPhone || isTestingEvolution}
+                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    onClick={async () => {
+                      setIsTestingEvolution(true);
+                      try {
+                        const evoUrl = formData.evolution_api_url.replace(/\/+$/, "");
+                        const evoKey = formData.evolution_api_key;
+                        const evoInstance = formData.evolution_instance_name || "phonezone";
+                        const clean = evolutionTestPhone.replace(/\D/g, "");
+                        const recipient = clean.length === 10 ? "91" + clean : clean;
+
+                        let success = false;
+                        try {
+                          const res = await fetch("/api/wa/evolution/test", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ phone: recipient }),
+                          });
+                          if (res.ok) success = true;
+                        } catch {}
+
+                        if (!success) {
+                          // Direct test from client
+                          const dRes = await fetch(`${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", apikey: evoKey },
+                            body: JSON.stringify({
+                              number: recipient,
+                              text: "Hello! This is a test message from PhoneZone Store Manager via Evolution API. Your 24/7 gateway is connected and active!",
+                            }),
+                          });
+                          if (dRes.ok) success = true;
+                          else {
+                            const errBody = await dRes.json().catch(() => ({}));
+                            throw new Error(errBody.message || `HTTP ${dRes.status}`);
+                          }
+                        }
+
+                        toast.success(`Test WhatsApp message sent to ${recipient}!`);
+                      } catch (err: any) {
+                        toast.error(`Failed to send test: ${err.message}`);
+                      } finally {
+                        setIsTestingEvolution(false);
+                      }
+                    }}
+                  >
+                    Send Test WhatsApp
+                  </Button>
+                </div>
+              </div>
+
+              {evolutionCheckStatus && (
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border text-[11px] font-mono text-slate-700 dark:text-slate-300">
+                  Status: <strong>{evolutionCheckStatus.connected ? "CONNECTED (ONLINE)" : (evolutionCheckStatus.state || evolutionCheckStatus.message || "Disconnected")}</strong>
+                </div>
+              )}
+            </div>
+          )}
 
           {formData.whatsapp_channel === "openwa" && (
             <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-950 space-y-2.5">
@@ -1407,6 +1595,12 @@ const SettingsTab = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Evolution API / WPPConnect Noob Guide Modal */}
+      <EvolutionApiGuideModal
+        open={showEvolutionGuide}
+        onOpenChange={setShowEvolutionGuide}
+      />
     </div>
   );
 };

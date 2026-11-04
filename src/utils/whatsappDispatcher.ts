@@ -67,8 +67,8 @@ export async function dispatchWhatsApp({
   }
   const channel = effectiveChannel || "openwa";
 
-  // 1. Primary: Direct OpenWA Gateway API (sends text and real PDF without opening OS popups)
-  if (channel === "openwa") {
+  // 1. Direct Gateway API (Evolution API / WPPConnect OR local OpenWA Gateway)
+  if (channel === "openwa" || channel === "evolution_api") {
     try {
       if (!pdfBase64 && pdfBlob) {
         pdfBase64 = await new Promise<string>((resolve, reject) => {
@@ -79,36 +79,79 @@ export async function dispatchWhatsApp({
         });
       }
 
-      const res = await fetch("/api/wa/gateway/send-invoice-pdf", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: cleanPhone,
-          message,
-          pdfBase64,
-          invoiceHtml,
-          filename: pdfFileName,
-          channel: waSessionChannel || "sales",
-        }),
-      });
+      // First attempt backend gateway
+      let backendSuccess = false;
+      try {
+        const res = await fetch("/api/wa/gateway/send-invoice-pdf", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: cleanPhone,
+            message,
+            pdfBase64,
+            invoiceHtml,
+            filename: pdfFileName,
+            channel: channel === "evolution_api" ? "evolution_api" : (waSessionChannel || "sales"),
+          }),
+        });
 
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
-        if (data.type === "text_and_pdf") {
-          toast.success("Invoice text message and PDF document sent via WhatsApp Gateway!");
-        } else if (data.type === "pdf") {
-          toast.success("Invoice PDF document sent via WhatsApp Gateway!");
-        } else {
-          toast.success("Invoice message sent via WhatsApp Gateway!");
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          backendSuccess = true;
+          const gatewayLabel = channel === "evolution_api" ? "Evolution API" : "OpenWA Gateway";
+          if (data.type === "text_and_pdf") {
+            toast.success(`Invoice text message and PDF document sent via ${gatewayLabel}!`);
+          } else if (data.type === "pdf") {
+            toast.success(`Invoice PDF document sent via ${gatewayLabel}!`);
+          } else {
+            toast.success(`Invoice message sent via ${gatewayLabel}!`);
+          }
+          return { success: true, channel };
         }
-        return { success: true, channel: "openwa" };
+      } catch (_e) {
+        // Backend not reachable (e.g. mobile standalone APK)
       }
-      
-      const errReason = data.error || "OpenWA Gateway did not confirm delivery.";
-      toast.warning(`${errReason} Opening Click-to-Chat fallback.`);
+
+      // If backend was not reached and this is Evolution API, send directly from mobile app!
+      if (!backendSuccess && channel === "evolution_api") {
+        const evoUrl = (adminSettings?.evolution_api_url || "").replace(/\/+$/, "");
+        const evoKey = adminSettings?.evolution_api_key || "";
+        const evoInstance = adminSettings?.evolution_instance_name || "phonezone";
+
+        if (evoUrl && evoKey) {
+          // Direct send from phone
+          if (message) {
+            await fetch(`${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "apikey": evoKey },
+              body: JSON.stringify({ number: cleanPhone, text: message }),
+            });
+          }
+          if (pdfBase64) {
+            const cleanB64 = String(pdfBase64).replace(/^data:application\/pdf;base64,/, "");
+            await fetch(`${evoUrl}/message/sendMedia/${encodeURIComponent(evoInstance)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "apikey": evoKey },
+              body: JSON.stringify({
+                number: cleanPhone,
+                media: cleanB64,
+                mediatype: "document",
+                mimetype: "application/pdf",
+                fileName: pdfFileName,
+                caption: "",
+              }),
+            });
+          }
+          toast.success("Dispatched automatically via Evolution API!");
+          return { success: true, channel: "evolution_api" };
+        }
+      }
+
+      const label = channel === "evolution_api" ? "Evolution API Gateway" : "OpenWA Gateway";
+      toast.warning(`${label} did not confirm delivery. Opening Click-to-Chat.`);
     } catch (err: any) {
-      toast.warning("OpenWA Gateway unreachable. Opening Click-to-Chat fallback.");
+      toast.warning("Gateway unreachable. Opening Click-to-Chat fallback.");
     }
   }
 

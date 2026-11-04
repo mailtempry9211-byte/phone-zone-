@@ -70,28 +70,38 @@ const SellersTab = () => {
   const applyAadhaar = (d: AadhaarData) =>
     setFormData((prev) => ({ ...fillPersonFields(prev, d), id_proof_type: "aadhaar" as IdProofType }));
 
-  const { data: sellers, isLoading } = useQuery({
+  const { data: sellers, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['sellers', searchTerm],
     queryFn: async () => {
-      let query = supabase
-        .from('sellers')
-        .select(`
-          *,
-          phones (
-            id, phone_name, model, purchase_price, selling_price, is_sold,
-            imei_number, imei2_number, variant, colour, condition,
-            seller_photo_url, seller_signature_url, sapath_patra_language, purchase_date
-          )
-        `)
-        .order('created_at', { ascending: false });
+      try {
+        let query = supabase
+          .from('sellers')
+          .select(`
+            *,
+            phones (
+              id, phone_name, model, purchase_price, selling_price, is_sold,
+              imei_number, imei2_number, variant, colour, condition,
+              seller_photo_url, seller_signature_url, sapath_patra_language, purchase_date
+            )
+          `)
+          .order('created_at', { ascending: false });
 
-      if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,id_number.ilike.%${searchTerm}%`);
+        if (searchTerm) {
+          query = query.or(`name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,id_number.ilike.%${searchTerm}%`);
+        }
+
+        const { data, error } = await (query as any);
+        if (error) throw error;
+        return (data || []) as any[];
+      } catch (err: any) {
+        console.warn("Failed detailed sellers query, falling back to simple select:", err);
+        // Resilient fallback for older restored databases
+        try {
+          const simpleRes = await supabase.from('sellers').select('*').order('created_at', { ascending: false });
+          if (simpleRes.data) return simpleRes.data as any[];
+        } catch {}
+        throw err;
       }
-
-      const { data, error } = await (query as any);
-      if (error) throw error;
-      return (data || []) as any[];
     }
   });
 
@@ -314,7 +324,32 @@ const SellersTab = () => {
     window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  if (isLoading) return <div>Loading sellers...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Loading sellers directory...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-center space-y-3 my-6">
+        <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">
+          Failed to load sellers: {(error as any)?.message || "Database query error"}
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          <Button size="sm" onClick={() => refetch()} variant="outline" className="border-rose-300 dark:border-rose-700">
+            Retry Loading
+          </Button>
+          <Button size="sm" onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="h-4 w-4 mr-1.5" /> Add New Seller
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

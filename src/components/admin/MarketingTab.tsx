@@ -1023,19 +1023,19 @@ export default function MarketingTab() {
       </Card>
 
       {/* ULTRA PRO MAX CAMPAIGN BUILDER & ANTI-BAN SUITE */}
-      <Card className="border-sky-300 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-sky-50 via-blue-50 to-white pb-3 border-b">
+      <Card className="bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-900/60 shadow-md">
+        <CardHeader className="bg-gradient-to-r from-sky-50 via-blue-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-900/90 pb-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2 text-lg text-sky-950 font-bold">
-                <Send className="h-5 w-5 text-sky-600" /> WhatsApp Marketing Campaign &amp; Broadcast
+              <CardTitle className="flex items-center gap-2 text-lg text-sky-950 dark:text-sky-100 font-bold">
+                <Send className="h-5 w-5 text-sky-600 dark:text-sky-400" /> WhatsApp Marketing Campaign &amp; Broadcast
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs text-slate-600 dark:text-slate-400">
                 Broadcast personalized promotional messages, festivals offers, stock updates &amp; media attachments.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className="bg-sky-600 text-white flex items-center gap-1 text-xs">
+              <Badge className="bg-sky-600 text-white flex items-center gap-1 text-xs shadow-sm">
                 <Zap className="h-3.5 w-3.5" /> Ultra Pro Max Anti-Ban Active
               </Badge>
             </div>
@@ -1162,26 +1162,26 @@ export default function MarketingTab() {
             </div>
 
             {/* STEP 2: ULTRA PRO MAX ANTI-BAN PROTECTION SUITE */}
-            <div className="space-y-3 bg-slate-50/80 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-center justify-between border-b pb-2">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-gray-800">
-                  <ShieldAlert className="h-4 w-4 text-emerald-600" />
+            <div className="space-y-3 bg-slate-50/90 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center justify-between border-b pb-2 border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 dark:text-slate-100">
+                  <ShieldAlert className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   Ultra Pro Max Anti-Ban Safety Suite
                 </div>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px]">
+                <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px]">
                   WhatsApp Protection Active
                 </Badge>
               </div>
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <div className="flex justify-between font-semibold text-gray-700 mb-1">
+                  <div className="flex justify-between font-semibold text-slate-700 dark:text-slate-200 mb-1">
                     <span>Human-Like Randomized Typing Delay:</span>
                     <span className="text-emerald-700 dark:text-emerald-300 font-mono font-bold">{delayMin}s – {delayMax}s per message</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     <div>
-                      <span className="text-[10px] text-gray-500 dark:text-slate-300">Min Jitter (Seconds):</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Min Jitter (Seconds):</span>
                       <Input
                         type="number"
                         min={15}
@@ -1192,7 +1192,7 @@ export default function MarketingTab() {
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] text-gray-500 dark:text-slate-300">Max Jitter (Seconds):</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">Max Jitter (Seconds):</span>
                       <Input
                         type="number"
                         min={25}
@@ -1203,43 +1203,43 @@ export default function MarketingTab() {
                       />
                     </div>
                   </div>
-                  <p className="text-[10px] text-gray-400 dark:text-slate-300 mt-1 font-medium">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium">
                     Meta detects automated blasting. Random 25-65s gaps prevent algorithm triggers.
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between border-t pt-2 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between border-t pt-2 border-slate-200 dark:border-slate-700">
                   <div>
-                    <div className="font-semibold text-gray-800 dark:text-slate-100">Simulate Human Typing Activity</div>
-                    <div className="text-[10px] text-gray-500 dark:text-slate-300">Sends &quot;typing...&quot; presence indicator before sending</div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-100">Simulate Human Typing Activity</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Sends &quot;typing...&quot; presence indicator before sending</div>
                   </div>
                   <input
                     type="checkbox"
                     checked={simulateTyping}
                     onChange={(e) => setSimulateTyping(e.target.checked)}
-                    className="h-4 w-4 rounded text-emerald-600"
+                    className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
                   />
                 </div>
 
-                <div className="border-t pt-2 space-y-1 border-slate-200 dark:border-slate-800">
-                  <div className="flex justify-between font-semibold text-gray-800 dark:text-slate-100">
+                <div className="border-t pt-2 space-y-1 border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-100">
                     <span>Smart Batch Cooldown Break:</span>
                     <span className="text-sky-700 dark:text-sky-300 font-semibold">Pause {cooldownMinutes}m after {cooldownBatchSize} msgs</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 dark:text-slate-300 font-medium">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                     Takes automatic rest intervals like a real human shop staff typing from a phone.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 border-t pt-2 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 border-t pt-2 border-slate-200 dark:border-slate-700">
                   <input
                     type="checkbox"
                     id="dryRunMarketing"
                     checked={dryRun}
                     onChange={(e) => setDryRun(e.target.checked)}
-                    className="h-4 w-4 rounded text-blue-600"
+                    className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                   />
-                  <label htmlFor="dryRunMarketing" className="text-xs font-semibold text-gray-700 dark:text-slate-200 cursor-pointer">
+                  <label htmlFor="dryRunMarketing" className="text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">
                     Dry Run Test (Simulate queue without actual WhatsApp delivery)
                   </label>
                 </div>
