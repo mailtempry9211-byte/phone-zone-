@@ -16,7 +16,7 @@
 
 import { getDb } from "../db/index.js";
 import { createBackup } from "./backupService.js";
-import { uploadBackupToDrive, getCloudBackupStatus } from "./googleDriveService.js";
+import { syncToGoogleDrive, getCloudBackupStatus } from "./googleDriveService.js";
 import { audit } from "./auditService.js";
 import { logger } from "../lib/logger.js";
 
@@ -103,9 +103,9 @@ export async function execute2Plus1Purge({ actorUserId = null, forceCloudUpload 
   try {
     const driveStatus = getCloudBackupStatus();
     if (driveStatus.connected && forceCloudUpload) {
-      await uploadBackupToDrive(backupResult.name);
+      syncToGoogleDrive();
       cloudUploaded = true;
-      logger.info(`Pre-purge snapshot uploaded to Google Drive: ${backupResult.name}`);
+      logger.info(`Pre-purge snapshot synced to Google Drive: ${backupResult.name}`);
     }
   } catch (driveErr) {
     logger.warn("Cloud backup pre-purge upload skipped/failed:", driveErr);

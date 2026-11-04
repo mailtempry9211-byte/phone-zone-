@@ -89,6 +89,12 @@
 
 ---
 
+### Error 3: "SyntaxError: does not provide an export named uploadBackupToDrive"
+- **कारण**: `dataRetentionService.js` में `googleDriveService.js` के फ़ंक्शन नाम का मिसमैच था।
+- **समाधान**: फ़ंक्शन एक्सपोर्ट को `syncToGoogleDrive` और `uploadBackupToDrive` दोनों नामों से एक्सपोर्ट कर दिया गया है ताकि बैकएंड सर्वर बिना किसी एरर के 1 सेकंड में स्टार्ट हो जाए।
+
+---
+
 ### Error 2: "Server 15 मिनट बाद Stop / Sleep हो जाता है (Cold Start Delay)"
 - **कारण**: Render Free Tier पर जब 15 मिनट तक कोई वेबसाइट नहीं खोलता, तो वह सर्वर को सुला देता है। अगली बार खोलने पर 30-50 सेकंड का समय लगता है।
 - **समाधान (100% Free Keep-Alive)**:

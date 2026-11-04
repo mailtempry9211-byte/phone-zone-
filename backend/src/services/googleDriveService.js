@@ -218,4 +218,7 @@ export function restoreFromCloudBackup(backupFileName) {
   return restoreBackup(safeName);
 }
 
+export const uploadBackupToDrive = syncToGoogleDrive;
+
+
 
