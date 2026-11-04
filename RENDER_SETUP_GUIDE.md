@@ -35,7 +35,7 @@
 | **Region** | `Singapore` (भारत में सबसे तेज़ स्पीड के लिए) |
 | **Branch** | `main` |
 | **Runtime** | `Node` |
-| **Build Command** | `npm install && cd backend && npm install && cd .. && npm run build` |
+| **Build Command** | `npm run render:build` |
 | **Start Command** | `npm start` |
 | **Instance Type** | `Free` ($0/month) |
 
@@ -46,6 +46,7 @@
 
 | Key | Value | विवरण |
 |---|---|---|
+| `NODE_VERSION` | `20.18.0` | **(अति-आवश्यक)** Node 20 LTS - Node 24 क्रैश रोकता है |
 | `NODE_ENV` | `production` | प्रोडक्शन मोड |
 | `PORT` | `10000` | Render का इंटरनल पोर्ट |
 | `RENDER` | `true` | Render डिटेक्शन |
@@ -67,7 +68,23 @@
 
 ## ⚠️ Render Common Errors & 100% Working Fixes
 
-### Error 1: "Server 15 मिनट बाद Stop / Sleep हो जाता है (Cold Start Delay)"
+### Error 1: "Exited with status 1 while building your code (Node 24 / Vite Not Found)"
+- **कारण (यही पहला एरर आया था)**:
+  1. Render ने अपने आप **Node.js 24.22.1** चुन लिया था। Node 24 में Linux के लिए `better-sqlite3` और `sharp` के प्रीबिल्ट बाइनरी नहीं होते, जिससे npm install फ़ेल हो जाता है।
+  2. `NODE_ENV=production` सेट होने पर npm install बाय डिफ़ॉल्ट `vite` और `typescript` को छोड़ देता है।
+- **100% परमानेंट समाधान (कोड में लागू कर दिया गया है)**:
+  1. हमने रिपॉज़िटरी में `.node-version` और `.nvmrc` फ़ाइल बनाकर Node 20.18.0 फ़िक्स कर दिया है।
+  2. `package.json` में `vite`, `typescript`, `tailwindcss` को सीधे कोर `dependencies` में डाल दिया है ताकि production मोड में भी कभी मिस न हों।
+  3. **आपको Render पर सिर्फ 2 चीज़ें करनी हैं**:
+     - **Build Command**: `npm run render:build` (या `npm install --include=dev && cd backend && npm install && cd .. && npm run build`)
+     - **Environment Variable में जोड़ें**:
+       - **Key**: `NODE_VERSION`
+       - **Value**: `20.18.0`
+     - इसके बाद Render के Deploy पेज पर जाकर **"Clear build cache & deploy"** या **"Manual Deploy -> Deploy latest commit"** दबाएँ। बिल्ड बिना किसी एरर के 100% पास हो जाएगा!
+
+---
+
+### Error 2: "Server 15 मिनट बाद Stop / Sleep हो जाता है (Cold Start Delay)"
 - **कारण**: Render Free Tier पर जब 15 मिनट तक कोई वेबसाइट नहीं खोलता, तो वह सर्वर को सुला देता है। अगली बार खोलने पर 30-50 सेकंड का समय लगता है।
 - **समाधान (100% Free Keep-Alive)**:
   1. [cron-job.org](https://cron-job.org/) पर मुफ़्त अकाउंट बनाएँ।

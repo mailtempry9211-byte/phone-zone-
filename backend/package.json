@@ -26,7 +26,7 @@
     "unzipper": "^0.12.5"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true
