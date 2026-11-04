@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: phonezone-erp
+    runtime: node
+    plan: free
+    region: singapore # or frankfurt, oregon, ohio
+    buildCommand: npm install && cd backend && npm install && cd .. && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: RENDER
+        value: "true"
+      - key: PHONEZONE_OFFLINE
+        value: "true"
+      - key: PHONEZONE_ADMIN_PASSWORD
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: VITE_PHONEZONE_OFFLINE
+        value: "true"

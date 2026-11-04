@@ -18,6 +18,7 @@ import * as financialYears from "../services/financialYearService.js";
 import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import * as googleDrive from "../services/googleDriveService.js";
+import * as retention from "../services/dataRetentionService.js";
 import * as licenseService from "../services/licenseService.js";
 import { getDeviceInfo } from "../services/hardwareId.js";
 import { getDb } from "../db/index.js";
@@ -780,10 +781,20 @@ export function buildRouter() {
     res.json({ restored: true, backupName, ...result });
   }));
 
-  // ---------------- database maintenance (admin) ----------------
+  // ---------------- database maintenance & 2+1 year retention (admin) ----------------
   r.post("/system/optimize", requireAuth, requireRole("admin"), wrap((_req, res) => {
     getDb().exec("VACUUM; ANALYZE;");
     res.json({ ok: true, message: "Database vacuumed and analyzed successfully." });
+  }));
+
+  r.get("/retention/preview", requireAuth, requireRole("admin"), wrap((_req, res) => {
+    res.json(retention.previewPurge());
+  }));
+
+  r.post("/retention/purge", requireAuth, requireRole("admin"), wrap(async (req, res) => {
+    enforce(backupLimiter, req);
+    const result = await retention.execute2Plus1Purge({ actorUserId: req.user?.id });
+    res.json(result);
   }));
 
   // ---------------- audit note endpoint ----------------

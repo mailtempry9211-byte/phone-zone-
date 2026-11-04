@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import JSZip from 'jszip';
 import StorageManagementCard from "./StorageManagementCard";
 import { GoogleDriveBackupCard } from "./GoogleDriveBackupCard";
+import { DataRetentionCard } from "./DataRetentionCard";
 
 interface Message {
   id: string;
@@ -1417,6 +1418,9 @@ section h2 {
 
       {/* Google Drive Cloud Backup */}
       <GoogleDriveBackupCard />
+
+      {/* 2+1 Year Auto-Backup & Retention Purge */}
+      <DataRetentionCard />
 
       {/* Export Controls */}
       <Card>
