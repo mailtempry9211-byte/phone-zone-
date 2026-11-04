@@ -143,6 +143,11 @@ if (isMain) {
       }
     }
 
+    // Auto-sync persistent business profile, users, and data from Supabase Cloud on boot
+    import("./services/supabaseSyncService.js")
+      .then((m) => m.syncFromSupabaseOnBoot().catch((err) => logger.warn("Supabase boot sync error", err)))
+      .catch(() => {});
+
     // Auto-start background services (OpenWA & Ngrok) if configured by owner
     import("./services/baileysService.js")
       .then((m) => m.initBaileys().catch((err) => logger.warn("Baileys init error", err)))

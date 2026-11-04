@@ -19,6 +19,7 @@ import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import * as googleDrive from "../services/googleDriveService.js";
 import * as retention from "../services/dataRetentionService.js";
+import * as supabaseSync from "../services/supabaseSyncService.js";
 import { getLiveQuotaMetrics } from "../services/quotaService.js";
 import * as licenseService from "../services/licenseService.js";
 import { getDeviceInfo } from "../services/hardwareId.js";
@@ -250,8 +251,13 @@ export function buildRouter() {
   });
 
   // ---------------- first-run setup (public, pre-login) ----------------
-  r.get("/setup/status", (_req, res) => {
-    const s = settings.getSettings();
+  r.get("/setup/status", wrap(async (_req, res) => {
+    let s = settings.getSettings();
+    // If local DB says not completed, attempt to pull persistent setup from Supabase Cloud
+    if (!s.setupCompleted && process.env.SUPABASE_URL) {
+      await supabaseSync.syncFromSupabaseOnBoot().catch(() => {});
+      s = settings.getSettings();
+    }
     res.json({
       setupCompleted: s.setupCompleted,
       configured: {
@@ -262,7 +268,7 @@ export function buildRouter() {
       },
       requiredConfigured: !!(s.businessName && s.primaryPhone && s.address && s.email),
     });
-  });
+  }));
   // Pre-login media upload for the wizard (only works while setup is not done).
   r.post("/setup/upload", upload.single("file"), wrap((req, res) => {
     enforce(setupLimiter, req);
@@ -297,19 +303,26 @@ export function buildRouter() {
     let result;
     try {
       result = getDb().transaction(() => {
-        createUser(profile.email, profile.password, profile.ownerName || profile.businessName, "all", "admin", {
+        const u = createUser(profile.email, profile.password, profile.ownerName || profile.businessName, "all", "admin", {
           securityQuestion: profile.securityQuestion,
           securityAnswer: profile.securityAnswer,
         });
-        return settings.completeSetup(profile);
+        const comp = settings.completeSetup(profile);
+        return { u, comp };
       })();
+
+      // Persist to Supabase Cloud so settings survive all future deploys!
+      supabaseSync.pushSettingsToSupabase(profile).catch(() => {});
+      if (result.u) {
+        supabaseSync.pushUserToSupabase(result.u, "admin").catch(() => {});
+      }
     } catch (err) {
       if (/UNIQUE constraint failed: users\.email/i.test(String(err?.message))) {
         throw badRequest("An account with this email already exists. Use a different email.");
       }
       throw err;
     }
-    res.json({ setupCompleted: result.setupCompleted });
+    res.json({ setupCompleted: result.comp?.setupCompleted || true });
   }));
 
   // Reset setup flag so user can re-run first-time setup or setup a new company (protected with Master Admin Password)
@@ -520,8 +533,16 @@ export function buildRouter() {
 
   // ---------------- settings (Admin > Settings, editable anytime) ----------------
   r.get("/settings", staff, wrap((_req, res) => res.json(settings.getSettings())));
-  r.put("/settings", staff, upload.none(), wrap((req, res) => res.json(settings.saveSettings(req.body || {}, req.user.id))));
-  r.post("/settings", staff, upload.none(), wrap((req, res) => res.json(settings.saveSettings(req.body || {}, req.user.id))));
+  r.put("/settings", staff, upload.none(), wrap((req, res) => {
+    const s = settings.saveSettings(req.body || {}, req.user.id);
+    supabaseSync.pushSettingsToSupabase(s).catch(() => {});
+    res.json(s);
+  }));
+  r.post("/settings", staff, upload.none(), wrap((req, res) => {
+    const s = settings.saveSettings(req.body || {}, req.user.id);
+    supabaseSync.pushSettingsToSupabase(s).catch(() => {});
+    res.json(s);
+  }));
   r.post("/settings/upload", staff, upload.single("file"), wrap((req, res) => {
     const { category } = req.body || {};
     if (!["logo", "signature"].includes(category)) throw badRequest("category must be logo or signature.");
