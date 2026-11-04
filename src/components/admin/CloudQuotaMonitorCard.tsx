@@ -25,6 +25,23 @@ interface QuotaResponse {
 }
 
 export const CloudQuotaMonitorCard: React.FC = () => {
+  const [testingSupabase, setTestingSupabase] = React.useState(false);
+  const [supabaseTestStatus, setSupabaseTestStatus] = React.useState<any>(null);
+
+  const handleTestSupabase = async () => {
+    setTestingSupabase(true);
+    setSupabaseTestStatus(null);
+    try {
+      const res = await fetch("/api/system/test-supabase", { credentials: "include" });
+      const data = await res.json();
+      setSupabaseTestStatus(data);
+    } catch (err: any) {
+      setSupabaseTestStatus({ ok: false, error: err.message || "Failed to reach backend test endpoint" });
+    } finally {
+      setTestingSupabase(false);
+    }
+  };
+
   const { data, isLoading, refetch, isFetching } = useQuery<QuotaResponse>({
     queryKey: ["quota-metrics"],
     queryFn: async () => {
@@ -64,7 +81,17 @@ export const CloudQuotaMonitorCard: React.FC = () => {
               Real-time monitoring of Supabase/Render free limits (500 MB Database, 1 GB Storage, 2 GB Bandwidth).
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleTestSupabase}
+              disabled={testingSupabase}
+              className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-sm"
+            >
+              <Database className={`h-3.5 w-3.5 ${testingSupabase ? "animate-spin" : ""}`} />
+              {testingSupabase ? "Testing Supabase..." : "Test Supabase (कनेक्शन टेस्ट)"}
+            </Button>
             <Badge variant="outline" className="border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-2.5 py-1 text-xs">
               Live Auto-Sync
             </Badge>
@@ -83,6 +110,22 @@ export const CloudQuotaMonitorCard: React.FC = () => {
       </CardHeader>
 
       <CardContent className="space-y-5 pt-1">
+        {/* Supabase Test Result Banner */}
+        {supabaseTestStatus && (
+          <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+            supabaseTestStatus.ok
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200"
+              : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-700 text-rose-900 dark:text-rose-200"
+          }`}>
+            <span className="text-base mt-0.5">{supabaseTestStatus.ok ? "✅" : "⚠️"}</span>
+            <div className="space-y-1">
+              <p className="font-bold">{supabaseTestStatus.message || supabaseTestStatus.error}</p>
+              {supabaseTestStatus.hint && (
+                <p className="opacity-90 underline font-medium">{supabaseTestStatus.hint}</p>
+              )}
+            </div>
+          </div>
+        )}
         {/* Warning Banner if Quota High */}
         {(db.percentage >= 80 || storage.percentage >= 80) && (
           <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 flex items-start gap-3 text-rose-600 dark:text-rose-400">

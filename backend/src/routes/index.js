@@ -814,6 +814,77 @@ export function buildRouter() {
     res.json(getLiveQuotaMetrics());
   }));
 
+  // ---------------- live Supabase verification test ----------------
+  r.get("/system/test-supabase", wrap(async (_req, res) => {
+    const url = (process.env.SUPABASE_URL || "").trim();
+    const key = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+    if (!url || !key) {
+      return res.json({
+        ok: false,
+        configured: false,
+        error: "SUPABASE_URL ya SUPABASE_ANON_KEY Render Environment me set nahi hai.",
+        hint: "Render dashboard me SUPABASE_URL aur SUPABASE_ANON_KEY add karein.",
+      });
+    }
+
+    try {
+      const restRes = await fetch(`${url.replace(/\/+$/, "")}/rest/v1/admin_settings?select=id,business_name&limit=1`, {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+      });
+
+      if (!restRes.ok) {
+        const text = await restRes.text().catch(() => "");
+        let json = {};
+        try { json = JSON.parse(text); } catch {}
+        if (restRes.status === 401) {
+          return res.json({
+            ok: false,
+            configured: true,
+            status: 401,
+            error: "Invalid API Key! Supabase ne key reject kar di.",
+            hint: "Supabase Settings > API Keys me 'View legacy API keys' dabayein aur eyJ... se shuru hone wali anon key use karein.",
+            details: json,
+          });
+        }
+        if (restRes.status === 404 || (json.message && json.message.includes("relation") && json.message.includes("does not exist"))) {
+          return res.json({
+            ok: false,
+            configured: true,
+            status: 404,
+            error: "Supabase me PhoneZone ki tables nahi mili!",
+            hint: "Supabase SQL Editor me jaakar supabase/supabase_complete_schema.sql ka code Run karein.",
+            details: json,
+          });
+        }
+        return res.json({
+          ok: false,
+          configured: true,
+          status: restRes.status,
+          error: json.message || text || `HTTP ${restRes.status}`,
+          hint: "Check Supabase project status.",
+          details: json,
+        });
+      }
+
+      const rows = await restRes.json().catch(() => []);
+      return res.json({
+        ok: true,
+        connected: true,
+        status: 200,
+        message: "✅ Supabase 100% Connected & Verified! Tables exist and queries are working.",
+        rowCount: Array.isArray(rows) ? rows.length : 0,
+      });
+    } catch (err) {
+      return res.json({
+        ok: false,
+        error: `Supabase se connect karne me network error: ${err.message}`,
+      });
+    }
+  }));
+
   // ---------------- audit note endpoint ----------------
   r.post("/audit/note", staff, wrap((req, res) => {
     const { action, entity, entityId, details } = req.body || {};

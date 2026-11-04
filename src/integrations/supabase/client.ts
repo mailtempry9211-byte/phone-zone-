@@ -5,15 +5,17 @@ import { isOfflineMode } from '@/lib/data';
 import { createOfflineSupabase } from '@/lib/data/offlineSupabase';
 
 const SUPABASE_URL =
+  (typeof window !== "undefined" && (window as any).__SUPABASE_URL__) ||
   (typeof window !== "undefined" && window.localStorage?.getItem("phonezone.supabase_url")) ||
   import.meta.env.VITE_SUPABASE_URL ||
-  "https://qzrclxbamvovrraizldj.supabase.co";
+  "https://rkhzhozrslrfsqlpgjav.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
+  (typeof window !== "undefined" && (window as any).__SUPABASE_ANON_KEY__) ||
   (typeof window !== "undefined" && window.localStorage?.getItem("phonezone.supabase_anon_key")) ||
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6cmNseGJhbXZvdnJyYWl6bGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NDY0OTgsImV4cCI6MjA2ODIyMjQ5OH0.lXAwpv3AjjHm_YvaOKX3Oyx48XlKciqH0GnLRrwfGlI";
+  "";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

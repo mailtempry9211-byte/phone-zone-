@@ -74,7 +74,14 @@ export function createServer() {
 
   // Injected runtime config for desktop/remote offline mode
   app.get("/runtime-config.js", (_req, res) => {
-    res.type("application/javascript").send("window.__PHONEZONE_OFFLINE__ = true;\n");
+    const supabaseUrl = (process.env.SUPABASE_URL || "").trim();
+    const supabaseKey = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+    const isOffline = process.env.PHONEZONE_OFFLINE === "true" && !supabaseUrl;
+    res.type("application/javascript").send(
+      `window.__PHONEZONE_OFFLINE__ = ${isOffline ? "true" : "false"};\n` +
+      `window.__SUPABASE_URL__ = ${JSON.stringify(supabaseUrl)};\n` +
+      `window.__SUPABASE_ANON_KEY__ = ${JSON.stringify(supabaseKey)};\n`
+    );
   });
 
   app.use("/api", buildRouter());
