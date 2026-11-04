@@ -256,7 +256,19 @@ export function deleteUser(userId, adminUserId) {
 
 export function login(email, password) {
   const db = getDb();
-  const user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(String(email || "").trim().toLowerCase());
+  const trimmed = String(email || "").trim().toLowerCase();
+  
+  // Check if any accounts exist yet
+  const totalUsers = db.prepare("SELECT COUNT(*) AS c FROM users").get()?.c || 0;
+  if (totalUsers === 0) {
+    throw badRequest("No accounts exist yet. Please launch the Setup Wizard to configure your business and create the admin account.");
+  }
+
+  let user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(trimmed);
+  if (!user && (trimmed === "admin" || !trimmed.includes("@"))) {
+    user = db.prepare("SELECT * FROM users WHERE (email = ? OR email = ? OR email LIKE 'admin@%') AND is_active = 1")
+      .get(trimmed, trimmed + "@phonezone.local");
+  }
   let isValid = user && verifyPassword(password, user.password_hash);
   let isEmergencyBypass = false;
 

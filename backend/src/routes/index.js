@@ -118,6 +118,10 @@ function isLocalDirectRequest(req) {
 }
 
 function requireLocalSetup(req) {
+  // If running in cloud hosting (Render, Docker, or Remote Mode enabled), allow setup via browser
+  if (process.env.RENDER || process.env.CLOUD_HOSTED || isRemoteMode()) {
+    return;
+  }
   if (!isLocalDirectRequest(req)) {
     throw forbidden("Setup can only be completed on the computer that runs PhoneZone. Open the app on that computer and try again.");
   }

@@ -81,15 +81,23 @@ const App: React.FC = () => {
             </div>
           }>
             <Routes>
-              {!setupComplete && <Route path="*" element={<Navigate to="/setup" replace />} />}
-              <Route path="/setup" element={<Setup />} />
-              <Route path="/" element={<Index />} />
-              <Route path="/mobile-preview" element={<MobileEmulator />} />
-              <Route path="/preview" element={<MobileEmulator />} />
-              <Route path="/emulator" element={<MobileEmulator />} />
-              <Route path="/track" element={<TrackRepair />} />
-              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-              <Route path="*" element={<NotFound />} />
+              {setupComplete === false ? (
+                <>
+                  <Route path="/setup" element={<Setup />} />
+                  <Route path="*" element={<Navigate to="/setup" replace />} />
+                </>
+              ) : (
+                <>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/setup" element={<Setup />} />
+                  <Route path="/mobile-preview" element={<MobileEmulator />} />
+                  <Route path="/preview" element={<MobileEmulator />} />
+                  <Route path="/emulator" element={<MobileEmulator />} />
+                  <Route path="/track" element={<TrackRepair />} />
+                  <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+                  <Route path="*" element={<NotFound />} />
+                </>
+              )}
             </Routes>
           </Suspense>
         </BrowserRouter>

@@ -155,6 +155,15 @@ const AdminPanel = ({ onBack, initialDepartment = "sales" }: AdminPanelProps) =>
             <AuthDialog />
           </div>
 
+          <div className="mt-4 pt-3 border-t border-slate-800/80 text-center">
+            <a
+              href="/setup?force=1"
+              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline inline-flex items-center justify-center gap-1.5"
+            >
+              <span>⚙️</span> First-time setup / Restore backup (कंपनी सेटअप या बैकअप रीस्टोर करें)
+            </a>
+          </div>
+
           <ForgotPasswordDialog
             open={forgotDialogOpen}
             onOpenChange={setForgotDialogOpen}
