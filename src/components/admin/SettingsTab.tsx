@@ -1112,6 +1112,11 @@ const SettingsTab = () => {
           <div className="flex flex-col gap-3">
             {[
               {
+                value: "baileys",
+                label: "⚡ Native Baileys Engine — In-Process (Render Cloud & Noob-Friendly)",
+                hint: "Built directly into PhoneZone! No Chrome, no Docker, no external servers. Just scan QR in Marketing tab to send automated PDF bills & receipts 24/7.",
+              },
+              {
                 value: "click_to_chat",
                 label: "Click-to-Chat (wa.me URL) — Manual WhatsApp App",
                 hint: "Direct link to WhatsApp. Opens official WhatsApp app on phone/PC with pre-filled message. Zero server setup required.",

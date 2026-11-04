@@ -54,6 +54,8 @@ interface Contact {
   type: "customer" | "seller" | "dealer" | "repair_customer" | "custom";
 }
 
+import { NativeWhatsAppCard } from "./NativeWhatsAppCard";
+
 export default function MarketingTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -686,6 +688,9 @@ export default function MarketingTab() {
 
   return (
     <div className="space-y-6">
+      {/* Native In-Process Baileys WhatsApp Engine (Cloud / Render / Zero-Config) */}
+      <NativeWhatsAppCard />
+
       {/* OpenWA Direct WhatsApp Gateway Card */}
       <Card className="border-emerald-300 shadow-sm">
         <CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-white pb-3 border-b">

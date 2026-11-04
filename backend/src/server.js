@@ -144,6 +144,9 @@ if (isMain) {
     }
 
     // Auto-start background services (OpenWA & Ngrok) if configured by owner
+    import("./services/baileysService.js")
+      .then((m) => m.initBaileys().catch((err) => logger.warn("Baileys init error", err)))
+      .catch(() => {});
     import("./services/openWaService.js")
       .then((m) => m.autoStartOpenWaOnBoot().catch((err) => logger.warn("OpenWA auto-start error", err)))
       .catch(() => {});

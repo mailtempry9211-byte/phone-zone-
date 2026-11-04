@@ -10,6 +10,7 @@ import { sessionUser } from "../services/authService.js";
 import * as waService from "../services/waService.js";
 import * as openWaService from "../services/openWaService.js";
 import * as evolutionWa from "../services/evolutionWaService.js";
+import * as baileysService from "../services/baileysService.js";
 import { getRawSettings } from "../services/settingsService.js";
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -98,6 +99,43 @@ export function buildWaRouter(staffAuth, adminAuth) {
     res.json(waService.revokeToken(req.params.id));
   }));
 
+  // ---------------- Native Baileys WhatsApp Engine (Render/Cloud/Zero-Config) ----------------
+  r.get("/baileys/status", staffAuth, wrap(async (_req, res) => {
+    let status = baileysService.getStatus();
+    if (status.state === "disconnected") {
+      baileysService.initBaileys().catch(() => {});
+      status = baileysService.getStatus();
+    }
+    res.json(status);
+  }));
+
+  r.post("/baileys/init", staffAuth, wrap(async (_req, res) => {
+    await baileysService.initBaileys(true);
+    res.json(baileysService.getStatus());
+  }));
+
+  r.post("/baileys/pairing-code", staffAuth, wrap(async (req, res) => {
+    const { phone } = req.body || {};
+    if (!phone) throw badRequest("phone is required.");
+    res.json(await baileysService.requestPairingCode(phone));
+  }));
+
+  r.post("/baileys/logout", staffAuth, wrap(async (_req, res) => {
+    res.json(await baileysService.logout());
+  }));
+
+  r.post("/baileys/send-text", staffAuth, wrap(async (req, res) => {
+    const { phone, message } = req.body || {};
+    if (!phone || !message) throw badRequest("phone and message are required.");
+    res.json(await baileysService.sendTextMessage({ phone, message }));
+  }));
+
+  r.post("/baileys/send-pdf", staffAuth, wrap(async (req, res) => {
+    const { phone, pdfBase64, filename, caption } = req.body || {};
+    if (!phone || !pdfBase64) throw badRequest("phone and pdfBase64 are required.");
+    res.json(await baileysService.sendDocumentMessage({ phone, pdfBuffer: pdfBase64, filename, caption }));
+  }));
+
   // ---------------- OpenWA REST Gateway Dual Sessions ----------------
   r.get("/gateway/server-status", staffAuth, wrap(async (_req, res) => {
     res.json(await openWaService.getServerStatus());
@@ -171,6 +209,9 @@ export function buildWaRouter(staffAuth, adminAuth) {
   r.post("/gateway/send-text", staffAuth, wrap(async (req, res) => {
     const { phone, message, channel } = req.body || {};
     if (!phone || !message) throw badRequest("phone and message are required.");
+    if (baileysService.isConnected()) {
+      return res.json(await baileysService.sendTextMessage({ phone, message }));
+    }
     res.json(await openWaService.sendTextMessage({ phone, message, channel: channel || "sales" }));
   }));
 
@@ -198,48 +239,64 @@ export function buildWaRouter(staffAuth, adminAuth) {
     let textResult = null;
     let pdfResult = null;
 
-    const currentChannel = getRawSettings()?.whatsapp_channel || "click_to_chat";
-    const useEvolution = channel === "evolution_api" || currentChannel === "evolution_api";
-
-    if (useEvolution) {
+    // 1. Native Baileys WhatsApp Engine (Highest Priority if connected)
+    if (baileysService.isConnected()) {
       if (textToSend) {
         try {
-          textResult = await evolutionWa.sendEvolutionText({ phone, message: textToSend });
+          textResult = await baileysService.sendTextMessage({ phone, message: textToSend });
         } catch (_err) {}
       }
       if (pdfBuf) {
         try {
-          pdfResult = await evolutionWa.sendEvolutionMedia({
+          pdfResult = await baileysService.sendDocumentMessage({
             phone,
-            mediaBase64: pdfBuf.toString("base64"),
+            pdfBuffer: pdfBuf,
             filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
             caption: "",
           });
         } catch (_err) {}
       }
     } else {
-      // 1. Send text receipt / invoice summary first
-      if (textToSend) {
-        try {
-          textResult = await openWaService.sendTextMessage({
+      const currentChannel = getRawSettings()?.whatsapp_channel || "click_to_chat";
+      const useEvolution = channel === "evolution_api" || currentChannel === "evolution_api";
+
+      if (useEvolution) {
+        if (textToSend) {
+          try {
+            textResult = await evolutionWa.sendEvolutionText({ phone, message: textToSend });
+          } catch (_err) {}
+        }
+        if (pdfBuf) {
+          try {
+            pdfResult = await evolutionWa.sendEvolutionMedia({
+              phone,
+              mediaBase64: pdfBuf.toString("base64"),
+              filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
+              caption: "",
+            });
+          } catch (_err) {}
+        }
+      } else {
+        // Fallback to local OpenWA Gateway
+        if (textToSend) {
+          try {
+            textResult = await openWaService.sendTextMessage({
+              phone,
+              message: textToSend,
+              channel: channel || "sales",
+            });
+          } catch (err) {}
+        }
+
+        if (pdfBuf) {
+          pdfResult = await openWaService.sendDocumentMessage({
             phone,
-            message: textToSend,
+            pdfBuffer: pdfBuf,
+            filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
+            caption: "",
             channel: channel || "sales",
           });
-        } catch (err) {
-          // If text sending had an issue, continue to attempt PDF
         }
-      }
-
-      // 2. Send PDF document
-      if (pdfBuf) {
-        pdfResult = await openWaService.sendDocumentMessage({
-          phone,
-          pdfBuffer: pdfBuf,
-          filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
-          caption: "", // text already sent cleanly above
-          channel: channel || "sales",
-        });
       }
     }
 

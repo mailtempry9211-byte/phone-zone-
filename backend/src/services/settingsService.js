@@ -32,7 +32,7 @@ const WRITABLE_COLUMNS = [
 ];
 
 const TAC_FETCH_MODES = new Set(["ask", "auto", "off"]);
-const WHATSAPP_CHANNELS = new Set(["click_to_chat", "openwa", "evolution_api", "chrome_extension"]);
+const WHATSAPP_CHANNELS = new Set(["click_to_chat", "openwa", "evolution_api", "chrome_extension", "baileys"]);
 
 const empty = (v) => (v === undefined || v === null ? "" : String(v));
 
