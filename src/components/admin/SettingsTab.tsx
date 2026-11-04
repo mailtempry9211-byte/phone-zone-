@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { EvolutionApiGuideModal } from "./EvolutionApiGuideModal";
 
@@ -22,6 +22,21 @@ const SettingsTab = () => {
   const [isTestingEvolution, setIsTestingEvolution] = useState(false);
   const [evolutionTestPhone, setEvolutionTestPhone] = useState("");
   const [evolutionCheckStatus, setEvolutionCheckStatus] = useState<any>(null);
+  const [headerLayoutMode, setHeaderLayoutMode] = useState<"scroll" | "condensed">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("phonezone_header_layout_mode") as "scroll" | "condensed") || "scroll";
+    }
+    return "scroll";
+  });
+
+  const handleHeaderModeChange = (mode: "scroll" | "condensed") => {
+    setHeaderLayoutMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("phonezone_header_layout_mode", mode);
+      window.dispatchEvent(new Event("storage"));
+      toast.success(mode === "scroll" ? "Header set to Horizontal Scroll" : "Header set to 3-Line Condensed Menu");
+    }
+  };
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading } = useQuery({
@@ -639,6 +654,69 @@ const SettingsTab = () => {
           </Button>
         </div>
       </div>
+
+      {/* Header Top-Bar Navigation Style Controller */}
+      <Card className="border border-border/80 bg-card shadow-sm mb-6">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <CardTitle className="flex items-center text-base sm:text-lg">
+              <SlidersHorizontal className="h-5 w-5 mr-2 text-cyan-500" />
+              Header Top-Bar Navigation Style
+            </CardTitle>
+            <Badge variant="outline" className="border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 px-2.5 py-1 text-xs w-fit">
+              Current: {headerLayoutMode === "scroll" ? "Horizontal Scroll" : "Condensed 3-Line Menu"}
+            </Badge>
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Choose how top action buttons (License, WhatsApp, Scanner, Password, Phone View) are displayed in the header bar.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => handleHeaderModeChange("scroll")}
+              className={`p-4 rounded-xl border text-left transition-all relative ${
+                headerLayoutMode === "scroll"
+                  ? "border-cyan-500 bg-cyan-500/10 ring-2 ring-cyan-500/30"
+                  : "border-border hover:border-slate-400 bg-background/50"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <LayoutTemplate className="h-4 w-4 text-cyan-500" />
+                  Horizontal Scroll (Default)
+                </span>
+                {headerLayoutMode === "scroll" && <Check className="h-4 w-4 text-cyan-500" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                All tool pills are visible side-by-side with smooth horizontal scrolling. Nothing is clipped or hidden.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleHeaderModeChange("condensed")}
+              className={`p-4 rounded-xl border text-left transition-all relative ${
+                headerLayoutMode === "condensed"
+                  ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30"
+                  : "border-border hover:border-slate-400 bg-background/50"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-amber-500" />
+                  Condensed 3-Line Menu
+                </span>
+                {headerLayoutMode === "condensed" && <Check className="h-4 w-4 text-amber-500" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Collapses all tool pills into a single clean "Quick Tools" dropdown menu. Keeps top bar minimal.
+              </p>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Business Information */}

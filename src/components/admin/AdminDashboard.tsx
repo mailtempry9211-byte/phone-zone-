@@ -31,6 +31,14 @@ import ShopSwitcher from "./ShopSwitcher";
 import PasswordChangeDialog from "./PasswordChangeDialog";
 import LicenseActivationModal from "./LicenseActivationModal";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 import {
   LayoutDashboard,
@@ -63,6 +71,8 @@ import {
   Crown,
   ArrowLeft,
   RotateCw,
+  SlidersHorizontal,
+  MoreHorizontal,
 } from "lucide-react";
 
 const DashboardTab = React.lazy(() => import("./dashboard/DashboardTab"));
@@ -278,6 +288,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return next;
     });
   };
+
+  const [headerLayoutMode, setHeaderLayoutMode] = useState<"scroll" | "condensed">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("phonezone_header_layout_mode") as "scroll" | "condensed") || "scroll";
+    }
+    return "scroll";
+  });
+
+  const toggleHeaderLayoutMode = () => {
+    setHeaderLayoutMode((prev) => {
+      const next = prev === "scroll" ? "condensed" : "scroll";
+      localStorage.setItem("phonezone_header_layout_mode", next);
+      window.dispatchEvent(new Event("storage"));
+      toast.success(next === "scroll" ? "Header Mode: Horizontal Scroll Enabled" : "Header Mode: 3-Line Condensed Menu Enabled");
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const mode = (localStorage.getItem("phonezone_header_layout_mode") as "scroll" | "condensed") || "scroll";
+      setHeaderLayoutMode(mode);
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -751,12 +787,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* ----------------- RIGHT CANVAS CONTENT ----------------- */}
       <div className="flex-1 min-w-0 w-full flex flex-col h-screen overflow-y-auto overflow-x-hidden">
-        {/* Top Canvas Bar (Sticky, High Contrast & Themed) */}
+        {/* Top Canvas Bar (Sticky, High Contrast & Responsive Horizontal Scroll / Condensed Menu) */}
         <header
-          className={`sticky top-0 z-30 backdrop-blur-md px-2.5 sm:px-4 py-2 flex items-center justify-between gap-2 border-b transition-colors overflow-x-hidden shrink-0 ${
+          className={`sticky top-0 z-30 backdrop-blur-md px-2.5 sm:px-4 py-2 flex items-center justify-between gap-2 border-b transition-colors overflow-x-auto scrollbar-thin shrink-0 ${
             isDark
-              ? "bg-[#0a0d14]/95 border-slate-800/90 text-white"
-              : "bg-white/95 border-slate-200 text-slate-900 shadow-xs"
+              ? "bg-[#0a0d14]/95 border-slate-800/90 text-white scrollbar-thumb-slate-800"
+              : "bg-white/95 border-slate-200 text-slate-900 shadow-xs scrollbar-thumb-slate-300"
           }`}
         >
           {/* Left: 3-Line Hamburger Menu & Breadcrumb - Guaranteed shrink-0 to prevent any overlap */}
@@ -827,8 +863,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Right: High-contrast visible tool pills & theme toggle (Guaranteed ZERO horizontal scroll) */}
-          <div className="flex items-center gap-1 py-0.5 min-w-0 ml-auto shrink-0">
+          {/* Right: High-contrast visible tool pills & theme toggle (Supports Horizontal Scroll & Condensed 3-Line Menu) */}
+          <div className="flex items-center gap-1.5 py-0.5 ml-auto shrink-0">
+
+            {/* Layout Style Switcher (Horizontal Scroll vs Condensed 3-Line Menu) */}
+            <button
+              onClick={toggleHeaderLayoutMode}
+              className={`h-7 px-2 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 shadow-sm shrink-0 ${
+                isDark
+                  ? "bg-slate-900 border-slate-700 text-cyan-300 hover:bg-slate-800"
+                  : "bg-slate-100 border-slate-300 text-cyan-800 hover:bg-slate-200"
+              }`}
+              title={
+                headerLayoutMode === "scroll"
+                  ? "Switch to 3-Line Condensed Tools Menu"
+                  : "Switch to Full Horizontal Scroll Bar"
+              }
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <span className="hidden xl:inline text-[11px]">
+                {headerLayoutMode === "scroll" ? "Scroll Bar" : "Condensed"}
+              </span>
+            </button>
 
             {/* Global Dark / Light Switch */}
             <button
@@ -853,146 +909,255 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </button>
 
-            {/* Financial Year Switcher (Admin only) */}
-            {isAdminOrOwner && (
-              <FinancialYearSwitcher
-                className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
-                  isDark
-                    ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
-                    : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
-                }`}
-              />
-            )}
+            {/* CONDENSED 3-LINE MENU MODE */}
+            {headerLayoutMode === "condensed" ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`h-7 px-2.5 text-xs font-black border transition-all flex items-center gap-1.5 shadow-sm shrink-0 ${
+                      isDark
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                        : "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100"
+                    }`}
+                  >
+                    <Menu className="h-4 w-4 text-amber-400" />
+                    <span>Quick Tools</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className={`w-56 p-1.5 space-y-1 shadow-2xl z-50 ${
+                    isDark ? "bg-slate-950 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+                  }`}
+                >
+                  <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1">
+                    System & Tools
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className={isDark ? "bg-slate-800" : "bg-slate-200"} />
 
-            {/* Universal Scanner Trigger */}
-            <UniversalScanner
-              isOpen={universalScannerOpen}
-              onOpenChange={(open) => {
-                setUniversalScannerOpen(open);
-                if (!open) setUniversalSearchQuery("");
-              }}
-              initialQuery={universalSearchQuery}
-              className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
-                isDark
-                  ? "bg-slate-900 border-blue-500/40 text-blue-300 hover:bg-slate-800"
-                  : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-              }`}
-            />
+                  {/* Financial Year in Menu */}
+                  {isAdminOrOwner && (
+                    <div className="px-1 py-1">
+                      <FinancialYearSwitcher
+                        className={`w-full justify-between h-8 text-xs font-bold border rounded-md shadow-none ${
+                          isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-slate-50 border-slate-200 text-slate-800"
+                        }`}
+                      />
+                    </div>
+                  )}
 
-            {/* Universal License Status & Device Pill */}
-            <button
-              type="button"
-              onClick={() => setLicenseModalOpen(true)}
-              className={`h-7 px-1.5 text-xs font-bold border rounded-md transition-all flex items-center gap-1 shadow-sm shrink-0 ${
-                isDark
-                  ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
-                  : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-              }`}
-              title="View License, Hardware ID (HWID) & Transfer Device"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="hidden xl:inline">License</span>
-            </button>
+                  {/* Universal Scanner in Menu */}
+                  <DropdownMenuItem
+                    onClick={() => setUniversalScannerOpen(true)}
+                    className="cursor-pointer flex items-center gap-2 py-1.5 px-2 text-xs font-medium rounded-md"
+                  >
+                    <Sparkles className="h-4 w-4 text-blue-400" />
+                    <span>Universal Scanner (Scan)</span>
+                  </DropdownMenuItem>
 
-            {/* WhatsApp Control Pill (Admin only) */}
-            {isAdminOrOwner && (
-              <div className="hidden sm:block shrink-0">
-                <OpenWaUniversalControl
-                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                  {/* Universal License Status */}
+                  <DropdownMenuItem
+                    onClick={() => setLicenseModalOpen(true)}
+                    className="cursor-pointer flex items-center gap-2 py-1.5 px-2 text-xs font-medium rounded-md"
+                  >
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <span>License & Device HWID</span>
+                  </DropdownMenuItem>
+
+                  {/* Password Change Dialog */}
+                  <div className="px-1 py-1">
+                    <PasswordChangeDialog
+                      className={`w-full justify-start h-8 text-xs font-bold border rounded-md ${
+                        isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-slate-50 border-slate-200 text-slate-800"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Mobile Phone Emulator */}
+                  <DropdownMenuItem asChild>
+                    <a
+                      href="/mobile-preview"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cursor-pointer flex items-center gap-2 py-1.5 px-2 text-xs font-medium rounded-md"
+                    >
+                      <Smartphone className="h-4 w-4 text-cyan-400" />
+                      <span>Mobile Phone View</span>
+                    </a>
+                  </DropdownMenuItem>
+
+                  {/* Back to Storefront Link */}
+                  {onBack && (
+                    <DropdownMenuItem
+                      onClick={onBack}
+                      className="cursor-pointer flex items-center gap-2 py-1.5 px-2 text-xs font-medium rounded-md"
+                    >
+                      <Store className="h-4 w-4 text-teal-400" />
+                      <span>Back to Storefront</span>
+                    </DropdownMenuItem>
+                  )}
+
+                  <DropdownMenuSeparator className={isDark ? "bg-slate-800" : "bg-slate-200"} />
+
+                  {/* Logout Button */}
+                  {onOpenLogout && (
+                    <DropdownMenuItem
+                      onClick={onOpenLogout}
+                      className="cursor-pointer flex items-center gap-2 py-1.5 px-2 text-xs font-semibold text-rose-500 rounded-md hover:bg-rose-500/10"
+                    >
+                      <LogOut className="h-4 w-4 text-rose-500" />
+                      <span>Logout Account</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              /* HORIZONTAL SCROLL MODE (100% accessible via smooth sideways scroll) */
+              <>
+                {/* Financial Year Switcher (Admin only) */}
+                {isAdminOrOwner && (
+                  <FinancialYearSwitcher
+                    className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
+                      isDark
+                        ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
+                        : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
+                    }`}
+                  />
+                )}
+
+                {/* Universal Scanner Trigger */}
+                <UniversalScanner
+                  isOpen={universalScannerOpen}
+                  onOpenChange={(open) => {
+                    setUniversalScannerOpen(open);
+                    if (!open) setUniversalSearchQuery("");
+                  }}
+                  initialQuery={universalSearchQuery}
+                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
+                    isDark
+                      ? "bg-slate-900 border-blue-500/40 text-blue-300 hover:bg-slate-800"
+                      : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                  }`}
+                />
+
+                {/* Universal License Status & Device Pill */}
+                <button
+                  type="button"
+                  onClick={() => setLicenseModalOpen(true)}
+                  className={`h-7 px-1.5 text-xs font-bold border rounded-md transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                     isDark
                       ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
                       : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                   }`}
-                />
-              </div>
-            )}
+                  title="View License, Hardware ID (HWID) & Transfer Device"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="inline">License</span>
+                </button>
 
-            {/* Ngrok Control Pill (Admin only) */}
-            {isAdminOrOwner && (
-              <div className="hidden lg:block shrink-0">
-                <NgrokUniversalControl
-                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                {/* WhatsApp Control Pill (Admin only) */}
+                {isAdminOrOwner && (
+                  <div className="shrink-0">
+                    <OpenWaUniversalControl
+                      className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                        isDark
+                          ? "bg-slate-900 border-emerald-500/40 text-emerald-300 hover:bg-slate-800"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                      }`}
+                    />
+                  </div>
+                )}
+
+                {/* Ngrok Control Pill (Admin only) */}
+                {isAdminOrOwner && (
+                  <div className="shrink-0">
+                    <NgrokUniversalControl
+                      className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm ${
+                        isDark
+                          ? "bg-slate-900 border-sky-500/40 text-sky-300 hover:bg-slate-800"
+                          : "bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100"
+                      }`}
+                    />
+                  </div>
+                )}
+
+                {/* Storage Usage Pill (Admin only) */}
+                {isAdminOrOwner && (
+                  <div className="shrink-0">
+                    <StorageUsageCard
+                      compact
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-xs font-semibold border transition-all ${
+                        isDark
+                          ? "bg-slate-900 border-slate-700 text-slate-200"
+                          : "bg-white border-slate-200 text-slate-700 shadow-xs"
+                      }`}
+                    />
+                  </div>
+                )}
+
+                {/* Password Change Dialog */}
+                <PasswordChangeDialog
+                  className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
                     isDark
-                      ? "bg-slate-900 border-sky-500/40 text-sky-300 hover:bg-slate-800"
-                      : "bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100"
+                      ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
+                      : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
                   }`}
                 />
-              </div>
-            )}
 
-            {/* Storage Usage Pill (Admin only) */}
-            {isAdminOrOwner && (
-              <div className="hidden 2xl:block shrink-0">
-                <StorageUsageCard
-                  compact
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-xs font-semibold border transition-all ${
+                {/* Live Phone View Emulator */}
+                <a
+                  href="/mobile-preview"
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`h-7 px-1.5 text-xs font-bold border transition-all rounded-md flex items-center gap-1 shadow-sm shrink-0 ${
                     isDark
-                      ? "bg-slate-900 border-slate-700 text-slate-200"
-                      : "bg-white border-slate-200 text-slate-700 shadow-xs"
+                      ? "border-cyan-800 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/60"
+                      : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"
                   }`}
-                />
-              </div>
-            )}
+                  title="Open Mobile Phone View Emulator"
+                >
+                  <Smartphone className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="inline">Phone</span>
+                </a>
 
-            {/* Password Change Dialog */}
-            <PasswordChangeDialog
-              className={`h-7 px-1.5 text-xs font-bold border transition-all flex items-center gap-1 shadow-sm shrink-0 ${
-                isDark
-                  ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800"
-                  : "bg-white border-slate-300 text-slate-800 hover:bg-slate-100"
-              }`}
-            />
+                {/* Back to Storefront Link */}
+                {onBack && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onBack}
+                    title="Storefront"
+                    className={`h-7 px-1.5 text-xs font-bold border transition-all shrink-0 ${
+                      isDark
+                        ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
+                        : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Store className="h-3.5 w-3.5 text-teal-500" />
+                    <span className="inline ml-1">Store</span>
+                  </Button>
+                )}
 
-            {/* Live Phone View Emulator */}
-            <a
-              href="/mobile-preview"
-              target="_blank"
-              rel="noreferrer"
-              className={`h-7 px-1.5 text-xs font-bold border transition-all rounded-md flex items-center gap-1 shadow-sm shrink-0 ${
-                isDark
-                  ? "border-cyan-800 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/60"
-                  : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"
-              }`}
-              title="Open Mobile Phone View Emulator"
-            >
-              <Smartphone className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="hidden 2xl:inline">Phone</span>
-            </a>
-
-            {/* Back to Storefront Link */}
-            {onBack && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onBack}
-                title="Storefront"
-                className={`h-7 px-1.5 text-xs font-bold border transition-all shrink-0 ${
-                  isDark
-                    ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
-                    : "border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
-                }`}
-              >
-                <Store className="h-3.5 w-3.5 text-teal-500" />
-                <span className="hidden 2xl:inline ml-1">Store</span>
-              </Button>
-            )}
-
-            {/* Prominent Logout Button Next to Storefront */}
-            {onOpenLogout && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onOpenLogout}
-                title="Logout"
-                className={`h-7 px-2 text-xs font-bold border transition-all shrink-0 ${
-                  isDark
-                    ? "border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-100"
-                    : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                }`}
-              >
-                <LogOut className="h-3.5 w-3.5 sm:mr-1 text-rose-400" />
-                <span className="hidden sm:inline">Logout</span>
-              </Button>
+                {/* Prominent Logout Button Next to Storefront */}
+                {onOpenLogout && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onOpenLogout}
+                    title="Logout"
+                    className={`h-7 px-2 text-xs font-bold border transition-all shrink-0 ${
+                      isDark
+                        ? "border-rose-900/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-100"
+                        : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                    }`}
+                  >
+                    <LogOut className="h-3.5 w-3.5 sm:mr-1 text-rose-400" />
+                    <span className="hidden sm:inline">Logout</span>
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </header>
