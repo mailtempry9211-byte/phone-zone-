@@ -157,6 +157,21 @@ export async function dispatchWhatsApp({
 
   // 2. Click-to-Chat Fallback (Only mobile uses Web Share API; Windows/PC NEVER triggers OS Share dialog)
   let shareBlob = pdfBlob;
+
+  // Convert base64 to Blob if Blob was not provided directly
+  if (!shareBlob && pdfBase64) {
+    try {
+      const cleanB64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
+      const byteChars = atob(cleanB64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      shareBlob = new Blob([byteArray], { type: "application/pdf" });
+    } catch {}
+  }
+
   if (!shareBlob && invoiceHtml && mode !== "text_only") {
     try {
       const rRes = await fetch("/api/invoices/render-pdf", {
@@ -171,7 +186,8 @@ export async function dispatchWhatsApp({
     } catch {}
   }
 
-  // Web Share API with files is strictly for Mobile (Android / APK / iOS), NEVER desktop Windows
+  // Web Share API with files: Directly opens WhatsApp file sharing with pre-attached PDF & text!
+  // No need to manually save the file to downloads or search inside file manager.
   if (isMobileDevice && shareBlob && typeof navigator !== "undefined" && navigator.canShare) {
     try {
       const file = new File([shareBlob], pdfFileName, { type: "application/pdf" });
@@ -181,7 +197,7 @@ export async function dispatchWhatsApp({
           title: pdfFileName,
           text: message,
         });
-        toast.success("Shared via device WhatsApp");
+        toast.success("Opening WhatsApp with Invoice PDF attached!");
         return { success: true, channel: "web_share" };
       }
     } catch (e: any) {
