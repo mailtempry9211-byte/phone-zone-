@@ -79,12 +79,13 @@
 
 ---
 
-### Error 2: "Rollup failed to resolve import src/lib/data/config"
-- **कारण**: Linux (Render) पर केस-सेंसिटिव पाथ और एक्सटेंशन रिज़ॉल्वर के कारण Rollup को `@/lib/data/config` की फ़ाइल सीधे नहीं मिल रही थी।
+### Error 2: "Rollup failed to resolve import src/lib/data/config (ENOENT)"
+- **असली कारण (Root Cause)**:
+  `.gitignore` में `data/` लिखा हुआ था, जिससे Git ने रूट के डाटा फ़ोल्डर के साथ-साथ कोड फ़ोल्डर `src/lib/data/` (`config.ts`, `index.ts`, `offlineSupabase.ts`) को भी Git में जाने से रोक (ignore) दिया था! इस वजह से GitHub पर `src/lib/data` फ़ोल्डर मौजूद ही नहीं था, और Render पर बिल्ड के समय `no such file or directory: src/lib/data/config` का एरर आ रहा था।
 - **100% परमानेंट समाधान**:
-  1. सारे इम्पोर्ट्स को सेंट्रलाइज़्ड `@/lib/data` (जिसमें `index.ts` मौजूद है) में बदल दिया गया है।
-  2. `vite.config.ts` में एक्सटेंशन लिस्ट `[".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"]` जोड़ दी गई है।
-  3. अब Linux और Windows दोनों पर Rollup 100% बिना किसी रुकावट के तुरंत फ़ाइलें रिज़ॉल्व कर लेता है।
+  1. `.gitignore` को ठीक करके `/data/` कर दिया गया और `!src/lib/data/` को स्पष्ट रूप से शामिल (unignore) कर दिया गया।
+  2. पूरे `src/lib/data/` कोड को GitHub रिपॉज़िटरी में कमिट करके पुश कर दिया गया।
+  3. अब Render पर कोड क्लोन होते ही सारी फ़ाइलें मिलेंगी और बिल्ड 100% पास हो जाएगा!
 
 ---
 

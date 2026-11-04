@@ -5,8 +5,10 @@
 # Aadhaar photos, customer names, phone numbers and the live business database.
 
 # ---- real business data (NEVER share, NEVER commit) ----
-data/
-data11/
+/data/
+/data11/
+backend/data/
+!src/lib/data/
 *.db
 *.db-wal
 *.db-shm
