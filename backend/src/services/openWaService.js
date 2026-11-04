@@ -12,6 +12,7 @@ import net from "node:net";
 import { spawn } from "node:child_process";
 import { getDb } from "../db/index.js";
 import { logger } from "../lib/logger.js";
+import { badRequest } from "../lib/errors.js";
 
 const DEFAULT_OPENWA_URL = process.env.OPENWA_SERVER_URL || "http://127.0.0.1:2785";
 let openWaChildProcess = null;
@@ -487,12 +488,17 @@ export async function startOpenWaServer() {
 
   const dir = findOpenWaDirectory();
   if (!dir) {
-    throw new Error("OpenWA directory not found. Please ensure OpenWA folder exists on Desktop.");
+    if (process.env.RENDER || process.env.CLOUD_HOSTED) {
+      throw badRequest(
+        "OpenWA ek Local Desktop WhatsApp Gateway hai jo PC par Chrome ke zariye chalta hai. Render Cloud Server par OpenWA start nahi ho sakta. Cloud me WhatsApp use karne ke liye Settings me 'Click-to-Chat' chunein, ya apne PC ke OpenWA ko ngrok tunnel se connect karein."
+      );
+    }
+    throw badRequest("OpenWA directory not found. Please ensure OpenWA folder exists on Desktop.");
   }
 
   const mainJs = path.join(dir, "dist", "main.js");
   if (!fs.existsSync(mainJs)) {
-    throw new Error(`OpenWA build not found at ${mainJs}.`);
+    throw badRequest(`OpenWA build not found at ${mainJs}.`);
   }
 
   // Ensure OpenWA .env has AUTO_START_SESSIONS=true

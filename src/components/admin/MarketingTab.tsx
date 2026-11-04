@@ -99,6 +99,13 @@ export default function MarketingTab() {
   const [testingPhone, setTestingPhone] = useState("");
   const [testMessage, setTestMessage] = useState("Hello from PhoneZone WhatsApp Gateway!");
 
+  const isCloudHost = typeof window !== "undefined" && (
+    window.location.hostname.includes("onrender.com") ||
+    window.location.hostname.includes("render.com") ||
+    window.location.hostname.includes("railway.app") ||
+    (!["localhost", "127.0.0.1"].includes(window.location.hostname) && !window.location.hostname.startsWith("192.168."))
+  );
+
   // Server management & Pairing Code
   const [linkMode, setLinkMode] = useState<"qr" | "pairing_code">("qr");
   const [pairingPhone, setPairingPhone] = useState("");
@@ -501,7 +508,11 @@ export default function MarketingTab() {
       refetchRepair();
     },
     onError: (err: any) => {
-      toast({ title: "Start Failed", description: err.message, variant: "destructive" });
+      toast({
+        title: isCloudHost ? "Desktop Gateway Only" : "Start Failed",
+        description: err.message,
+        variant: "destructive"
+      });
     },
   });
 
@@ -750,6 +761,24 @@ export default function MarketingTab() {
                   <p className="text-gray-600">
                     बैकग्राउंड में अपने-आप PDF और टेक्स्ट मैसेज चले जाते हैं।
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cloud notice when hosted on Render */}
+          {isCloudHost && !serverStatus?.running && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 rounded-xl p-4 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
+              <span className="text-xl">ℹ️</span>
+              <div className="space-y-1.5">
+                <p className="font-bold text-sm">OpenWA Gateway Notice (Render Cloud):</p>
+                <p>
+                  OpenWA एक <strong>Desktop WhatsApp Gateway</strong> है जिसे चलाने के लिए आपके कंप्यूटर में Chrome ब्राउज़र की आवश्यकता होती है। Render के क्लाउड सर्वर पर Chrome नहीं होता, इसलिए गेटवे सीधे Render पर Start नहीं हो सकता।
+                </p>
+                <div className="pt-1 text-[11px] space-y-1 text-amber-800 dark:text-amber-300 font-medium">
+                  <p>✅ <strong>अनुशंसित समाधान (Recommended):</strong></p>
+                  <p>1. <strong>Click-to-Chat (100% Free &amp; Zero Setup):</strong> Settings ➔ WhatsApp Central Control में <strong>Click-to-Chat</strong> चुनें। यह फोन, टैबलेट और वेब पर बिना किसी सर्वर के तुरंत काम करता है।</p>
+                  <p>2. <strong>PC के OpenWA को जोड़ें:</strong> अपने कंप्यूटर पर OpenWA चलाकर उसका ngrok/tunnel URL Settings में पेस्ट करें।</p>
                 </div>
               </div>
             </div>
