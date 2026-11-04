@@ -1,4 +1,7 @@
 import { toast } from "sonner";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 
 export interface SendWhatsAppOptions {
   phone: string;
@@ -15,7 +18,8 @@ export interface SendWhatsAppOptions {
 const isMobileDevice =
   typeof navigator !== "undefined" &&
   (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase()) ||
-    (Boolean(navigator.maxTouchPoints) && navigator.maxTouchPoints > 2 && /macintosh/i.test(navigator.userAgent.toLowerCase())));
+    (Boolean(navigator.maxTouchPoints) && navigator.maxTouchPoints > 2 && /macintosh/i.test(navigator.userAgent.toLowerCase())) ||
+    Capacitor.isNativePlatform());
 
 export function formatWhatsAppPhone(phone: string): string {
   const clean = (phone || "").replace(/\D/g, "");
@@ -26,10 +30,68 @@ export function formatWhatsAppPhone(phone: string): string {
 }
 
 /**
+ * Client-side HTML to PDF converter (100% standalone, works offline on Android without backend!)
+ */
+export async function htmlToPdfBlob(html: string): Promise<Blob> {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: html2canvas } = await import("html2canvas");
+
+  const container = document.createElement("div");
+  container.style.position = "fixed";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "794px"; // Standard A4 width at 96 DPI
+  container.style.backgroundColor = "#ffffff";
+  container.style.color = "#000000";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    return pdf.output("blob");
+  } finally {
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+  }
+}
+
+/**
  * Unified WhatsApp dispatcher respecting admin settings:
- * - 'openwa': backend OpenWA gateway API (no dialog, direct delivery of text + PDF)
- * - 'click_to_chat': standard wa.me direct URL
- * - 'chrome_extension': local Chrome extension bridge
+ * - 'click_to_chat': Mobile native file sharing (direct PDF attached without saving) or wa.me URL
+ * - 'evolution_api': Evolution API / WPPConnect cloud/local instance (24/7 background delivery)
+ * - 'openwa': backend OpenWA gateway API (PC desktop setup)
  */
 export async function dispatchWhatsApp({
   phone,
@@ -37,7 +99,7 @@ export async function dispatchWhatsApp({
   pdfBlob: initialPdfBlob,
   pdfBase64: initialPdfBase64,
   invoiceHtml: initialInvoiceHtml,
-  pdfFileName = "document.pdf",
+  pdfFileName = "Invoice.pdf",
   adminSettings,
   waSessionChannel = "sales",
   mode = "both",
@@ -120,7 +182,6 @@ export async function dispatchWhatsApp({
         const evoInstance = adminSettings?.evolution_instance_name || "phonezone";
 
         if (evoUrl && evoKey) {
-          // Direct send from phone
           if (message) {
             await fetch(`${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`, {
               method: "POST",
@@ -155,7 +216,7 @@ export async function dispatchWhatsApp({
     }
   }
 
-  // 2. Click-to-Chat Fallback (Only mobile uses Web Share API; Windows/PC NEVER triggers OS Share dialog)
+  // 2. Click-to-Chat with Direct Native PDF Attachment
   let shareBlob = pdfBlob;
 
   // Convert base64 to Blob if Blob was not provided directly
@@ -172,7 +233,9 @@ export async function dispatchWhatsApp({
     } catch {}
   }
 
+  // If we only have invoice HTML and need PDF:
   if (!shareBlob && invoiceHtml && mode !== "text_only") {
+    // 1st: try backend Puppeteer
     try {
       const rRes = await fetch("/api/invoices/render-pdf", {
         method: "POST",
@@ -184,10 +247,56 @@ export async function dispatchWhatsApp({
         shareBlob = await rRes.blob();
       }
     } catch {}
+
+    // 2nd: if backend was unavailable (e.g. standalone mobile), render locally!
+    if (!shareBlob) {
+      try {
+        toast.info("Generating Invoice PDF locally...");
+        shareBlob = await htmlToPdfBlob(invoiceHtml);
+      } catch (err) {
+        console.warn("Client-side PDF render failed:", err);
+      }
+    }
   }
 
-  // Web Share API with files: Directly opens WhatsApp file sharing with pre-attached PDF & text!
-  // No need to manually save the file to downloads or search inside file manager.
+  // 3. Android Native Capacitor Sharing (Directly attaches PDF in WhatsApp sheet)
+  if (Capacitor.isNativePlatform() && shareBlob) {
+    try {
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          resolve(res.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(shareBlob);
+      });
+
+      const writeResult = await Filesystem.writeFile({
+        path: pdfFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title: pdfFileName,
+        text: message,
+        url: writeResult.uri,
+        files: [writeResult.uri],
+        dialogTitle: "Send Invoice PDF via WhatsApp",
+      });
+
+      toast.success("Opening WhatsApp with Invoice PDF attached!");
+      return { success: true, channel: "capacitor_native_share" };
+    } catch (e: any) {
+      if (e.message?.includes("canceled") || e.message?.includes("cancelled")) {
+        return { success: true, channel: "share_cancelled" };
+      }
+      console.warn("Capacitor Share failed, attempting Web Share fallback:", e);
+    }
+  }
+
+  // 4. Mobile Browser Web Share API fallback
   if (isMobileDevice && shareBlob && typeof navigator !== "undefined" && navigator.canShare) {
     try {
       const file = new File([shareBlob], pdfFileName, { type: "application/pdf" });
@@ -207,7 +316,7 @@ export async function dispatchWhatsApp({
     }
   }
 
-  // On Windows / PC desktop: download PDF directly (no Windows share dialog popup)
+  // 5. Desktop PC fallback: download PDF file automatically (no annoying Windows dialog)
   if (shareBlob && !isMobileDevice) {
     try {
       const blobUrl = URL.createObjectURL(shareBlob);
@@ -222,10 +331,9 @@ export async function dispatchWhatsApp({
     } catch {}
   }
 
-  // Open WhatsApp chat URL
+  // 6. Open WhatsApp Chat URL
   const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   window.open(waUrl, "_blank");
   toast.success("Opening WhatsApp chat...");
   return { success: true, channel: "click_to_chat" };
 }
-
