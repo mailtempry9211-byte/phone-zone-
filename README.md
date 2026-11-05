@@ -1,6 +1,13 @@
-# PhoneZone - Local Offline Mobile Store ERP
+# PhoneZone - Enterprise Mobile Store & Repair ERP
+> **Cloud (Render + Supabase) & Windows Desktop (.exe) • JARVIS AI Vision • In-Process WhatsApp Engine**
 
-PhoneZone is a secure, offline-first management system designed for Indian mobile-phone shops. It manages phone purchases, sales, customer invoices, returns, a private repairs workshop, inventory cross-checks, and optional remote access.
+PhoneZone is a secure, enterprise management system designed for Indian mobile-phone shops. It manages phone purchases, sales, customer invoices, returns, a private repairs workshop, inventory cross-checks, legal Sapath Patra agreements, and JARVIS AI store automation.
+
+---
+
+## 🚀 100% Free Production Deployment & Setup Guides
+- 📖 **Full Zero-Error Render Cloud Guide**: See [`RENDER_SETUP_GUIDE.md`](./RENDER_SETUP_GUIDE.md) for step-by-step 100% free hosting instructions with Supabase PostgreSQL, JARVIS Vision OCR, and WhatsApp automation.
+- 💻 **Windows Desktop Setup Installer**: Direct offline installer available at [`dist-electron/PhoneZone Setup 1.0.0.exe`](./dist-electron/PhoneZone%20Setup%201.0.0.exe).
 
 ---
 
