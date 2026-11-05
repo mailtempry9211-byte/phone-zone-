@@ -121,6 +121,28 @@ export const JARVIS_TOOLS = [
       required: ["brand", "model", "imei", "purchase_price", "seller_name", "seller_phone"],
     },
   },
+  {
+    name: "change_theme",
+    description: "Change the active storefront and dashboard design theme. Themes: 'glassmorphism' (Frosted Glass), 'neon' (Cyber Neon), 'luxury' (Black & Gold Luxury), 'apple_minimal' (Apple Minimal), 'phonezone_signature' (PhoneZone Signature), 'bento_pro', 'compact_retail', 'brutalist', 'fluid_carousel', 'split_slider'.",
+    parameters: {
+      type: "object",
+      properties: {
+        theme_id: { type: "string", description: "Target theme name, e.g. 'glassmorphism', 'neon', 'luxury', 'apple_minimal'" },
+      },
+      required: ["theme_id"],
+    },
+  },
+  {
+    name: "navigate_tab",
+    description: "Navigate to an admin dashboard tab screen: 'inventory' (phones stock), 'sold' (sold phones history & bills), 'repairs' (repair tickets), 'marketing' (WhatsApp campaigns & channel control), 'reports' (accounting & charts), 'settings' (store settings), 'storefront' (storefront designer).",
+    parameters: {
+      type: "object",
+      properties: {
+        tab: { type: "string", description: "Target tab: 'inventory', 'sold', 'repairs', 'marketing', 'reports', 'settings', 'storefront'" },
+      },
+      required: ["tab"],
+    },
+  },
 ];
 
 /**
@@ -531,6 +553,44 @@ export async function executeJarvisTool(toolName, args = {}) {
           purchase_price: Number(purchase_price),
           seller_name,
           message: `Phone ${brand} ${model} successfully added to inventory!`,
+        };
+      }
+
+      // -------------------------------------------------------------
+      // 8. Change Storefront / Admin Theme
+      // -------------------------------------------------------------
+      case "change_theme": {
+        const { theme_id } = args;
+        let cleanTheme = (theme_id || "").toLowerCase().trim();
+        if (cleanTheme.includes("frost") || cleanTheme.includes("glass")) cleanTheme = "glassmorphism";
+        else if (cleanTheme.includes("neon") || cleanTheme.includes("cyber")) cleanTheme = "neon";
+        else if (cleanTheme.includes("lux") || cleanTheme.includes("gold")) cleanTheme = "luxury";
+        else if (cleanTheme.includes("apple") || cleanTheme.includes("mini")) cleanTheme = "apple_minimal";
+        else if (cleanTheme.includes("sign") || cleanTheme.includes("phonezone")) cleanTheme = "phonezone_signature";
+
+        try {
+          db.prepare("UPDATE admin_settings SET homepage_theme = ?").run(cleanTheme);
+        } catch {}
+
+        return {
+          ok: true,
+          theme_id: cleanTheme,
+          action: "CHANGE_THEME",
+          message: `Theme successfully changed to ${cleanTheme}!`,
+        };
+      }
+
+      // -------------------------------------------------------------
+      // 9. Navigate Dashboard Tab
+      // -------------------------------------------------------------
+      case "navigate_tab": {
+        const { tab } = args;
+        const cleanTab = (tab || "dashboard").toLowerCase().trim();
+        return {
+          ok: true,
+          tab: cleanTab,
+          action: "NAVIGATE_TAB",
+          message: `Navigating to ${cleanTab} tab...`,
         };
       }
 

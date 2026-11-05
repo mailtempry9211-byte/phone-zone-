@@ -4,9 +4,11 @@
  */
 import express from "express";
 import { badRequest } from "../lib/errors.js";
-import { getAiConfig, parseAadhaarWithVision, parseImeiWithVision, testAiConnection } from "../services/aiService.js";
+import { getAiConfig, parseAadhaarWithVision, parseImeiWithVision, processSmartIntake, testAiConnection } from "../services/aiService.js";
 import { handleJarvisChat } from "../services/jarvisAgent.js";
 import { saveSettings } from "../services/settingsService.js";
+import { getDb } from "../db/index.js";
+import * as baileysService from "../services/baileysService.js";
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -26,6 +28,108 @@ export function buildAiRouter(staffAuth, adminAuth) {
       history,
     });
     res.json(result);
+  }));
+
+  // 2. AI Multi-Photo Smart Intake
+  r.post("/smart-intake", staffAuth, wrap(async (req, res) => {
+    const { images = [], message = "" } = req.body || {};
+    if (!images || images.length === 0) {
+      throw badRequest("At least 1 image is required for smart intake.");
+    }
+    const result = await processSmartIntake({ images, message });
+    res.json({ ok: true, data: result });
+  }));
+
+  // 3. Confirm and Save Smart Intake Deal into Inventory
+  r.post("/confirm-intake", staffAuth, wrap(async (req, res) => {
+    const db = getDb();
+    const {
+      brand,
+      model,
+      imei1,
+      imei2 = "",
+      purchase_price,
+      selling_price,
+      seller_name,
+      seller_phone,
+      seller_aadhaar = "",
+      seller_address = "",
+      seller_signature = "",
+      condition = "good",
+      payment_method = "cash",
+      product_photos = [],
+      purchase_documents = [],
+      payment_proof_photos = [],
+    } = req.body || {};
+
+    const cleanImei = (imei1 || "").replace(/\D/g, "");
+    if (cleanImei.length < 15) throw badRequest("Valid 15-digit IMEI 1 is required.");
+    if (!brand || !model) throw badRequest("Brand and Model are required.");
+    if (!purchase_price) throw badRequest("Purchase price is required.");
+
+    // Check duplicate IMEI
+    const existing = db.prepare("SELECT id, is_sold FROM phones WHERE imei_number = ?").get(cleanImei);
+    if (existing) {
+      throw badRequest(`IMEI ${cleanImei} is already registered in store (${existing.is_sold ? "Sold" : "In Stock"}).`);
+    }
+
+    // Upsert Seller
+    let sellerId = "sel_" + Math.random().toString(36).substring(2, 10);
+    if (seller_phone) {
+      const exSeller = db.prepare("SELECT id FROM sellers WHERE phone = ?").get(seller_phone);
+      if (exSeller) sellerId = exSeller.id;
+      else {
+        db.prepare(`
+          INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number)
+          VALUES (?, ?, ?, ?, 'aadhaar', ?)
+        `).run(sellerId, seller_name || "Customer", seller_phone, seller_address, seller_aadhaar);
+      }
+    }
+
+    const phoneId = "ph_" + Math.random().toString(36).substring(2, 12);
+    const sellPrice = selling_price || Math.round(Number(purchase_price) * 1.15);
+
+    db.prepare(`
+      INSERT INTO phones (
+        id, phone_name, model, imei_number, imei2_number, purchase_price, selling_price,
+        condition, is_sold, seller_id, purchase_date, payment_method, shop_id,
+        product_photos, purchase_documents, payment_proof_photos, seller_signature_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now'), ?, 'all', ?, ?, ?, ?)
+    `).run(
+      phoneId,
+      brand,
+      model,
+      cleanImei,
+      (imei2 || "").replace(/\D/g, ""),
+      Number(purchase_price),
+      Number(sellPrice),
+      condition,
+      sellerId,
+      payment_method,
+      JSON.stringify(product_photos),
+      JSON.stringify(purchase_documents),
+      JSON.stringify(payment_proof_photos),
+      seller_signature
+    );
+
+    // Optional WhatsApp acknowledgment
+    if (seller_phone && seller_phone.length >= 10 && baileysService.isReady()) {
+      try {
+        await baileysService.sendTextMessage({
+          phone: seller_phone,
+          message: `Namaste ${seller_name || "Customer"} ji, PhoneZone me aapka phone (${brand} ${model}) purchase record successfully register ho gaya hai. Aapki payment ₹${Number(purchase_price).toLocaleString()} (${payment_method.toUpperCase()}) complete hai. Dhanyawad!`,
+        });
+      } catch {}
+    }
+
+    res.json({
+      ok: true,
+      phone_id: phoneId,
+      brand,
+      model,
+      imei: cleanImei,
+      message: `Phone ${brand} ${model} successfully added to inventory!`,
+    });
   }));
 
   // 2. AI Vision OCR: Aadhaar Card (Front/Back)

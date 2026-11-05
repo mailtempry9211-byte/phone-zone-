@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { data as dataDriver } from "@/lib/data";
 import { ContactInfo } from "@/lib/data/types";
 import { ThemeDesignId } from "@/components/home-themes/types";
-import { DEFAULT_REPAIR_SERVICES } from "@/components/admin/StorefrontCustomizerTab";
+import { DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices";
 import { useAuth } from "@/hooks/useAuth";
 import { StorefrontTopBar } from "@/components/StorefrontTopBar";
 import { StorefrontBusinessHub } from "@/components/StorefrontBusinessHub";

@@ -43,6 +43,14 @@ const InventoryTab = ({ onNavigateTab }: InventoryTabProps = {}) => {
   const [selectedPhoneIds, setSelectedPhoneIds] = useState<Set<string>>(new Set());
   const [selectedBatchPhones, setSelectedBatchPhones] = useState<any[]>([]);
 
+  useEffect(() => {
+    const handleOpenDialog = () => {
+      setAddDialogOpen(true);
+    };
+    window.addEventListener("phonezone:open_add_phone_dialog", handleOpenDialog);
+    return () => window.removeEventListener("phonezone:open_add_phone_dialog", handleOpenDialog);
+  }, []);
+
   const toggleSelectPhone = (id: string) => {
     setSelectedPhoneIds((prev) => {
       const next = new Set(prev);

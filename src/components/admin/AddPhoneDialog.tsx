@@ -151,6 +151,36 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
   const [extraPhones, setExtraPhones] = useState<ExtraPhoneItem[]>([]);
   const [uploadingExtraIndex, setUploadingExtraIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    const handlePrefill = (e: any) => {
+      const d = e.detail;
+      if (!d) return;
+      onOpenChange(true);
+      setFormData((prev) => ({
+        ...prev,
+        phone_name: d.brand || d.phone_name || prev.phone_name,
+        model: d.model || prev.model,
+        imei_number: d.imei1 || d.imei_number || prev.imei_number,
+        imei2_number: d.imei2 || d.imei2_number || prev.imei2_number,
+        purchase_price: d.purchase_price ? String(d.purchase_price) : prev.purchase_price,
+        selling_price: d.selling_price ? String(d.selling_price) : prev.selling_price,
+        payment_method: d.payment_mode || prev.payment_method,
+        seller_name: d.seller_name || prev.seller_name,
+        seller_phone: d.seller_phone || prev.seller_phone,
+        id_number: d.seller_aadhaar || d.id_number || prev.id_number,
+        id_proof_type: d.seller_aadhaar ? "Aadhaar" : prev.id_proof_type,
+        seller_address: d.seller_address || prev.seller_address,
+        product_photos: Array.isArray(d.product_photos) && d.product_photos.length > 0 ? d.product_photos : prev.product_photos,
+        purchase_documents: Array.isArray(d.purchase_documents) && d.purchase_documents.length > 0 ? d.purchase_documents : prev.purchase_documents,
+        payment_proof_photos: Array.isArray(d.payment_proof_photos) && d.payment_proof_photos.length > 0 ? d.payment_proof_photos : prev.payment_proof_photos,
+        seller_signature_url: d.seller_signature_url || prev.seller_signature_url,
+      }));
+      toast.success("AI Pre-fill Form Loaded!", { description: `${d.brand || ""} ${d.model || ""}`.trim() });
+    };
+    window.addEventListener("phonezone:prefill_purchase_form", handlePrefill);
+    return () => window.removeEventListener("phonezone:prefill_purchase_form", handlePrefill);
+  }, [onOpenChange]);
+
   const handleExtraPhonePhotosUpload = async (idx: number, files: FileList | null) => {
     if (!files || files.length === 0) return;
     const currentPhotos = extraPhones[idx]?.product_photos || [];
@@ -1128,13 +1158,17 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       const imeiPrefix = "";
                       setFormData((prev) => ({
                         ...prev,
-                        imei_number: imeiPrefix + r.imei,
-                        // Only touch fields the user has left empty so a manual
-                        // brand/model entry is never clobbered.
-                        ...(prev.phone_name ? {} : {}),
+                        imei_number: imeiPrefix + (r.imei || prev.imei_number),
+                        imei2_number: r.imei2 || prev.imei2_number,
+                        phone_name: r.brand || prev.phone_name,
+                        model: r.model || prev.model,
+                        colour: r.colour || prev.colour,
                       }));
                       if (r.via === "barcode") {
                         tacFetch(r.imei).catch(() => {});
+                      }
+                      if (r.brand || r.model) {
+                        toast.success(`AI Vision Extracted: ${r.brand || ""} ${r.model || ""}`.trim());
                       }
                     }}
                   />

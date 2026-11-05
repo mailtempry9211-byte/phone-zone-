@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { data } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -275,6 +275,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const queryClient = useQueryClient();
+
+  // Full System Control via JARVIS AI (Tabs, Themes, Add Phone modal)
+  React.useEffect(() => {
+    const handleNavigate = (e: any) => {
+      const tab = e.detail?.tab;
+      if (tab) {
+        setActiveTab(tab);
+        toast.success(`JARVIS: Navigated to ${tab.toUpperCase()} Tab`, { icon: "🧭" });
+      }
+    };
+
+    const handleChangeTheme = (e: any) => {
+      const theme = e.detail?.theme;
+      if (theme) {
+        queryClient.invalidateQueries({ queryKey: ["admin_settings"] });
+        queryClient.invalidateQueries({ queryKey: ["settings"] });
+        toast.success(`JARVIS: Storefront Theme changed to ${theme.toUpperCase()}!`, { icon: "🎨" });
+      }
+    };
+
+    const handleOpenAddPhone = () => {
+      setActiveTab("inventory");
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("phonezone:open_add_phone_dialog"));
+      }, 100);
+    };
+
+    window.addEventListener("phonezone:navigate_tab", handleNavigate);
+    window.addEventListener("phonezone:change_theme", handleChangeTheme);
+    window.addEventListener("phonezone:open_add_phone", handleOpenAddPhone);
+
+    return () => {
+      window.removeEventListener("phonezone:navigate_tab", handleNavigate);
+      window.removeEventListener("phonezone:change_theme", handleChangeTheme);
+      window.removeEventListener("phonezone:open_add_phone", handleOpenAddPhone);
+    };
+  }, [queryClient]);
   const [themeMode, setThemeMode] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("phonezone_admin_mode") as "dark" | "light") || "dark";

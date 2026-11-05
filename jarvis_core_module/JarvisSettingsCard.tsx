@@ -25,7 +25,7 @@ export const JarvisSettingsCard: React.FC = () => {
   const queryClient = useQueryClient();
   const [provider, setProvider] = useState<string>("gemini");
   const [apiKey, setApiKey] = useState<string>("");
-  const [model, setModel] = useState<string>("gemini-1.5-flash");
+  const [model, setModel] = useState<string>("gemini-2.5-flash-lite");
   const [customUrl, setCustomUrl] = useState<string>("");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
@@ -40,7 +40,7 @@ export const JarvisSettingsCard: React.FC = () => {
       if (res.ok) {
         const d = await res.json();
         setProvider(d.provider || "gemini");
-        setModel(d.model || "gemini-1.5-flash");
+        setModel(d.model || "gemini-2.5-flash-lite");
         setCustomUrl(d.customUrl || "");
         setVoiceEnabled(d.voiceEnabled !== false);
         setAutoSpeak(Boolean(d.autoSpeak));
@@ -167,7 +167,7 @@ export const JarvisSettingsCard: React.FC = () => {
               onChange={(e) => {
                 const p = e.target.value;
                 setProvider(p);
-                if (p === "gemini") setModel("gemini-1.5-flash");
+                if (p === "gemini") setModel("gemini-2.5-flash-lite");
                 else if (p === "groq") setModel("llama-3.3-70b-versatile");
                 else if (p === "openrouter") setModel("meta-llama/llama-3.3-70b-instruct:free");
               }}
@@ -184,12 +184,25 @@ export const JarvisSettingsCard: React.FC = () => {
             <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
               Model Name
             </Label>
-            <Input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="e.g. gemini-1.5-flash or llama-3.3-70b-versatile"
-              className="h-9 text-xs"
-            />
+            {provider === "gemini" ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full h-9 px-3 rounded-md border text-xs bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+              >
+                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Recommended - 100% Free & Stable)</option>
+                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra Fast & Lightweight)</option>
+                <option value="gemini-3.5-flash">gemini-3.5-flash (High Intelligence)</option>
+                <option value="gemini-flash-latest">gemini-flash-latest (Auto Latest)</option>
+              </select>
+            ) : (
+              <Input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="e.g. llama-3.3-70b-versatile or meta-llama/llama-3.3-70b-instruct:free"
+                className="h-9 text-xs"
+              />
+            )}
           </div>
         </div>
 

@@ -15,13 +15,17 @@
  */
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ScanLine, Loader2, CheckCircle2, AlertTriangle, Camera, Upload, FileText, ArrowLeft, QrCode, ChevronRight } from "lucide-react";
+import { ScanLine, Loader2, CheckCircle2, AlertTriangle, Camera, Upload, FileText, ArrowLeft, QrCode, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export interface ImeiScanResult {
   imei: string;
-  /** how it was read: a barcode scan or OCR off the printed label */
-  via: "barcode" | "ocr";
+  imei2?: string;
+  brand?: string;
+  model?: string;
+  colour?: string;
+  /** how it was read: a barcode scan, OCR, or Gemini AI Vision */
+  via: "barcode" | "ocr" | "ai_vision";
   /** barcode digits read exactly never need checksum help */
   checksumOk: boolean;
 }
@@ -530,13 +534,72 @@ export const decodeBarcode = async (file: File | Blob): Promise<{ text: string; 
 const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const aiBoxInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const pickFile = (target: "upload" | "camera") => {
-    (target === "camera" ? cameraInputRef : uploadInputRef).current?.click();
+  const pickFile = (target: "upload" | "camera" | "ai") => {
+    if (target === "camera") cameraInputRef.current?.click();
+    else if (target === "ai") aiBoxInputRef.current?.click();
+    else uploadInputRef.current?.click();
+  };
+
+  const handleAiVisionDirect = async (file: File) => {
+    setBusy(true);
+    setError("");
+    setLastScan(null);
+    setStatusMsg("Analyzing box sticker with Gemini Vision...");
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const aiResp = await fetch("/api/ai/ocr-imei", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: b64 }),
+        credentials: "include",
+      });
+
+      if (!aiResp.ok) {
+        const errJson = await aiResp.json().catch(() => ({}));
+        throw new Error(errJson.error || "AI Vision OCR failed");
+      }
+
+      const aiData = await aiResp.json();
+      const d = aiData?.data;
+      const imeiCand = (d?.imei1 || d?.imei2 || "").replace(/\D/g, "");
+
+      if (imeiCand && imeiCand.length >= 14 && imeiCand.length <= 16) {
+        onResult({
+          imei: imeiCand,
+          imei2: d?.imei2 ? d.imei2.replace(/\D/g, "") : undefined,
+          brand: d?.brand || undefined,
+          model: d?.model || undefined,
+          colour: d?.color || d?.colour || undefined,
+          via: "ai_vision",
+          checksumOk: true,
+        });
+        setLastScan(imeiCand);
+        toast.success(`IMEI (${imeiCand}) + Details extracted via Gemini Vision!`);
+        return;
+      }
+
+      setError("AI Vision did not detect a 15-digit IMEI. Please ensure the sticker is clearly visible.");
+      toast.error("Could not find IMEI on sticker image.");
+    } catch (err: any) {
+      console.error("[ai-vision-scan] error:", err);
+      setError(err?.message || "AI Vision scan failed.");
+      toast.error(err?.message || "AI Vision scan failed.");
+    } finally {
+      setBusy(false);
+      setStatusMsg("");
+    }
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -572,7 +635,15 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
             const d = aiData?.data;
             const imeiCand = (d?.imei1 || d?.imei2 || "").replace(/\D/g, "");
             if (imeiCand && imeiCand.length >= 14 && imeiCand.length <= 16) {
-              onResult({ imei: imeiCand, via: "ocr", checksumOk: true });
+              onResult({
+                imei: imeiCand,
+                imei2: d?.imei2 ? d.imei2.replace(/\D/g, "") : undefined,
+                brand: d?.brand || undefined,
+                model: d?.model || undefined,
+                colour: d?.color || d?.colour || undefined,
+                via: "ai_vision",
+                checksumOk: true,
+              });
               setLastScan(imeiCand);
               toast.success(`IMEI (${imeiCand}) extracted via AI Vision!`);
               return;
@@ -625,8 +696,19 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
         className="hidden"
         onChange={handleFile}
       />
+      <input
+        ref={aiBoxInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) handleAiVisionDirect(f);
+        }}
+      />
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <Button
           type="button"
           variant="outline"
@@ -650,6 +732,19 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
           title="Upload Barcode Photo"
         >
           <Upload className="h-3.5 w-3.5" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled || busy}
+          onClick={() => pickFile("ai")}
+          className="h-8 px-2.5 text-xs font-semibold border-purple-300 dark:border-purple-700 bg-purple-50/60 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 shadow-xs flex items-center gap-1.5"
+          title="Read Phone Box Sticker (IMEI 1, IMEI 2, Brand, Model) with Gemini Vision"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-purple-600 animate-pulse" />
+          <span>AI Box OCR</span>
         </Button>
       </div>
 

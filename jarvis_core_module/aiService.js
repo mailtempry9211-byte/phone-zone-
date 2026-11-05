@@ -14,7 +14,10 @@ export function getAiConfig() {
   const settings = getRawSettings() || {};
   const provider = (settings.ai_provider || process.env.AI_PROVIDER || "gemini").toLowerCase().trim();
   const apiKey = (settings.ai_api_key || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
-  const model = (settings.ai_model || process.env.AI_MODEL || (provider === "gemini" ? "gemini-1.5-flash" : provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free")).trim();
+  let model = (settings.ai_model || process.env.AI_MODEL || "").trim();
+  if (!model || model === "gemini-1.5-flash" || model === "gemini-2.5-flash") {
+    model = provider === "gemini" ? "gemini-3.5-flash" : provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free";
+  }
   const customUrl = (settings.ai_custom_url || process.env.AI_CUSTOM_URL || "").trim();
   const voiceEnabled = settings.ai_voice_enabled !== 0;
   const autoSpeak = Boolean(settings.ai_auto_speak);
@@ -111,8 +114,12 @@ async function executeVisionJson(imageBase64, prompt, config) {
 
   // Gemini Vision
   if (config.provider === "gemini" || !config.provider) {
-    const model = config.model.includes("gemini") ? config.model : "gemini-1.5-flash";
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+    let model = config.model && config.model.includes("gemini") ? config.model : "gemini-2.5-flash-lite";
+    if (model === "gemini-1.5-flash" || model === "gemini-2.5-flash") model = "gemini-2.5-flash-lite";
+
+    const candidateModels = [model, "gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"].filter(
+      (m, idx, arr) => arr.indexOf(m) === idx
+    );
 
     const payload = {
       contents: [
@@ -134,16 +141,25 @@ async function executeVisionJson(imageBase64, prompt, config) {
       },
     };
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let res = null;
+    let errText = "";
 
-    if (!res.ok) {
-      const err = await res.text();
-      logger.error("[AIVision] Gemini error: " + err);
-      throw new Error(`Gemini Vision failed (${res.status}): ${err.slice(0, 150)}`);
+    for (const m of candidateModels) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${config.apiKey}`;
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) break;
+      errText = await res.text();
+      logger.warn(`[AIVision] Gemini model ${m} returned ${res.status}: ${errText.slice(0, 100)}. Falling back...`);
+      if (res.status === 400) break;
+    }
+
+    if (!res || !res.ok) {
+      logger.error("[AIVision] Gemini error: " + errText);
+      throw new Error(`Gemini Vision failed (${res?.status || 500}): ${errText.slice(0, 150)}`);
     }
 
     const json = await res.json();
@@ -201,6 +217,146 @@ async function executeVisionJson(imageBase64, prompt, config) {
 }
 
 /**
+ * Multi-Modal Multi-Photo Smart Intake
+ * Automatically categorizes photos into product_photos, purchase_documents (Aadhaar), and payment_proof
+ * and extracts all fields for a 1-click on-screen confirmation card.
+ */
+export async function processSmartIntake({ images = [], message = "" }) {
+  const config = getAiConfig();
+  if (!config.apiKey && config.provider !== "ollama") {
+    throw new Error("AI API Key is missing. Please configure your AI Key in Settings > Jarvis AI.");
+  }
+
+  const prompt = `You are an expert mobile shop intake assistant for PhoneZone ERP.
+Examine the attached photos and user notes: "${message}".
+Classify each image and extract all second-hand smartphone purchase details.
+
+Images can be:
+- Smartphone packaging box sticker / screen showing *#06#
+- Smartphone physical condition (front, back, screen)
+- Aadhaar Card (Front or Back)
+- Payment receipt / UPI transaction screenshot
+
+Return a STRICT JSON object only. No markdown formatting.
+Schema:
+{
+  "brand": "detected brand (e.g. Vivo, Oppo, Realme, Apple, Samsung)",
+  "model": "detected model and variant (e.g. 12X 5G 8GB/128GB)",
+  "color": "detected color",
+  "imei1": "15-digit primary IMEI",
+  "imei2": "15-digit secondary IMEI if found",
+  "seller_name": "Full name from Aadhaar card",
+  "seller_phone": "10-digit mobile number if found",
+  "seller_aadhaar": "Aadhaar number if found",
+  "seller_address": "Full address from Aadhaar back if found",
+  "purchase_price": number or null,
+  "payment_method": "cash" or "upi",
+  "classifications": [
+    {
+      "index": 0,
+      "type": "product_photo" | "purchase_document" | "payment_proof" | "box_sticker"
+    }
+  ]
+}`;
+
+  const b64Parts = images.map((img) => ({
+    inline_data: {
+      mime_type: "image/jpeg",
+      data: cleanBase64(img),
+    },
+  }));
+
+  const payload = {
+    contents: [
+      {
+        parts: [{ text: prompt }, ...b64Parts],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      response_mime_type: "application/json",
+    },
+  };
+
+  let model = config.model && config.model.includes("gemini") ? config.model : "gemini-3.1-flash-lite";
+  const candidateModels = [model, "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite"].filter(
+    (m, idx, arr) => arr.indexOf(m) === idx
+  );
+
+  let res = null;
+  let lastErr = "";
+  for (const m of candidateModels) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${config.apiKey}`;
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) break;
+    lastErr = await res.text();
+  }
+
+  if (!res || !res.ok) {
+    throw new Error(`AI Intake Vision failed: ${lastErr.slice(0, 150)}`);
+  }
+
+  const json = await res.json();
+  const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  let extracted = {};
+  try {
+    extracted = JSON.parse(rawText.replace(/```json\n?|```/g, "").trim());
+  } catch {
+    extracted = {};
+  }
+
+  // Parse price from message if not extracted
+  if (!extracted.purchase_price && message) {
+    const priceMatch = message.match(/(?:rs\.?|inr|₹)?\s*(\d{3,6})/i);
+    if (priceMatch) extracted.purchase_price = Number(priceMatch[1]);
+  }
+
+  // Parse phone number from message if not extracted
+  if (!extracted.seller_phone && message) {
+    const phoneMatch = message.match(/\b([6-9]\d{9})\b/);
+    if (phoneMatch) extracted.seller_phone = phoneMatch[1];
+  }
+
+  // Auto-bucket images based on classifications
+  const product_photos = [];
+  const purchase_documents = [];
+  const payment_proof_photos = [];
+
+  const classes = extracted.classifications || [];
+  images.forEach((img, idx) => {
+    const t = classes.find((c) => c.index === idx)?.type || "product_photo";
+    if (t === "purchase_document" || t === "aadhaar_front" || t === "aadhaar_back") {
+      purchase_documents.push(img);
+    } else if (t === "payment_proof") {
+      payment_proof_photos.push(img);
+    } else {
+      product_photos.push(img);
+    }
+  });
+
+  return {
+    brand: extracted.brand || "",
+    model: extracted.model || "",
+    color: extracted.color || "",
+    imei1: extracted.imei1 || "",
+    imei2: extracted.imei2 || "",
+    seller_name: extracted.seller_name || "",
+    seller_phone: extracted.seller_phone || "",
+    seller_aadhaar: extracted.seller_aadhaar || "",
+    seller_address: extracted.seller_address || "",
+    purchase_price: extracted.purchase_price || null,
+    payment_method: extracted.payment_method || "cash",
+    product_photos,
+    purchase_documents,
+    payment_proof_photos,
+  };
+}
+
+/**
  * -------------------------------------------------------------
  * 3. Conversational AI + Function / Tool Calling Engine
  * -------------------------------------------------------------
@@ -228,8 +384,10 @@ export async function callLLMWithTools({ messages, tools = [], systemPrompt }) {
  * Gemini Provider Implementation
  */
 async function callGeminiWithTools({ messages, tools, systemPrompt, config }) {
-  const model = config.model.includes("gemini") ? config.model : "gemini-1.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+  let model = config.model && config.model.includes("gemini") ? config.model : "gemini-3.5-flash";
+  if (model === "gemini-1.5-flash" || model === "gemini-2.5-flash") {
+    model = "gemini-3.5-flash";
+  }
 
   // Format tools for Gemini functionDeclarations
   const geminiTools = tools.length > 0 ? [
@@ -251,26 +409,34 @@ async function callGeminiWithTools({ messages, tools, systemPrompt, config }) {
       contents.push({ role: "user", parts: [{ text: m.content }] });
     } else if (m.role === "assistant") {
       const parts = [];
-      if (m.content) parts.push({ text: m.content });
-      if (m.toolCalls && m.toolCalls.length > 0) {
-        for (const tc of m.toolCalls) {
-          parts.push({
-            functionCall: {
-              name: tc.name,
-              args: typeof tc.args === "string" ? JSON.parse(tc.args) : tc.args,
-            },
-          });
+      if (m.rawParts && m.rawParts.length > 0) {
+        parts.push(...m.rawParts);
+      } else {
+        if (m.content) parts.push({ text: m.content });
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          for (const tc of m.toolCalls) {
+            const p = {
+              functionCall: {
+                name: tc.name,
+                args: typeof tc.args === "string" ? JSON.parse(tc.args) : tc.args,
+              },
+            };
+            if (tc.thoughtSignature || tc.thought_signature) {
+              p.thoughtSignature = tc.thoughtSignature || tc.thought_signature;
+            }
+            parts.push(p);
+          }
         }
       }
       if (parts.length > 0) contents.push({ role: "model", parts });
     } else if (m.role === "tool") {
       contents.push({
-        role: "function",
+        role: "user",
         parts: [
           {
             functionResponse: {
               name: m.name,
-              response: { result: m.content },
+              response: { content: m.content },
             },
           },
         ],
@@ -295,16 +461,35 @@ async function callGeminiWithTools({ messages, tools, systemPrompt, config }) {
     payload.tools = geminiTools;
   }
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const executeCall = async (modelToUse) => {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${config.apiKey}`;
+    return await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  };
 
-  if (!res.ok) {
-    const errText = await res.text();
-    logger.error("[Jarvis] Gemini LLM Error: " + errText);
-    throw new Error(`Gemini Error (${res.status}): ${errText.slice(0, 180)}`);
+  const candidateModels = [model, "gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3-flash-preview"].filter(
+    (m, idx, arr) => arr.indexOf(m) === idx
+  );
+
+  let res = null;
+  let lastErrorText = "";
+
+  for (const m of candidateModels) {
+    res = await executeCall(m);
+    if (res.ok) {
+      break;
+    }
+    lastErrorText = await res.text();
+    logger.warn(`[Jarvis] Gemini model ${m} returned ${res.status}: ${lastErrorText.slice(0, 100)}. Trying fallback...`);
+    if (res.status === 400) break;
+  }
+
+  if (!res || !res.ok) {
+    logger.error("[Jarvis] Gemini LLM Error: " + lastErrorText);
+    throw new Error(`Gemini Error (${res?.status || 500}): ${lastErrorText.slice(0, 180)}`);
   }
 
   const data = await res.json();
@@ -321,6 +506,8 @@ async function callGeminiWithTools({ messages, tools, systemPrompt, config }) {
         id: "call_" + Math.random().toString(36).substring(2, 9),
         name: p.functionCall.name,
         args: p.functionCall.args || {},
+        thoughtSignature: p.thoughtSignature || p.thought_signature,
+        rawPart: p,
       });
     }
   }
@@ -329,6 +516,7 @@ async function callGeminiWithTools({ messages, tools, systemPrompt, config }) {
     role: "assistant",
     content: textContent,
     toolCalls,
+    rawParts: parts,
   };
 }
 

@@ -40,16 +40,9 @@ import {
   Store,
 } from "lucide-react";
 import { toast } from "sonner";
-
-export interface RepairItem {
-  id: string;
-  icon: string;
-  title: string;
-  price: string;
-  duration: string;
-  description: string;
-  active: boolean;
-}
+import { RepairItem, DEFAULT_REPAIR_SERVICES } from "@/lib/repairServices";
+export type { RepairItem };
+export { DEFAULT_REPAIR_SERVICES };
 
 export interface HomepageConfig {
   showTrustBar: boolean;
@@ -63,63 +56,6 @@ export interface HomepageConfig {
   heroHeadline?: string;
   heroSubheadline?: string;
 }
-
-export const DEFAULT_REPAIR_SERVICES: RepairItem[] = [
-  {
-    id: "rep-1",
-    icon: "📱",
-    title: "Screen Replacement",
-    price: "₹1,500",
-    duration: "30–60 mins",
-    description: "High-quality screen replacement with warranty",
-    active: true,
-  },
-  {
-    id: "rep-2",
-    icon: "🔋",
-    title: "Battery Replacement",
-    price: "₹800",
-    duration: "15–30 mins",
-    description: "Original high-health battery with 6 months warranty",
-    active: true,
-  },
-  {
-    id: "rep-3",
-    icon: "🔌",
-    title: "Charging Port Repair",
-    price: "₹600",
-    duration: "20–45 mins",
-    description: "Fix loose connection, slow charging, or mic issues",
-    active: true,
-  },
-  {
-    id: "rep-4",
-    icon: "💻",
-    title: "Software Issues",
-    price: "₹300",
-    duration: "30–90 mins",
-    description: "OS flashing, bootloop recovery, and unlock issues",
-    active: true,
-  },
-  {
-    id: "rep-5",
-    icon: "💧",
-    title: "Water Damage Repair",
-    price: "₹1,200",
-    duration: "2–24 hours",
-    description: "Deep ultrasonic cleaning and motherboard restoration",
-    active: true,
-  },
-  {
-    id: "rep-6",
-    icon: "🔧",
-    title: "General Repairs",
-    price: "₹500",
-    duration: "30–120 mins",
-    description: "Camera, speaker, earpiece, sensor, or back glass",
-    active: true,
-  },
-];
 
 export const HOMEPAGE_THEMES = [
   {
@@ -643,12 +579,20 @@ const StorefrontCustomizerTab: React.FC = () => {
                     <button
                       key={mode.id}
                       type="button"
-                      onClick={() =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          phoneDisplayMode: mode.id as any,
-                        }))
-                      }
+                      onClick={async () => {
+                        const newConfig = { ...config, phoneDisplayMode: mode.id as any };
+                        setConfig(newConfig);
+                        try {
+                          await fetch("/api/settings", {
+                            method: "PUT",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ homepage_config: JSON.stringify(newConfig) }),
+                          });
+                          await queryClient.invalidateQueries({ queryKey: ["storefront-settings"] });
+                          toast.success(`✨ Phone listing style: ${mode.name} applied live!`);
+                        } catch {}
+                      }}
                       className={`p-2.5 rounded-xl border-2 text-left flex flex-col justify-between transition-all ${
                         isCurrent
                           ? "border-blue-600 bg-blue-50/90 shadow-sm ring-1 ring-blue-500/30 scale-[1.02]"
