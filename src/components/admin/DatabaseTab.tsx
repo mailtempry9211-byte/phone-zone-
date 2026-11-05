@@ -119,28 +119,31 @@ const DatabaseTab = () => {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [phonesRes, sellersRes, customersRes, messagesRes, adminRes, returnsRes, repairsRes, repairCustRes, dealersRes, batchesRes] = await Promise.all([
-        supabase.from('phones').select('*').order('created_at', { ascending: false }),
-        supabase.from('sellers').select('*').order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('messages').select('*').order('created_at', { ascending: false }),
-        supabase.from('admin_settings').select('*'),
-        supabase.from('returns').select('*').order('created_at', { ascending: false }),
-        supabase.from('repair_jobs').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
-        supabase.from('repair_customers').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
-        supabase.from('dealers').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
-        supabase.from('dealer_batches').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] }))
+
+      const safeQuery = async (queryBuilder: any) => {
+        try {
+          const res = await queryBuilder;
+          return res?.data || [];
+        } catch {
+          return [];
+        }
+      };
+
+      const [phonesData, sellersData, customersData, messagesData, adminData, returnsData, repairsData, repairCustData, dealersData, batchesData] = await Promise.all([
+        safeQuery(supabase.from('phones').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('sellers').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('customers').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('messages').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('admin_settings').select('*')),
+        safeQuery(supabase.from('returns').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('repair_jobs').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('repair_customers').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('dealers').select('*').order('created_at', { ascending: false })),
+        safeQuery(supabase.from('dealer_batches').select('*').order('created_at', { ascending: false }))
       ]);
 
-      if (phonesRes.error) throw phonesRes.error;
-      if (sellersRes.error) throw sellersRes.error;
-      if (customersRes.error) throw customersRes.error;
-      if (messagesRes.error) throw messagesRes.error;
-      if (adminRes.error) throw adminRes.error;
-      if (returnsRes.error) throw returnsRes.error;
-
       // Backend API query for Workshop Repairs (ensures local SQLite repairs are included)
-      let resolvedRepairs = repairsRes.data || [];
+      let resolvedRepairs = repairsData;
       try {
         const rRes = await fetch('/api/repair/jobs?shop=all&limit=500', { credentials: 'include' });
         if (rRes.ok) {
@@ -151,7 +154,7 @@ const DatabaseTab = () => {
       } catch {}
 
       // Backend API query for Repair Customers
-      let resolvedRepairCust = repairCustRes.data || [];
+      let resolvedRepairCust = repairCustData;
       try {
         const rcRes = await fetch('/api/repair/customers?limit=500', { credentials: 'include' });
         if (rcRes.ok) {
@@ -162,7 +165,7 @@ const DatabaseTab = () => {
       } catch {}
 
       // Backend API query for Dealers
-      let resolvedDealers = dealersRes.data || [];
+      let resolvedDealers = dealersData;
       try {
         const dRes = await fetch('/api/dealers', { credentials: 'include' });
         if (dRes.ok) {
@@ -172,32 +175,30 @@ const DatabaseTab = () => {
       } catch {}
 
       // Backend API query for Dealer Batches
-      let resolvedBatches = batchesRes.data || [];
-      if (resolvedBatches.length === 0) {
-        try {
-          const dbRes = await fetch('/api/dealers/batches/all', { credentials: 'include' });
-          if (dbRes.ok) {
-            const dbJson = await dbRes.json();
-            if (Array.isArray(dbJson) && dbJson.length > 0) resolvedBatches = dbJson;
-          }
-        } catch {}
-      }
+      let resolvedBatches = batchesData;
+      try {
+        const dbRes = await fetch('/api/dealers/batches/all', { credentials: 'include' });
+        if (dbRes.ok) {
+          const dbJson = await dbRes.json();
+          if (Array.isArray(dbJson) && dbJson.length > 0) resolvedBatches = dbJson;
+        }
+      } catch {}
 
-      setPhones(phonesRes.data || []);
-      setSellers(sellersRes.data || []);
-      setCustomers(customersRes.data || []);
-      setMessages(messagesRes.data || []);
-      setAdminSettings(adminRes.data || []);
-      setReturns(returnsRes.data || []);
+      setPhones(phonesData);
+      setSellers(sellersData);
+      setCustomers(customersData);
+      setMessages(messagesData);
+      setAdminSettings(adminData);
+      setReturns(returnsData);
       setRepairJobs(resolvedRepairs);
       setRepairCustomers(resolvedRepairCust);
       setDealers(resolvedDealers);
       setDealerBatches(resolvedBatches);
 
-      setSelectedPhones((phonesRes.data || []).map((p: any) => p.id));
-      setSelectedSellers((sellersRes.data || []).map((s: any) => s.id));
-      setSelectedCustomers((customersRes.data || []).map((c: any) => c.id));
-      setSelectedMessages((messagesRes.data || []).map((m: any) => m.id));
+      setSelectedPhones(phonesData.map((p: any) => p.id));
+      setSelectedSellers(sellersData.map((s: any) => s.id));
+      setSelectedCustomers(customersData.map((c: any) => c.id));
+      setSelectedMessages(messagesData.map((m: any) => m.id));
       setSelectedRepairJobs(resolvedRepairs.map((r: any) => r.id));
       setSelectedDealers(resolvedDealers.map((d: any) => d.id));
       setSelectedDealerBatches(resolvedBatches.map((b: any) => b.id));
