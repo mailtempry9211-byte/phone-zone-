@@ -100,6 +100,51 @@ export const JarvisOrb: React.FC = () => {
     }
   }, []);
 
+  // Speech synthesis voice selection
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => {
+    return localStorage.getItem("jarvis_preferred_voice") || "";
+  });
+  const [showVoicePicker, setShowVoicePicker] = useState<boolean>(false);
+
+  // Load and select the best Indian voice
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    const updateVoices = () => {
+      const allVoices = window.speechSynthesis.getVoices();
+      if (!allVoices || allVoices.length === 0) return;
+      setVoices(allVoices);
+
+      const saved = localStorage.getItem("jarvis_preferred_voice");
+      if (saved && allVoices.some((v) => v.voiceURI === saved)) {
+        setSelectedVoiceURI(saved);
+        return;
+      }
+
+      // Best natural voice selection cascade:
+      // 1. Natural Indian Hindi / English (Swara, Madhur, Neerja, Heera, Google हिन्दी, Google English India)
+      const best = 
+        allVoices.find((v) => /swara|madhur|हिन्दी/i.test(v.name)) ||
+        allVoices.find((v) => v.lang === "hi-IN" || v.lang === "hi_IN") ||
+        allVoices.find((v) => /neerja|heera|prabhat/i.test(v.name)) ||
+        allVoices.find((v) => v.lang === "en-IN" || v.lang === "en_IN") ||
+        allVoices.find((v) => /india/i.test(v.name)) ||
+        allVoices.find((v) => v.default) ||
+        allVoices[0];
+
+      if (best) {
+        setSelectedVoiceURI(best.voiceURI);
+        localStorage.setItem("jarvis_preferred_voice", best.voiceURI);
+      }
+    };
+
+    updateVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
+
   // Auto-scroll to bottom of messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -110,24 +155,69 @@ export const JarvisOrb: React.FC = () => {
     if (!("speechSynthesis" in window) || !text) return;
     try {
       window.speechSynthesis.cancel();
-      // Clean markdown characters for smooth speech
-      const clean = text
-        .replace(/[*#_`~>]/g, "")
-        .replace(/\[.*?\]\(.*?\)/g, "")
-        .replace(/https?:\/\/\S+/g, "")
+
+      // Clean speech text thoroughly so Indian TTS speaks smoothly without spelling letters
+      let clean = text
+        // Replace ₹ with "rupaye"
+        .replace(/₹\s*([0-9,]+)/g, "$1 rupaye ")
+        .replace(/₹/g, " rupaye ")
+        // Remove markdown formatting
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/\*([^*]+)\*/g, "$1")
+        .replace(/[*#_`~>]/g, " ")
+        .replace(/\[.*?\]\(.*?\)/g, " ")
+        .replace(/https?:\/\/\S+/g, " ")
+        // Remove bullet markers and list numbers
+        .replace(/^\s*[\*\-]\s+/gm, " ")
+        .replace(/^\s*\d+[\.\)]\s+/gm, " ")
+        // Replace colons, slashes with natural pauses
+        .replace(/:\s*/g, ", ")
+        .replace(/\//g, " ya ")
+        // Clean multiple whitespace
+        .replace(/\s+/g, " ")
         .trim();
 
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 1.05;
+
+      const activeVoice = voices.find((v) => v.voiceURI === selectedVoiceURI) ||
+        voices.find((v) => v.lang.startsWith("hi") || v.lang.startsWith("en-IN")) ||
+        null;
+
+      if (activeVoice) {
+        utterance.voice = activeVoice;
+        utterance.lang = activeVoice.lang;
+      } else {
+        utterance.lang = "hi-IN";
+      }
+
+      // 0.92 rate provides calm, articulate, natural human cadence without rushing syllables
+      utterance.rate = 0.92;
       utterance.pitch = 1.0;
-      utterance.lang = "hi-IN";
 
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => setIsSpeaking(false);
       utterance.onerror = () => setIsSpeaking(false);
 
       window.speechSynthesis.speak(utterance);
-    } catch {}
+    } catch (e) {
+      console.warn("TTS Error:", e);
+      setIsSpeaking(false);
+    }
+  };
+
+  const handleVoiceChange = (uri: string) => {
+    setSelectedVoiceURI(uri);
+    localStorage.setItem("jarvis_preferred_voice", uri);
+    // Preview speech with the selected voice
+    const chosen = voices.find((v) => v.voiceURI === uri);
+    if (chosen) {
+      const u = new SpeechSynthesisUtterance("Namaste bhaiya, main PhoneZone AI assistant hoon.");
+      u.voice = chosen;
+      u.lang = chosen.lang;
+      u.rate = 0.92;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
   };
 
   const toggleSpeech = () => {
@@ -264,14 +354,27 @@ export const JarvisOrb: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowVoicePicker((prev) => !prev)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showVoicePicker
+                    ? "bg-indigo-600 text-white"
+                    : "text-indigo-300 hover:text-white hover:bg-white/10"
+                }`}
+                title="Voice / Aawaz Settings"
+              >
+                <Volume2 className="h-4 w-4" />
+              </button>
+
               {isSpeaking && (
                 <button
                   type="button"
                   onClick={toggleSpeech}
-                  className="p-1.5 text-indigo-300 hover:text-white rounded-lg transition-colors"
+                  className="p-1.5 text-emerald-400 hover:text-white rounded-lg transition-colors animate-pulse"
                   title="Stop voice playback"
                 >
-                  <Volume2 className="h-4 w-4 text-emerald-400 animate-pulse" />
+                  <VolumeX className="h-4 w-4" />
                 </button>
               )}
               <button
@@ -284,6 +387,31 @@ export const JarvisOrb: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Voice Selector Bar (Collapsible) */}
+          {showVoicePicker && (
+            <div className="bg-slate-900 border-b border-indigo-900/60 p-2.5 px-3 flex flex-col gap-1.5 animate-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between text-[11px] text-slate-300">
+                <span className="font-semibold text-sky-400 flex items-center gap-1">
+                  🎙️ AI Aawaz (Voice Selection):
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Select best Indian Hindi voice
+                </span>
+              </div>
+              <select
+                value={selectedVoiceURI}
+                onChange={(e) => handleVoiceChange(e.target.value)}
+                className="w-full h-8 px-2 text-xs rounded bg-slate-950 text-white border border-slate-700 focus:outline-none focus:border-indigo-500"
+              >
+                {voices.map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Quick Suggestion Chips */}
           <div className="p-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
