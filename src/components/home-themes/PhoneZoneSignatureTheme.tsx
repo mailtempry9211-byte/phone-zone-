@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ThemeProps } from "./types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import FeaturedPhones from "@/components/FeaturedPhones";
 import {
   Smartphone,
   Wrench,
@@ -504,144 +505,14 @@ export const PhoneZoneSignatureTheme: React.FC<ThemeProps> = ({
           </div>
 
           {/* Dynamic Phone Layout Rendering based on config.phoneDisplayMode */}
-          {config.phoneDisplayMode === "carousel" ? (
-            <div className="relative">
-              <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-6 pt-2 px-1 scrollbar-thin scrollbar-thumb-blue-400">
-                {filteredPhones.map((phone, idx) => (
-                  <div
-                    key={phone.id || idx}
-                    className="w-[280px] sm:w-[320px] shrink-0 snap-start bg-white rounded-2xl p-5 border border-slate-200 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-3">
-                        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 font-semibold text-[10px]">
-                          {phone.condition || "Tested Grade A"}
-                        </Badge>
-                        {phone.rating && (
-                          <span className="flex items-center gap-1 text-amber-500 font-bold text-xs">
-                            <Star className="h-3 w-3 fill-amber-400" /> {phone.rating}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="font-extrabold text-base text-slate-900 line-clamp-1">{phone.phone_name}</h3>
-                      <p className="text-xs text-slate-500 mb-3">{phone.model} • {phone.variant || "Standard"}</p>
-
-                      <div className="py-4 flex items-center justify-center min-h-[160px]">
-                        {phone.product_photos && phone.product_photos[0] ? (
-                          <img
-                            src={phone.product_photos[0]}
-                            alt={phone.phone_name}
-                            className="h-36 object-contain transition-transform duration-300 hover:scale-105"
-                          />
-                        ) : (
-                          <Smartphone className="h-24 w-24 text-slate-200" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-xl font-black text-slate-900">
-                          ₹{Number(phone.selling_price || 0).toLocaleString()}
-                        </span>
-                        <span className="text-[10px] font-bold text-emerald-600">
-                          Bill &amp; Box ✓
-                        </span>
-                      </div>
-
-                      <Button
-                        onClick={() => openWhatsApp(phone)}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl shadow-xs min-h-[44px]"
-                      >
-                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Lock Deal on WhatsApp
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : config.phoneDisplayMode === "list_compact" ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-              {filteredPhones.map((phone, idx) => (
-                <div
-                  key={phone.id || idx}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/80 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 bg-slate-50 border rounded-xl flex items-center justify-center shrink-0">
-                      {phone.product_photos && phone.product_photos[0] ? (
-                        <img src={phone.product_photos[0]} alt={phone.phone_name} className="h-12 object-contain" />
-                      ) : (
-                        <Smartphone className="h-8 w-8 text-slate-300" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-black text-slate-900 text-base">{phone.phone_name} {phone.model}</h4>
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-blue-200 bg-blue-50 text-blue-700">
-                          {phone.condition || "Grade A"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-500">{phone.variant || "Standard"} • Tested &amp; Certified with 7-Day Replacement</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <div className="text-left sm:text-right">
-                      <span className="text-[10px] text-slate-400 block font-semibold">CASH PRICE</span>
-                      <span className="text-xl font-black text-slate-900">₹{Number(phone.selling_price || 0).toLocaleString()}</span>
-                    </div>
-                    <Button
-                      onClick={() => openWhatsApp(phone)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl shadow-xs"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Buy on WhatsApp
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : config.phoneDisplayMode === "showcase" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredPhones.map((phone, idx) => (
-                <div
-                  key={phone.id || idx}
-                  className="bg-gradient-to-br from-white to-slate-50 rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <Badge className="bg-blue-600 text-white font-bold text-xs">SPOTLIGHT DEAL</Badge>
-                    <span className="text-xs font-bold text-emerald-600">✓ In-Stock Ready</span>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4 items-center my-4">
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-900 leading-tight">{phone.phone_name}</h3>
-                      <p className="text-sm font-semibold text-blue-600 mt-1">{phone.model}</p>
-                      <p className="text-xs text-slate-500 mt-2">Storage: {phone.variant || "Standard"} • Condition: {phone.condition || "Like New"}</p>
-                      <div className="mt-4">
-                        <span className="text-xs text-slate-400 block">SPECIAL OFFER</span>
-                        <span className="text-3xl font-black text-slate-900">₹{Number(phone.selling_price || 0).toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-center p-4 bg-white rounded-2xl border shadow-inner min-h-[180px]">
-                      {phone.product_photos && phone.product_photos[0] ? (
-                        <img src={phone.product_photos[0]} alt={phone.phone_name} className="h-44 object-contain" />
-                      ) : (
-                        <Smartphone className="h-28 w-28 text-slate-200" />
-                      )}
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={() => openWhatsApp(phone)}
-                    className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-xl shadow-md"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" /> Book This Deal on WhatsApp
-                  </Button>
-                </div>
-              ))}
+          {config.phoneDisplayMode && config.phoneDisplayMode !== "grid" ? (
+            <div className="w-full">
+              <FeaturedPhones
+                theme="modern"
+                displayMode={config.phoneDisplayMode}
+                whatsappNumber={whatsappNumber}
+                phonePrimary={phonePrimary}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">

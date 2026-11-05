@@ -61,58 +61,144 @@ function zip(sourceDirs, outFile) {
   return gz;
 }
 
-export function createBackup() {
+export function createBackup({ scope = "all", financialYear = null } = {}) {
   fs.mkdirSync(PATHS.backupsDir, { recursive: true });
   const db = getDb();
   db.pragma("wal_checkpoint(TRUNCATE)"); // flush WAL so the .db file is complete
 
-  const desiredName = `PhoneZone_Backup_${stamp()}.tar.gz`;
-  const desiredFile = path.join(PATHS.backupsDir, desiredName);
+  // Resolve FY label if scope is year-based
+  let fyLabel = null;
+  if (scope !== "all") {
+    let fys = [];
+    try {
+      fys = db.prepare("SELECT label, start_date FROM financial_years ORDER BY start_date DESC").all();
+    } catch {}
 
-  let dbHash = null;
-  if (fs.existsSync(PATHS.databaseFile)) {
-    const dbBytes = fs.readFileSync(PATHS.databaseFile);
-    dbHash = crypto.createHash("sha256").update(dbBytes).digest("hex");
+    if (financialYear) {
+      fyLabel = String(financialYear).trim();
+    } else if (scope === "current_fy") {
+      fyLabel = fys[0]?.label || "current";
+    } else if (scope === "previous_fy_1") {
+      fyLabel = fys[1]?.label || "previous_1";
+    } else if (scope === "previous_fy_2" || scope === "older_fy") {
+      fyLabel = fys[2]?.label || "older";
+    }
   }
 
-  const manifest = {
-    createdAt: new Date().toISOString(),
-    app: "PhoneZone",
-    dbSha256: dbHash,
-    schemaVersions: db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((r) => r.version),
-    counts: Object.fromEntries(
-      ["sellers", "customers", "phones", "returns", "repairs", "invoices", "files", "messages"].map((t) => {
-        try {
-          return [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n];
-        } catch {
-          return [t, 0];
-        }
-      }),
-    ),
-  };
-  const manifestFile = path.join(PATHS.dataDir, "manifest.json");
-  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+  const safeScope = fyLabel ? `FY_${fyLabel.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "ALL_YEARS";
+  const desiredName = `PhoneZone_Backup_${safeScope}_${stamp()}.tar.gz`;
+  const desiredFile = path.join(PATHS.backupsDir, desiredName);
+
+  if (scope === "all" || !fyLabel) {
+    let dbHash = null;
+    if (fs.existsSync(PATHS.databaseFile)) {
+      const dbBytes = fs.readFileSync(PATHS.databaseFile);
+      dbHash = crypto.createHash("sha256").update(dbBytes).digest("hex");
+    }
+
+    const manifest = {
+      createdAt: new Date().toISOString(),
+      app: "PhoneZone",
+      scope: "all",
+      dbSha256: dbHash,
+      schemaVersions: db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((r) => r.version),
+      counts: Object.fromEntries(
+        ["sellers", "customers", "dealers", "phones", "returns", "repairs", "invoices", "files", "messages"].map((t) => {
+          try {
+            return [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n];
+          } catch {
+            return [t, 0];
+          }
+        }),
+      ),
+    };
+    const manifestFile = path.join(PATHS.dataDir, "manifest.json");
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+
+    try {
+      tar.c(
+        {
+          gzip: true,
+          file: desiredFile,
+          cwd: PATHS.dataDir,
+          sync: true,
+          filter: (p) => !p.endsWith("-wal") && !p.endsWith("-shm") && !p.endsWith("-journal"),
+        },
+        ["database", "storage", "manifest.json"],
+      );
+    } finally {
+      fs.rmSync(manifestFile, { force: true });
+    }
+
+    if (!fs.existsSync(desiredFile) || fs.statSync(desiredFile).size === 0) {
+      throw new AppError("The backup file could not be written. Check that this folder can be written to.", 500);
+    }
+    logger.info("Backup created", { outFile: desiredFile, scope: "all" });
+    return { file: desiredFile, name: path.basename(desiredFile), manifest, sizeBytes: fs.statSync(desiredFile).size };
+  }
+
+  // Scoped backup for a specific FY (or older)
+  const scopedDir = path.join(PATHS.dataDir, `.backup_temp_${stamp()}`);
+  const scopedDbDir = path.join(scopedDir, "database");
+  const scopedStorageDir = path.join(scopedDir, "storage");
+  fs.mkdirSync(scopedDbDir, { recursive: true });
+  fs.mkdirSync(scopedStorageDir, { recursive: true });
+
+  const scopedDbFile = path.join(scopedDbDir, "phonezone.db");
+  fs.copyFileSync(PATHS.databaseFile, scopedDbFile);
+
+  const Database = db.constructor;
+  const scopedDb = new Database(scopedDbFile);
 
   try {
+    scopedDb.pragma("journal_mode = WAL");
+    // Prune transactional rows that don't belong to this financial year
+    // Keep master records: sellers, customers, dealers, repair_customers, admin_settings, user_roles
+    scopedDb.prepare("DELETE FROM phones WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+    try {
+      scopedDb.prepare("DELETE FROM repair_jobs WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+    } catch {}
+    try {
+      scopedDb.prepare("DELETE FROM invoices WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+    } catch {}
+    try {
+      scopedDb.prepare("DELETE FROM returns WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+    } catch {}
+
+    scopedDb.pragma("wal_checkpoint(TRUNCATE)");
+    scopedDb.close();
+
+    if (fs.existsSync(PATHS.storageDir)) {
+      fs.cpSync(PATHS.storageDir, scopedStorageDir, { recursive: true });
+    }
+
+    const manifest = {
+      createdAt: new Date().toISOString(),
+      app: "PhoneZone",
+      scope: fyLabel,
+      financialYear: fyLabel,
+    };
+    fs.writeFileSync(path.join(scopedDir, "manifest.json"), JSON.stringify(manifest, null, 2));
+
     tar.c(
       {
         gzip: true,
         file: desiredFile,
-        cwd: PATHS.dataDir,
+        cwd: scopedDir,
         sync: true,
         filter: (p) => !p.endsWith("-wal") && !p.endsWith("-shm") && !p.endsWith("-journal"),
       },
       ["database", "storage", "manifest.json"],
     );
   } finally {
-    fs.rmSync(manifestFile, { force: true });
+    fs.rmSync(scopedDir, { recursive: true, force: true });
   }
 
   if (!fs.existsSync(desiredFile) || fs.statSync(desiredFile).size === 0) {
-    throw new AppError("The backup file could not be written. Check that this folder can be written to.", 500);
+    throw new AppError("The scoped backup file could not be written.", 500);
   }
-  logger.info("Backup created", { outFile: desiredFile });
-  return { file: desiredFile, name: path.basename(desiredFile), manifest, sizeBytes: fs.statSync(desiredFile).size };
+  logger.info("Scoped backup created", { outFile: desiredFile, scope: fyLabel });
+  return { file: desiredFile, name: path.basename(desiredFile), sizeBytes: fs.statSync(desiredFile).size };
 }
 
 export function listBackups() {

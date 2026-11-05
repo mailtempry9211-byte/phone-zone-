@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Download, Trash2, Database, HardDrive, FileText, FileSpreadsheet, Code, Upload } from "lucide-react";
+import { Download, Trash2, Database, HardDrive, FileText, FileSpreadsheet, Code, Upload, Cloud, RefreshCw, CheckCircle2, AlertCircle, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import JSZip from 'jszip';
@@ -15,6 +15,7 @@ import StorageManagementCard from "./StorageManagementCard";
 import { GoogleDriveBackupCard } from "./GoogleDriveBackupCard";
 import { DataRetentionCard } from "./DataRetentionCard";
 import { CloudQuotaMonitorCard } from "./CloudQuotaMonitorCard";
+import { generateOfflineHTML, generateOfflineCSS } from "@/utils/offlineWebsiteGenerator";
 
 interface Message {
   id: string;
@@ -59,7 +60,14 @@ const DatabaseTab = () => {
   const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [selectedSellers, setSelectedSellers] = useState<string[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
-  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [repairJobs, setRepairJobs] = useState<any[]>([]);
+  const [repairCustomers, setRepairCustomers] = useState<any[]>([]);
+  const [dealers, setDealers] = useState<any[]>([]);
+  const [dealerBatches, setDealerBatches] = useState<any[]>([]);
+  const [selectedRepairJobs, setSelectedRepairJobs] = useState<string[]>([]);
+  const [selectedDealers, setSelectedDealers] = useState<string[]>([]);
+  const [selectedDealerBatches, setSelectedDealerBatches] = useState<string[]>([]);
+  const [backupScope, setBackupScope] = useState<string>("all");
   const [storageUsage, setStorageUsage] = useState<number>(0);
   const [totalStorage, setTotalStorage] = useState<number>(1024); // 1GB in MB
   const [exportFormat, setExportFormat] = useState<string>('json');
@@ -69,22 +77,58 @@ const DatabaseTab = () => {
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+
+  const fetchSupabaseStatus = async () => {
+    try {
+      const res = await fetch('/api/supabase/status', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseStatus(data);
+      }
+    } catch {}
+  };
+
+  const handleSyncToSupabase = async () => {
+    setIsSyncingSupabase(true);
+    toast.loading('Pushing all local database tables to Supabase Cloud...', { id: 'sb-sync' });
+    try {
+      const res = await fetch('/api/supabase/sync-now', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Supabase push failed');
+      toast.success('✅ All local data successfully pushed to Supabase Cloud!', { id: 'sb-sync' });
+      await fetchSupabaseStatus();
+    } catch (err: any) {
+      toast.error(`Sync failed: ${err.message}`, { id: 'sb-sync' });
+    } finally {
+      setIsSyncingSupabase(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
     calculateStorageUsage();
+    fetchSupabaseStatus();
   }, []);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [phonesRes, sellersRes, customersRes, messagesRes, adminRes, returnsRes] = await Promise.all([
+      const [phonesRes, sellersRes, customersRes, messagesRes, adminRes, returnsRes, repairsRes, repairCustRes, dealersRes, batchesRes] = await Promise.all([
         supabase.from('phones').select('*').order('created_at', { ascending: false }),
         supabase.from('sellers').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('messages').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_settings').select('*'),
-        supabase.from('returns').select('*').order('created_at', { ascending: false })
+        supabase.from('returns').select('*').order('created_at', { ascending: false }),
+        supabase.from('repair_jobs').select('*').order('created_at', { ascending: false }),
+        supabase.from('repair_customers').select('*').order('created_at', { ascending: false }),
+        supabase.from('dealers').select('*').order('created_at', { ascending: false }),
+        supabase.from('dealer_batches').select('*').order('created_at', { ascending: false })
       ]);
 
       if (phonesRes.error) throw phonesRes.error;
@@ -100,6 +144,17 @@ const DatabaseTab = () => {
       setMessages(messagesRes.data || []);
       setAdminSettings(adminRes.data || []);
       setReturns(returnsRes.data || []);
+      setRepairJobs(repairsRes.data || []);
+      setRepairCustomers(repairCustRes.data || []);
+      setDealers(dealersRes.data || []);
+      setDealerBatches(batchesRes.data || []);
+
+      setSelectedPhones((phonesRes.data || []).map((p: any) => p.id));
+      setSelectedSellers((sellersRes.data || []).map((s: any) => s.id));
+      setSelectedCustomers((customersRes.data || []).map((c: any) => c.id));
+      setSelectedRepairJobs((repairsRes.data || []).map((r: any) => r.id));
+      setSelectedDealers((dealersRes.data || []).map((d: any) => d.id));
+      setSelectedDealerBatches((batchesRes.data || []).map((b: any) => b.id));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to fetch data');
@@ -167,7 +222,12 @@ const DatabaseTab = () => {
 
       // Electron build: use the native Windows "Save As" dialog (via IPC).
       if (win.phonezone?.isElectron) {
-        const res = await fetch('/api/backups', { method: 'POST', credentials: 'include' });
+        const res = await fetch('/api/backups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ scope: backupScope }),
+        });
         if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Failed to create backup'); }
         const backup = await res.json();
         if (!backup.name && !backup.file) throw new Error('Backend did not return a backup name');
@@ -179,7 +239,7 @@ const DatabaseTab = () => {
           if (result.canceled) return; // user closed the dialog
           throw new Error(result.error || 'Could not save the backup');
         }
-        toast.success(`Full backup saved (${(data.byteLength / (1024 * 1024)).toFixed(2)} MB):\n${result.path}`);
+        toast.success(`Backup saved (${(data.byteLength / (1024 * 1024)).toFixed(2)} MB):\n${result.path}`);
         return;
       }
 
@@ -191,7 +251,7 @@ const DatabaseTab = () => {
         try {
           saveHandle = await win.showSaveFilePicker({
             suggestedName,
-            types: [{ description: 'PhoneZone backup (ZIP)', accept: { 'application/zip': ['.zip'] } }],
+            types: [{ description: 'PhoneZone backup archive', accept: { 'application/gzip': ['.tar.gz'], 'application/zip': ['.zip'] } }],
           });
         } catch (pickErr: any) {
           if (pickErr?.name === 'AbortError') return; // user cancelled the picker
@@ -200,7 +260,12 @@ const DatabaseTab = () => {
       }
       if (saveHandle) toast.info('Choose where you want to save the backup...');
 
-      const res = await fetch('/api/backups', { method: 'POST', credentials: 'include' });
+      const res = await fetch('/api/backups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scope: backupScope }),
+      });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
         throw new Error(b.error || 'Failed to create backup');
@@ -386,6 +451,10 @@ const DatabaseTab = () => {
         sellers: sellers.filter(s => selectedSellers.includes(s.id)),
         customers: customers.filter(c => selectedCustomers.includes(c.id)),
         messages: messages.filter(m => selectedMessages.includes(m.id)),
+        repairs: repairJobs.filter(r => selectedRepairJobs.includes(r.id)),
+        repair_customers: repairCustomers,
+        dealers: dealers.filter(d => selectedDealers.includes(d.id)),
+        dealer_batches: dealerBatches.filter(b => selectedDealerBatches.includes(b.id)),
         returns: returns,
         admin_settings: adminSettings,
         exported_at: new Date().toISOString()
@@ -569,7 +638,7 @@ const DatabaseTab = () => {
     }
 
     // Generate HTML content
-    const htmlContent = generateOfflineHTML(data, phoneFolders);
+    const htmlContent = generateOfflineHTML(data, phoneFolders, generateFileName);
     zip.file('index.html', htmlContent);
     
     // Add CSS file
@@ -851,485 +920,6 @@ const DatabaseTab = () => {
     return txt;
   };
 
-  const generateOfflineHTML = (data: any, phoneFolders: Map<string, any>) => {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhoneZone - Offline Database</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>PhoneZone - Database Export</h1>
-            <p>Exported on: ${new Date().toLocaleDateString()}</p>
-            <div class="stats">
-                <div class="stat">
-                    <h3>${data.phones.length}</h3>
-                    <p>Phones</p>
-                </div>
-                <div class="stat">
-                    <h3>${data.sellers.length}</h3>
-                    <p>Sellers</p>
-                </div>
-                <div class="stat">
-                    <h3>${data.customers.length}</h3>
-                    <p>Customers</p>
-                </div>
-                <div class="stat">
-                    <h3>${data.messages.length}</h3>
-                    <p>Messages</p>
-                </div>
-            </div>
-        </header>
-        
-        <main>
-            <section class="phones-section">
-                <h2>Phones Inventory</h2>
-                <div class="phones-grid">
-                    ${data.phones.map((phone: any) => {
-                      const phoneFolder = phoneFolders.get(phone.id);
-                      const folderName = phoneFolder?.folderName || '';
-                      const seller = data.sellers.find((s: any) => s.id === phone.seller_id);
-                      const customer = data.customers.find((c: any) => c.id === phone.customer_id);
-                      
-                      return `
-                        <div class="phone-card">
-                            <div class="phone-header">
-                                <h3>${phone.phone_name} - ${phone.model}</h3>
-                                <span class="condition-badge ${phone.condition}">${phone.condition}</span>
-                            </div>
-                            <div class="phone-details">
-                                <p><strong>IMEI:</strong> ${phone.imei_number}</p>
-                                <p><strong>Purchase Price:</strong> ₹${phone.purchase_price}</p>
-                                <p><strong>Selling Price:</strong> ₹${phone.selling_price}</p>
-                                <p><strong>Purchase Date:</strong> ${new Date(phone.purchase_date).toLocaleDateString()}</p>
-                                <p><strong>Payment Method:</strong> ${phone.payment_method}</p>
-                                <p><strong>Status:</strong> ${phone.is_sold ? 'SOLD' : 'AVAILABLE'}</p>
-                                ${phone.is_sold && phone.sold_date ? `<p><strong>Sold Date:</strong> ${new Date(phone.sold_date).toLocaleDateString()}</p>` : ''}
-                            </div>
-                            
-                            ${seller ? `
-                            <div class="seller-info">
-                                <h4>Seller Information</h4>
-                                <p><strong>Name:</strong> ${seller.name}</p>
-                                <p><strong>Phone:</strong> ${seller.phone}</p>
-                                <p><strong>Address:</strong> ${seller.address}</p>
-                                <p><strong>ID Type:</strong> ${seller.id_proof_type}</p>
-                                <p><strong>ID Number:</strong> ${seller.id_number}</p>
-                                ${seller.seller_photo_url ? `<img src="${folderName}/${generateFileName(phone, 'sellerpic')}" alt="Seller" class="seller-photo">` : ''}
-                            </div>
-                            ` : ''}
-                            
-                            ${customer ? `
-                            <div class="customer-info">
-                                <h4>Customer Information</h4>
-                                <p><strong>Name:</strong> ${customer.name}</p>
-                                <p><strong>Phone:</strong> ${customer.phone}</p>
-                                <p><strong>Address:</strong> ${customer.address}</p>
-                                <p><strong>ID Type:</strong> ${customer.id_proof_type}</p>
-                                <p><strong>ID Number:</strong> ${customer.id_number}</p>
-                            </div>
-                            ` : ''}
-                            
-                            ${phone.product_photos && phone.product_photos.length > 0 ? 
-                              `<div class="phone-images">
-                                 <h4>Product Photos</h4>
-                                 <div class="image-grid">
-                                   ${phone.product_photos.map((photo: string, index: number) => 
-                                     `<img src="${folderName}/${generateFileName(phone, 'product', index)}" alt="Product ${index + 1}" class="phone-image" onclick="openImageModal(this.src)">`
-                                   ).join('')}
-                                 </div>
-                               </div>` : ''
-                            }
-                            
-                            ${phone.purchase_documents && phone.purchase_documents.length > 0 ? 
-                              `<div class="documents">
-                                 <h4>Purchase Documents</h4>
-                                 <div class="image-grid">
-                                   ${phone.purchase_documents.map((doc: string, index: number) => 
-                                     `<img src="${folderName}/${generateFileName(phone, 'purch_doc', index)}" alt="Document ${index + 1}" class="document-image" onclick="openImageModal(this.src)">`
-                                   ).join('')}
-                                 </div>
-                               </div>` : ''
-                            }
-                            
-                            ${phone.payment_proof_photos && phone.payment_proof_photos.length > 0 ? 
-                              `<div class="payment-proofs">
-                                 <h4>Payment Proofs</h4>
-                                 <div class="image-grid">
-                                   ${phone.payment_proof_photos.map((proof: string, index: number) => 
-                                     `<img src="${folderName}/${generateFileName(phone, 'payment_proof', index)}" alt="Payment Proof ${index + 1}" class="proof-image" onclick="openImageModal(this.src)">`
-                                   ).join('')}
-                                 </div>
-                               </div>` : ''
-                            }
-                        </div>
-                      `;
-                    }).join('')}
-                </div>
-            </section>
-            
-            <section class="sellers-section">
-                <h2>Sellers Database</h2>
-                <div class="sellers-grid">
-                    ${data.sellers.map((seller: any) => `
-                        <div class="seller-card">
-                            <h3>${seller.name}</h3>
-                            <p><strong>Phone:</strong> ${seller.phone}</p>
-                            <p><strong>Address:</strong> ${seller.address}</p>
-                            <p><strong>ID Type:</strong> ${seller.id_proof_type}</p>
-                            <p><strong>ID Number:</strong> ${seller.id_number}</p>
-                            <p><strong>Registered:</strong> ${new Date(seller.created_at).toLocaleDateString()}</p>
-                        </div>
-                    `).join('')}
-                </div>
-            </section>
-
-            <section class="customers-section">
-                <h2>Customers Database</h2>
-                <div class="customers-grid">
-                    ${data.customers.map((customer: any) => `
-                        <div class="customer-card">
-                            <h3>${customer.name}</h3>
-                            <p><strong>Phone:</strong> ${customer.phone}</p>
-                            <p><strong>Address:</strong> ${customer.address}</p>
-                            <p><strong>ID Type:</strong> ${customer.id_proof_type}</p>
-                            <p><strong>ID Number:</strong> ${customer.id_number}</p>
-                            <p><strong>Registered:</strong> ${new Date(customer.created_at).toLocaleDateString()}</p>
-                        </div>
-                    `).join('')}
-                </div>
-            </section>
-            
-            <section class="messages-section">
-                <h2>Customer Messages</h2>
-                <div class="messages-grid">
-                    ${data.messages.map((message: any) => `
-                        <div class="message-card">
-                            <h3>${message.name}</h3>
-                            <p><strong>Email:</strong> ${message.email}</p>
-                            ${message.phone ? `<p><strong>Phone:</strong> ${message.phone}</p>` : ''}
-                            <p><strong>Date:</strong> ${new Date(message.created_at).toLocaleDateString()}</p>
-                            <div class="message-content">
-                                <p>${message.message}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </section>
-        </main>
-    </div>
-    
-    <!-- Image Modal -->
-    <div id="imageModal" class="modal" onclick="closeImageModal()">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <img id="modalImage" src="" alt="Full Size Image">
-        </div>
-    </div>
-    
-    <script>
-        function openImageModal(src) {
-            document.getElementById('imageModal').style.display = 'block';
-            document.getElementById('modalImage').src = src;
-        }
-        
-        function closeImageModal() {
-            document.getElementById('imageModal').style.display = 'none';
-        }
-        
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeImageModal();
-            }
-        });
-    </script>
-</body>
-</html>`;
-  };
-
-  const generateOfflineCSS = () => {
-    return `
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    line-height: 1.6;
-    color: #333;
-    background-color: #f8fafc;
-}
-
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-header {
-    text-align: center;
-    margin-bottom: 40px;
-    background: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-header h1 {
-    color: #1e40af;
-    margin-bottom: 10px;
-    font-size: 2.5rem;
-}
-
-.stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.stat {
-    text-align: center;
-    padding: 15px;
-    background: #f1f5f9;
-    border-radius: 8px;
-}
-
-.stat h3 {
-    font-size: 2rem;
-    color: #1e40af;
-    margin-bottom: 5px;
-}
-
-section {
-    margin-bottom: 40px;
-}
-
-section h2 {
-    color: #1e40af;
-    margin-bottom: 20px;
-    font-size: 1.8rem;
-    text-align: center;
-}
-
-.phones-grid, .sellers-grid, .customers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 30px;
-}
-
-.phone-card, .seller-card, .customer-card {
-    background: white;
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: transform 0.2s;
-}
-
-.phone-card:hover, .seller-card:hover, .customer-card:hover {
-    transform: translateY(-2px);
-}
-
-.phone-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #e2e8f0;
-}
-
-.phone-header h3 {
-    color: #1e40af;
-    font-size: 1.2rem;
-}
-
-.condition-badge {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.condition-badge.excellent {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.condition-badge.good {
-    background: #dbeafe;
-    color: #1e40af;
-}
-
-.condition-badge.fair {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.condition-badge.poor {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.phone-details {
-    margin-bottom: 20px;
-}
-
-.phone-details p {
-    margin-bottom: 8px;
-    padding: 5px 0;
-}
-
-.seller-info, .customer-info {
-    background: #f8fafc;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
-}
-
-.seller-info h4, .customer-info h4 {
-    color: #1e40af;
-    margin-bottom: 10px;
-}
-
-.seller-photo {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-top: 10px;
-}
-
-.phone-images, .documents, .payment-proofs {
-    margin-top: 20px;
-}
-
-.phone-images h4, .documents h4, .payment-proofs h4 {
-    color: #1e40af;
-    margin-bottom: 10px;
-}
-
-.image-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px;
-}
-
-.phone-image, .document-image, .proof-image {
-    width: 100%;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 6px;
-    border: 2px solid #e2e8f0;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.phone-image:hover, .document-image:hover, .proof-image:hover {
-    border-color: #1e40af;
-    transform: scale(1.05);
-}
-
-.messages-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
-}
-
-.message-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-.message-card h3 {
-    color: #1e40af;
-    margin-bottom: 10px;
-}
-
-.message-content {
-    margin-top: 15px;
-    padding: 15px;
-    background: #f8fafc;
-    border-radius: 8px;
-    border-left: 4px solid #1e40af;
-}
-
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.9);
-}
-
-.modal-content {
-    position: relative;
-    margin: auto;
-    padding: 0;
-    width: 90%;
-    max-width: 1200px;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.close {
-    position: absolute;
-    top: 15px;
-    right: 35px;
-    color: #f1f1f1;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 1001;
-}
-
-.close:hover {
-    color: #bbb;
-}
-
-#modalImage {
-    width: 100%;
-    height: auto;
-    border-radius: 8px;
-}
-
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .phones-grid, .sellers-grid, .customers-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .messages-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .stats {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    header h1 {
-        font-size: 2rem;
-    }
-}
-`;
-  };
-
   if (isLoading) {
     return <div className="flex justify-center items-center p-8">Loading database...</div>;
   }
@@ -1376,6 +966,126 @@ section h2 {
       {/* Storage Management Card */}
       <StorageManagementCard />
 
+      {/* Supabase Cloud Database & Live Sync Card */}
+      <Card className="border-emerald-500/40 bg-gradient-to-br from-slate-900/90 via-slate-900 to-emerald-950/20 shadow-md">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base text-white">
+              <Cloud className="h-5 w-5 text-emerald-400" />
+              <span>Supabase Cloud Database &amp; Live Mirror</span>
+              {supabaseStatus?.connected ? (
+                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Cloud Live &amp; Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-amber-400 border-amber-500/40 text-[10px] gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {supabaseStatus?.isConfigured ? 'Connecting...' : 'Offline Local Mode'}
+                </Badge>
+              )}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={fetchSupabaseStatus}
+                className="h-8 text-xs border-slate-700 hover:bg-slate-800 text-slate-300"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Refresh
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSyncToSupabase}
+                disabled={isSyncingSupabase}
+                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs"
+              >
+                <Zap className="h-3.5 w-3.5 mr-1.5 text-amber-300" />
+                {isSyncingSupabase ? 'Pushing to Cloud...' : '⚡ Push All Local Data to Supabase Now'}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-slate-400">
+            {supabaseStatus?.url ? (
+              <span>
+                Connected Project: <strong className="text-emerald-400">{supabaseStatus.url}</strong>. Jab aap backup restore karte hain ya offline kaam karte hain, single-click me saare records (Phones, Repairs, Customers, Sellers, Dealers) Supabase Cloud Database me live push ho jate hain.
+              </span>
+            ) : (
+              <span>
+                Supabase credentials Render / .env me set hain. <strong>Push All Local Data</strong> dabakar local SQLite database ka poora data Supabase Cloud me upload karein.
+              </span>
+            )}
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">📱 Phones</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {phones.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.phones ?? 0} in Cloud
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">👤 Sellers</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {sellers.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.sellers ?? 0} in Cloud
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">👥 Customers</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {customers.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.customers ?? 0} in Cloud
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">🔧 Repair Jobs</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {repairJobs.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.repairs ?? 0} in Cloud
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">🏢 B2B Dealers</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {dealers.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.dealers ?? 0} in Cloud
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+              <span className="text-[11px] text-slate-400 block font-medium">🛠️ Repair Clients</span>
+              <div className="text-lg font-bold text-white mt-0.5">
+                {repairCustomers.length} <span className="text-xs font-normal text-slate-500">local</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 block mt-0.5">
+                {supabaseStatus?.rowCounts?.repair_customers ?? 0} in Cloud
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Backup & Restore */}
       <Card>
         <CardHeader>
@@ -1385,10 +1095,34 @@ section h2 {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <Button onClick={createBackup} disabled={backupBusy} className="w-full">
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Select Backup Scope / Financial Year
+              </label>
+              <Select value={backupScope} onValueChange={setBackupScope}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    🌐 Full Complete Backup (Till Date - All Years & Master Books)
+                  </SelectItem>
+                  <SelectItem value="current_fy">
+                    📅 Current Financial Year Only (FY 2026-27 Books & Inventory)
+                  </SelectItem>
+                  <SelectItem value="previous_fy_1">
+                    ⏮️ 1st Previous Financial Year Only (FY 2025-26 Books)
+                  </SelectItem>
+                  <SelectItem value="older_fy">
+                    🗄️ 2nd Previous FY / 3rd Year Archive (FY 2024-25 & Older)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={createBackup} disabled={backupBusy} className="w-full bg-emerald-600 hover:bg-emerald-700 font-bold">
               <Download className="h-4 w-4 mr-2" />
-              {backupBusy ? 'Creating backup...' : 'Create Full Backup (ZIP)'}
+              {backupBusy ? 'Creating backup...' : `Create ${backupScope === 'all' ? 'Full Complete' : 'Scoped FY'} Backup (.tar.gz)`}
             </Button>
             <Button
               type="button"
@@ -1641,6 +1375,140 @@ section h2 {
                     <span className="text-sm">{message.name} - {message.email}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Repairs Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Workshop Repairs ({repairJobs.length})</label>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedRepairJobs(repairJobs.map(r => r.id))}
+                  >
+                    Select All
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedRepairJobs([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                {repairJobs.length === 0 ? (
+                  <p className="text-xs text-slate-500">No repair jobs found</p>
+                ) : (
+                  repairJobs.map(repair => (
+                    <div key={repair.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={selectedRepairJobs.includes(repair.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedRepairJobs([...selectedRepairJobs, repair.id]);
+                          } else {
+                            setSelectedRepairJobs(selectedRepairJobs.filter(id => id !== repair.id));
+                          }
+                        }}
+                      />
+                      <span className="text-sm">
+                        #{repair.job_number || repair.id?.slice(0, 8)} - {repair.brand || ''} {repair.model || 'Device'} ({repair.customer_name || 'Customer'})
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* B2B Dealers Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">B2B Dealers ({dealers.length})</label>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedDealers(dealers.map(d => d.id))}
+                  >
+                    Select All
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedDealers([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                {dealers.length === 0 ? (
+                  <p className="text-xs text-slate-500">No dealers found</p>
+                ) : (
+                  dealers.map(dealer => (
+                    <div key={dealer.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={selectedDealers.includes(dealer.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedDealers([...selectedDealers, dealer.id]);
+                          } else {
+                            setSelectedDealers(selectedDealers.filter(id => id !== dealer.id));
+                          }
+                        }}
+                      />
+                      <span className="text-sm">{dealer.name || dealer.business_name} ({dealer.phone || 'No phone'})</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Dealer Batches Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Dealer Purchase Batches ({dealerBatches.length})</label>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedDealerBatches(dealerBatches.map(b => b.id))}
+                  >
+                    Select All
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedDealerBatches([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                {dealerBatches.length === 0 ? (
+                  <p className="text-xs text-slate-500">No dealer batches found</p>
+                ) : (
+                  dealerBatches.map(batch => (
+                    <div key={batch.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={selectedDealerBatches.includes(batch.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedDealerBatches([...selectedDealerBatches, batch.id]);
+                          } else {
+                            setSelectedDealerBatches(selectedDealerBatches.filter(id => id !== batch.id));
+                          }
+                        }}
+                      />
+                      <span className="text-sm">Batch #{batch.batch_number || batch.id?.slice(0, 8)} - {batch.total_quantity || 0} phones (₹{batch.total_amount || 0})</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

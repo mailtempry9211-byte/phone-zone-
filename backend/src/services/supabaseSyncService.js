@@ -667,7 +667,7 @@ export async function getSupabaseSyncStatus() {
   }
 
   try {
-    const [phonesRes, sellersRes, custRes] = await Promise.all([
+    const [phonesRes, sellersRes, custRes, repRes, repCustRes, dealersRes] = await Promise.all([
       fetch(`${url}/rest/v1/phones?select=id`, {
         headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
       }),
@@ -677,10 +677,20 @@ export async function getSupabaseSyncStatus() {
       fetch(`${url}/rest/v1/customers?select=id`, {
         headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
       }),
+      fetch(`${url}/rest/v1/repair_jobs?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }).catch(() => ({ ok: false, headers: new Map() })),
+      fetch(`${url}/rest/v1/repair_customers?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }).catch(() => ({ ok: false, headers: new Map() })),
+      fetch(`${url}/rest/v1/dealers?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }).catch(() => ({ ok: false, headers: new Map() })),
     ]);
 
     const getCount = (res) => {
-      const range = res.headers.get("content-range") || "";
+      if (!res || !res.ok) return 0;
+      const range = (typeof res.headers?.get === "function" ? res.headers.get("content-range") : "") || "";
       const match = range.match(/\/(\d+)/);
       return match ? parseInt(match[1], 10) : 0;
     };
@@ -695,6 +705,9 @@ export async function getSupabaseSyncStatus() {
         phones: getCount(phonesRes),
         sellers: getCount(sellersRes),
         customers: getCount(custRes),
+        repairs: getCount(repRes),
+        repair_customers: getCount(repCustRes),
+        dealers: getCount(dealersRes),
       },
     };
   } catch (err) {

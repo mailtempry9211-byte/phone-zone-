@@ -769,7 +769,7 @@ export function buildRouter() {
   r.get("/backups", requireAuth, requireRole("admin"), wrap((_req, res) => res.json(backups.listBackups())));
   r.post("/backups", requireAuth, requireRole("admin"), wrap((req, res) => {
     enforce(backupLimiter, req);
-    res.status(201).json(backups.createBackup());
+    res.status(201).json(backups.createBackup(req.body || {}));
   }));
   r.post("/backups/restore", requireAuth, requireRole("admin"), wrap((req, res) => {
     enforce(restoreLimiter, req);

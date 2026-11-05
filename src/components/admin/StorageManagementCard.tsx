@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Trash2, RefreshCw, Image, Folder } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Trash2, RefreshCw, Image, Folder, Eye, Download, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ const StorageManagementCard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   const fetchStorageFiles = async () => {
     try {
@@ -126,9 +128,14 @@ const StorageManagementCard = () => {
   };
 
   const getFileUrl = (fileName: string) => {
+    if (!fileName) return "";
+    if (fileName.startsWith("http://") || fileName.startsWith("https://") || fileName.startsWith("data:")) {
+      return fileName;
+    }
+    const clean = fileName.replace(/^\/+/, "");
     const { data } = supabase.storage
       .from('phonezone-uploads')
-      .getPublicUrl(fileName);
+      .getPublicUrl(clean);
     return data.publicUrl;
   };
 
@@ -209,31 +216,104 @@ const StorageManagementCard = () => {
         </div>
 
         {files.length > 0 && (
-          <div className="max-h-64 overflow-y-auto border rounded p-2 space-y-2">
-            {files.map((file) => (
-              <div key={file.name} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
-                <Checkbox
-                  checked={selectedFiles.includes(file.name)}
-                  onCheckedChange={(checked) => handleFileSelect(file.name, !!checked)}
-                />
-                <Image className="h-4 w-4 text-gray-500" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{file.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {formatFileSize(file.metadata?.size || 0)} • {new Date(file.created_at).toLocaleDateString()}
+          <div className="max-h-80 overflow-y-auto border border-slate-800 rounded-lg p-2 space-y-2 bg-slate-950/40">
+            {files.map((file) => {
+              const fileUrl = getFileUrl(file.name);
+              return (
+                <div key={file.name} className="flex items-center space-x-3 p-2 hover:bg-slate-850/80 rounded-lg transition-colors border border-transparent hover:border-slate-800">
+                  <Checkbox
+                    checked={selectedFiles.includes(file.name)}
+                    onCheckedChange={(checked) => handleFileSelect(file.name, !!checked)}
+                  />
+                  {/* Real Image Thumbnail with Zoom Click */}
+                  <div
+                    className="h-12 w-12 min-w-12 rounded-md overflow-hidden bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all shadow-sm group relative"
+                    onClick={() => setPreviewImage({ url: fileUrl, name: file.name })}
+                    title="Click to view full photo"
+                  >
+                    <img
+                      src={fileUrl}
+                      alt={file.name}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                        const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = "flex";
+                      }}
+                    />
+                    <div className="hidden h-full w-full items-center justify-center bg-slate-800 text-slate-400">
+                      <Image className="h-5 w-5" />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate text-slate-200" title={file.name}>{file.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {formatFileSize(file.metadata?.size || 0)} • {new Date(file.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 gap-1"
+                      onClick={() => setPreviewImage({ url: fileUrl, name: file.name })}
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-slate-400 hover:text-white"
+                      onClick={() => window.open(fileUrl, '_blank')}
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => window.open(getFileUrl(file.name), '_blank')}
-                >
-                  View
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+
+        {/* Full Image Preview Modal */}
+        <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+          <DialogContent className="max-w-3xl bg-slate-900 border border-slate-700 text-white p-4">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-mono truncate text-slate-300">
+                {previewImage?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-2 flex items-center justify-center bg-slate-950 rounded-lg overflow-hidden max-h-[75vh] p-2">
+              {previewImage && (
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.name}
+                  className="max-h-[70vh] w-auto max-w-full object-contain rounded"
+                />
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => previewImage && window.open(previewImage.url, "_blank")}
+                className="text-xs gap-1 border-slate-700 text-slate-300"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open Full Image
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setPreviewImage(null)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-xs"
+              >
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {files.length === 0 && !isLoading && (
           <div className="text-center py-4 text-gray-500">

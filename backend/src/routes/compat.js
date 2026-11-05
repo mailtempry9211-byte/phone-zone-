@@ -583,7 +583,7 @@ export function buildCompatRouter(staff, canRead = staff) {
     })));
   }));
 
-  r.post("/storage/remove", staff, wrap((req, res) => {
+  r.post("/storage/remove", staff, wrap(async (req, res) => {
     guardWrites(req);
     const paths = req.body?.paths || [];
     const bucket = req.body?.bucket || "phonezone-uploads";
@@ -591,6 +591,22 @@ export function buildCompatRouter(staff, canRead = staff) {
       const row = getDb().prepare(`SELECT id FROM files WHERE owner_type='bucket' AND owner_id=? AND category=?`).get(bucket, p);
       if (row) storage.deleteFile(row.id);
     }
+    // Also delete permanently from Supabase Cloud Storage if configured
+    try {
+      const { getSupabaseConfig } = await import("../services/supabaseSyncService.js");
+      const { url, key } = getSupabaseConfig();
+      if (url && key && paths.length > 0) {
+        fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}`, {
+          method: "DELETE",
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prefixes: paths }),
+        }).catch(() => {});
+      }
+    } catch {}
     res.json({ ok: true });
   }));
 
