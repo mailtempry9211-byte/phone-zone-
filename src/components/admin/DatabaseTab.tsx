@@ -126,10 +126,10 @@ const DatabaseTab = () => {
         supabase.from('messages').select('*').order('created_at', { ascending: false }),
         supabase.from('admin_settings').select('*'),
         supabase.from('returns').select('*').order('created_at', { ascending: false }),
-        supabase.from('repair_jobs').select('*').order('created_at', { ascending: false }),
-        supabase.from('repair_customers').select('*').order('created_at', { ascending: false }),
-        supabase.from('dealers').select('*').order('created_at', { ascending: false }),
-        supabase.from('dealer_batches').select('*').order('created_at', { ascending: false })
+        supabase.from('repair_jobs').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
+        supabase.from('repair_customers').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
+        supabase.from('dealers').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] })),
+        supabase.from('dealer_batches').select('*').order('created_at', { ascending: false }).catch(() => ({ data: [] }))
       ]);
 
       if (phonesRes.error) throw phonesRes.error;
@@ -139,24 +139,68 @@ const DatabaseTab = () => {
       if (adminRes.error) throw adminRes.error;
       if (returnsRes.error) throw returnsRes.error;
 
+      // Backend API query for Workshop Repairs (ensures local SQLite repairs are included)
+      let resolvedRepairs = repairsRes.data || [];
+      try {
+        const rRes = await fetch('/api/repair/jobs?shop=all&limit=500', { credentials: 'include' });
+        if (rRes.ok) {
+          const rJson = await rRes.json();
+          const list = Array.isArray(rJson) ? rJson : (rJson?.jobs || []);
+          if (list.length > 0) resolvedRepairs = list;
+        }
+      } catch {}
+
+      // Backend API query for Repair Customers
+      let resolvedRepairCust = repairCustRes.data || [];
+      try {
+        const rcRes = await fetch('/api/repair/customers?limit=500', { credentials: 'include' });
+        if (rcRes.ok) {
+          const rcJson = await rcRes.json();
+          const list = Array.isArray(rcJson) ? rcJson : (rcJson?.customers || []);
+          if (list.length > 0) resolvedRepairCust = list;
+        }
+      } catch {}
+
+      // Backend API query for Dealers
+      let resolvedDealers = dealersRes.data || [];
+      try {
+        const dRes = await fetch('/api/dealers', { credentials: 'include' });
+        if (dRes.ok) {
+          const dJson = await dRes.json();
+          if (Array.isArray(dJson) && dJson.length > 0) resolvedDealers = dJson;
+        }
+      } catch {}
+
+      // Backend API query for Dealer Batches
+      let resolvedBatches = batchesRes.data || [];
+      if (resolvedBatches.length === 0) {
+        try {
+          const dbRes = await fetch('/api/dealers/batches/all', { credentials: 'include' });
+          if (dbRes.ok) {
+            const dbJson = await dbRes.json();
+            if (Array.isArray(dbJson) && dbJson.length > 0) resolvedBatches = dbJson;
+          }
+        } catch {}
+      }
+
       setPhones(phonesRes.data || []);
       setSellers(sellersRes.data || []);
       setCustomers(customersRes.data || []);
       setMessages(messagesRes.data || []);
       setAdminSettings(adminRes.data || []);
       setReturns(returnsRes.data || []);
-      setRepairJobs(repairsRes.data || []);
-      setRepairCustomers(repairCustRes.data || []);
-      setDealers(dealersRes.data || []);
-      setDealerBatches(batchesRes.data || []);
+      setRepairJobs(resolvedRepairs);
+      setRepairCustomers(resolvedRepairCust);
+      setDealers(resolvedDealers);
+      setDealerBatches(resolvedBatches);
 
       setSelectedPhones((phonesRes.data || []).map((p: any) => p.id));
       setSelectedSellers((sellersRes.data || []).map((s: any) => s.id));
       setSelectedCustomers((customersRes.data || []).map((c: any) => c.id));
       setSelectedMessages((messagesRes.data || []).map((m: any) => m.id));
-      setSelectedRepairJobs((repairsRes.data || []).map((r: any) => r.id));
-      setSelectedDealers((dealersRes.data || []).map((d: any) => d.id));
-      setSelectedDealerBatches((batchesRes.data || []).map((b: any) => b.id));
+      setSelectedRepairJobs(resolvedRepairs.map((r: any) => r.id));
+      setSelectedDealers(resolvedDealers.map((d: any) => d.id));
+      setSelectedDealerBatches(resolvedBatches.map((b: any) => b.id));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to fetch data');
@@ -204,7 +248,12 @@ const DatabaseTab = () => {
 
   const downloadImage = async (url: string, fileName: string) => {
     try {
-      const response = await fetch(url);
+      if (!url) return null;
+      if (url.startsWith('data:')) {
+        const res = await fetch(url);
+        return await res.blob();
+      }
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
       return await response.blob();
     } catch (error) {
@@ -453,10 +502,16 @@ const DatabaseTab = () => {
         sellers: sellers.filter(s => selectedSellers.includes(s.id)),
         customers: customers.filter(c => selectedCustomers.includes(c.id)),
         messages: messages.filter(m => selectedMessages.includes(m.id)),
-        repairs: repairJobs.filter(r => selectedRepairJobs.includes(r.id)),
+        repairs: (repairJobs && repairJobs.length > 0 && selectedRepairJobs && selectedRepairJobs.length > 0)
+          ? repairJobs.filter(r => selectedRepairJobs.includes(r.id))
+          : repairJobs,
         repair_customers: repairCustomers,
-        dealers: dealers.filter(d => selectedDealers.includes(d.id)),
-        dealer_batches: dealerBatches.filter(b => selectedDealerBatches.includes(b.id)),
+        dealers: (dealers && dealers.length > 0 && selectedDealers && selectedDealers.length > 0)
+          ? dealers.filter(d => selectedDealers.includes(d.id))
+          : dealers,
+        dealer_batches: (dealerBatches && dealerBatches.length > 0 && selectedDealerBatches && selectedDealerBatches.length > 0)
+          ? dealerBatches.filter(b => selectedDealerBatches.includes(b.id))
+          : dealerBatches,
         returns: returns,
         admin_settings: adminSettings,
         exported_at: new Date().toISOString()
@@ -614,27 +669,72 @@ const DatabaseTab = () => {
           }
         }
       }
+
+      // Download seller signature & photo captured specifically for this phone
+      if (phone.seller_signature_url) {
+        const sigBlob = await downloadImage(phone.seller_signature_url, 'seller_signature.png');
+        if (sigBlob) {
+          folder?.file('seller_signature.png', sigBlob);
+          phone._local_seller_signature = 'seller_signature.png';
+        }
+      }
+      if (phone.seller_photo_url) {
+        const photoBlob = await downloadImage(phone.seller_photo_url, 'seller_photo.jpg');
+        if (photoBlob) {
+          folder?.file('seller_photo.jpg', photoBlob);
+          phone._local_seller_photo = 'seller_photo.jpg';
+        }
+      }
     }
     
-    // Add seller photos
-    for (const seller of data.sellers) {
-      const relatedPhones = data.phones.filter((p: any) => p.seller_id === seller.id);
-      for (const phone of relatedPhones) {
-        const phoneFolder = phoneFolders.get(phone.id);
-        if (phoneFolder && seller.seller_photo_url) {
-          const fileName = generateFileName(phone, 'sellerpic');
-          const blob = await downloadImage(seller.seller_photo_url, fileName);
-          if (blob) {
-            phoneFolder.folder?.file(fileName, blob);
-          }
+    // Download top-level sellers media (Photo, Digital Signature, Aadhaar KYC)
+    const sellersFolder = zip.folder('sellers_media');
+    for (const seller of (data.sellers || [])) {
+      const sellerIdShort = (seller.id || 'seller').slice(0, 8);
+      if (seller.seller_photo_url) {
+        const fileName = `seller_${sellerIdShort}_photo.jpg`;
+        const blob = await downloadImage(seller.seller_photo_url, fileName);
+        if (blob) {
+          sellersFolder?.file(fileName, blob);
+          seller._local_photo = `sellers_media/${fileName}`;
         }
-        
-        if (phoneFolder && seller.aadhaar_photo_url) {
-          const fileName = generateFileName(phone, 'salesdoc');
-          const blob = await downloadImage(seller.aadhaar_photo_url, fileName);
-          if (blob) {
-            phoneFolder.folder?.file(fileName, blob);
-          }
+      }
+      if (seller.seller_signature_url) {
+        const fileName = `seller_${sellerIdShort}_sig.png`;
+        const blob = await downloadImage(seller.seller_signature_url, fileName);
+        if (blob) {
+          sellersFolder?.file(fileName, blob);
+          seller._local_signature = `sellers_media/${fileName}`;
+        }
+      }
+      if (seller.aadhaar_photo_url) {
+        const fileName = `seller_${sellerIdShort}_aadhaar.jpg`;
+        const blob = await downloadImage(seller.aadhaar_photo_url, fileName);
+        if (blob) {
+          sellersFolder?.file(fileName, blob);
+          seller._local_aadhaar = `sellers_media/${fileName}`;
+        }
+      }
+    }
+
+    // Download top-level dealers media (Photo, Digital Signature)
+    const dealersFolder = zip.folder('dealers_media');
+    for (const dealer of (data.dealers || [])) {
+      const dealerIdShort = (dealer.id || 'dealer').slice(0, 8);
+      if (dealer.photo_url) {
+        const fileName = `dealer_${dealerIdShort}_photo.jpg`;
+        const blob = await downloadImage(dealer.photo_url, fileName);
+        if (blob) {
+          dealersFolder?.file(fileName, blob);
+          dealer._local_photo = `dealers_media/${fileName}`;
+        }
+      }
+      if (dealer.signature_url) {
+        const fileName = `dealer_${dealerIdShort}_sig.png`;
+        const blob = await downloadImage(dealer.signature_url, fileName);
+        if (blob) {
+          dealersFolder?.file(fileName, blob);
+          dealer._local_signature = `dealers_media/${fileName}`;
         }
       }
     }
@@ -1418,7 +1518,7 @@ const DatabaseTab = () => {
                         }}
                       />
                       <span className="text-sm">
-                        #{repair.job_number || repair.id?.slice(0, 8)} - {repair.brand || ''} {repair.model || 'Device'} ({repair.customer_name || 'Customer'})
+                        #{repair.job_no || repair.job_number || repair.id?.slice(0, 8)} - {(repair.device_brand || repair.brand || '').toUpperCase()} {(repair.device_model || repair.model || 'Device').toUpperCase()} (₹{repair.final_price || repair.estimate || 0})
                       </span>
                     </div>
                   ))
@@ -1463,7 +1563,7 @@ const DatabaseTab = () => {
                           }
                         }}
                       />
-                      <span className="text-sm">{dealer.name || dealer.business_name} ({dealer.phone || 'No phone'})</span>
+                      <span className="text-sm">{dealer.shop_name || dealer.proprietor_name || dealer.business_name || dealer.name} ({dealer.phone || 'No phone'})</span>
                     </div>
                   ))
                 )}
@@ -1507,7 +1607,7 @@ const DatabaseTab = () => {
                           }
                         }}
                       />
-                      <span className="text-sm">Batch #{batch.batch_number || batch.id?.slice(0, 8)} - {batch.total_quantity || 0} phones (₹{batch.total_amount || 0})</span>
+                      <span className="text-sm">{batch.invoice_number || `Batch #${batch.id?.slice(0, 8)}`} - {batch.total_phones || batch.total_quantity || 0} Phones (₹{batch.total_amount || 0})</span>
                     </div>
                   ))
                 )}
