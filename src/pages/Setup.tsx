@@ -122,17 +122,23 @@ const Setup = () => {
 
   const checkSetupStatus = async () => {
     try {
-      const searchParams = new URLSearchParams(window.location.search);
-      if (searchParams.get('force') === '1' || searchParams.get('reconfigure') === '1') {
-        setLoading(false);
-        return;
-      }
       const res = await fetch('/api/setup/status', { credentials: 'include' });
       if (res.ok) {
         const status = await res.json();
         if (status.setupCompleted) {
-          navigate('/', { replace: true });
-          return;
+          const searchParams = new URLSearchParams(window.location.search);
+          const wantsForce = searchParams.get('force') === '1' || searchParams.get('reconfigure') === '1';
+          if (!wantsForce) {
+            navigate('/', { replace: true });
+            return;
+          }
+          // If force=1 is requested, check if user is logged in as admin
+          const authRes = await fetch('/api/auth/me', { credentials: 'include' });
+          if (!authRes.ok) {
+            toast.error('Access Denied: Setup is already completed. Sign in as Admin to reconfigure.');
+            navigate('/?admin=1', { replace: true });
+            return;
+          }
         }
       }
     } catch (e) {

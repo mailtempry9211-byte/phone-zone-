@@ -361,10 +361,18 @@ export function buildRouter() {
     res.json({ ok: true, message: "Setup reset successfully. You can now launch the Setup Wizard to configure a new company." });
   }));
 
-  // Restore from backup file (public, pre-login)
+  // Restore from backup file (only public before initial setup; requires admin auth if setup already complete)
   r.post("/setup/restore", restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
-    requireLocalSetup(req);
+    if (settings.isSetupComplete()) {
+      const auth = await import("../services/authService.js");
+      const user = auth.authenticateRequest(req);
+      if (!user || user.role !== "admin") {
+        throw forbidden("Setup is already completed. Only an administrator can restore backups.");
+      }
+    } else {
+      requireLocalSetup(req);
+    }
     if (!req.file) throw badRequest("Please upload a backup file.");
     const { restoreBackup } = await import("../services/backupService.js");
     const { PATHS } = await import("../config/paths.js");
@@ -376,9 +384,9 @@ export function buildRouter() {
     const targetPath = path.join(backupsDir, `uploaded_restore_${Date.now()}.${ext}`);
     fs.writeFileSync(targetPath, req.file.buffer);
     logger.info("Restore request received", { backupName: path.basename(targetPath), sizeBytes: req.file.size });
-    const result = restoreBackup(path.basename(targetPath));
+    const result = await restoreBackup(path.basename(targetPath));
     logger.info("Restore succeeded", { result });
-    supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
+    await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
     res.json({ restored: true, backupName: path.basename(targetPath), ...result });
   }));
 
@@ -394,7 +402,7 @@ export function buildRouter() {
     requireLocalSetup(req);
     const backupName = String(req.body?.backupName || "").trim();
     if (!backupName) throw badRequest("Please select a cloud backup to restore.");
-    const result = googleDrive.restoreFromCloudBackup(backupName);
+    const result = await googleDrive.restoreFromCloudBackup(backupName);
     logger.info("Setup cloud restore succeeded", { backupName, result });
     res.json({ restored: true, backupName, ...result });
   }));
@@ -771,9 +779,9 @@ export function buildRouter() {
     enforce(backupLimiter, req);
     res.status(201).json(backups.createBackup(req.body || {}));
   }));
-  r.post("/backups/restore", requireAuth, requireRole("admin"), wrap((req, res) => {
+  r.post("/backups/restore", requireAuth, requireRole("admin"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
-    res.json(backups.restoreBackup(req.body?.name));
+    res.json(await backups.restoreBackup(req.body?.name));
   }));
 
   // Download a created full backup (.zip) so the admin can save it.
@@ -794,8 +802,8 @@ export function buildRouter() {
     const name = `uploaded_restore_${Date.now()}_${safeName}`;
     const target = pathMod.join(PATHS.backupsDir, name);
     fsMod.writeFileSync(target, req.file.buffer);
-    const restoreRes = backups.restoreBackup(pathMod.basename(target));
-    supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
+    const restoreRes = await backups.restoreBackup(pathMod.basename(target));
+    await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
     res.json(restoreRes);
   }));
 
@@ -819,11 +827,11 @@ export function buildRouter() {
     enforce(backupLimiter, req);
     res.json(googleDrive.syncToGoogleDrive());
   }));
-  r.post("/google-drive/restore", requireAuth, requireRole("admin"), wrap((req, res) => {
+  r.post("/google-drive/restore", requireAuth, requireRole("admin"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
     const backupName = String(req.body?.backupName || "").trim();
     if (!backupName) throw badRequest("Please select a cloud backup to restore.");
-    const result = googleDrive.restoreFromCloudBackup(backupName);
+    const result = await googleDrive.restoreFromCloudBackup(backupName);
     res.json({ restored: true, backupName, ...result });
   }));
 

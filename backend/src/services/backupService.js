@@ -8,6 +8,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import * as tar from "tar";
+import unzipper from "unzipper";
 import { PATHS } from "../config/paths.js";
 import { getDb, initDatabase, closeDatabase } from "../db/index.js";
 import { logger } from "../lib/logger.js";
@@ -225,9 +226,45 @@ export function getBackupFilePath(name) {
  * top level. Anything else (absolute paths, `..`, symlinks, random files) means
  * the archive was not produced by this app and must not be extracted.
  */
-const ALLOWED_ENTRY = /^(database(\/|$)|storage(\/|$)|manifest\.json$)/i;
+function isZipFile(filePath) {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    const buf = Buffer.alloc(4);
+    fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+    return buf[0] === 0x50 && buf[1] === 0x4b; // 'PK'
+  } catch {
+    return false;
+  }
+}
 
-function assertSafeArchive(src) {
+/**
+ * A valid backup only ever contains database/, storage/ and manifest.json at the
+ * top level, or data.json + images/. Anything else (absolute paths, `..`, symlinks)
+ * means the archive was not produced by this app and must not be extracted.
+ */
+const ALLOWED_ENTRY = /^(database(\/|$)|storage(\/|$)|manifest\.json$|data\.json$|images(\/|$))/i;
+
+async function assertSafeArchive(src) {
+  if (isZipFile(src)) {
+    try {
+      const zip = await unzipper.Open.file(src);
+      if (!zip.files || zip.files.length === 0) {
+        throw new AppError("The uploaded zip archive is empty or invalid.", 400);
+      }
+      for (const entry of zip.files) {
+        const raw = entry.path.replace(/^\.\//, "");
+        if (raw.startsWith("/") || raw.includes("..") || /^[a-zA-Z]:[\\/]/.test(raw)) {
+          throw new AppError("This backup contains unsafe file paths and was rejected. No data was changed.", 400);
+        }
+      }
+      return;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError("That zip file could not be read as a backup. Please use a valid PhoneZone backup file.", 400);
+    }
+  }
+
   let entriesCount = 0;
   try {
     tar.t({
@@ -261,21 +298,121 @@ function assertSafeArchive(src) {
   }
 }
 
+function restoreFromJsonData(data, tempDir) {
+  const db = getDb();
+  db.transaction(() => {
+    // 1. admin_settings
+    if (data.admin_settings && data.admin_settings[0]) {
+      const s = data.admin_settings[0];
+      db.prepare(`
+        UPDATE admin_settings SET
+          business_name = COALESCE(?, business_name),
+          business_tagline = COALESCE(?, business_tagline),
+          owner_name = COALESCE(?, owner_name),
+          address = COALESCE(?, address),
+          phone_primary = COALESCE(?, phone_primary),
+          email = COALESCE(?, email),
+          setup_completed = 1
+        WHERE id = '00000000-0000-0000-0000-000000000001'
+      `).run(s.business_name || null, s.business_tagline || null, s.owner_name || null, s.address || null, s.phone_primary || null, s.email || null);
+    }
+    // 2. sellers
+    if (Array.isArray(data.sellers)) {
+      const stmt = db.prepare(`
+        INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number, seller_photo_url, aadhaar_photo_url, created_at, updated_at)
+        VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @seller_photo_url, @aadhaar_photo_url, @created_at, @updated_at)
+        ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone, address = excluded.address
+      `);
+      for (const item of data.sellers) {
+        try { stmt.run({ ...item, address: item.address || "", id_proof_type: item.id_proof_type || "aadhaar", id_number: item.id_number || "", seller_photo_url: item.seller_photo_url || null, aadhaar_photo_url: item.aadhaar_photo_url || null, created_at: item.created_at || new Date().toISOString(), updated_at: item.updated_at || new Date().toISOString() }); } catch {}
+      }
+    }
+    // 3. customers
+    if (Array.isArray(data.customers)) {
+      const stmt = db.prepare(`
+        INSERT INTO customers (id, name, phone, address, id_proof_type, id_number, created_at, updated_at)
+        VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @created_at, @updated_at)
+        ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone
+      `);
+      for (const item of data.customers) {
+        try { stmt.run({ ...item, address: item.address || "", id_proof_type: item.id_proof_type || "aadhaar", id_number: item.id_number || "", created_at: item.created_at || new Date().toISOString(), updated_at: item.updated_at || new Date().toISOString() }); } catch {}
+      }
+    }
+    // 4. phones
+    if (Array.isArray(data.phones)) {
+      const stmt = db.prepare(`
+        INSERT INTO phones (id, phone_name, model, imei_number, condition, purchase_price, selling_price, is_sold, sold_date, seller_id, customer_id, product_photos, payment_proof_photos, purchase_documents, seller_signature_url, seller_photo_url, created_at, updated_at)
+        VALUES (@id, @phone_name, @model, @imei_number, @condition, @purchase_price, @selling_price, @is_sold, @sold_date, @seller_id, @customer_id, @product_photos, @payment_proof_photos, @purchase_documents, @seller_signature_url, @seller_photo_url, @created_at, @updated_at)
+        ON CONFLICT(id) DO UPDATE SET phone_name = excluded.phone_name, model = excluded.model, selling_price = excluded.selling_price
+      `);
+      for (const item of data.phones) {
+        try {
+          stmt.run({
+            ...item,
+            condition: item.condition || "good",
+            purchase_price: Number(item.purchase_price) || 0,
+            selling_price: Number(item.selling_price) || 0,
+            is_sold: item.is_sold ? 1 : 0,
+            sold_date: item.sold_date || null,
+            seller_id: item.seller_id || null,
+            customer_id: item.customer_id || null,
+            product_photos: typeof item.product_photos === "string" ? item.product_photos : JSON.stringify(item.product_photos || []),
+            payment_proof_photos: typeof item.payment_proof_photos === "string" ? item.payment_proof_photos : JSON.stringify(item.payment_proof_photos || []),
+            purchase_documents: typeof item.purchase_documents === "string" ? item.purchase_documents : JSON.stringify(item.purchase_documents || []),
+            seller_signature_url: item.seller_signature_url || null,
+            seller_photo_url: item.seller_photo_url || null,
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: item.updated_at || new Date().toISOString()
+          });
+        } catch {}
+      }
+    }
+    // 5. repair_jobs
+    if (Array.isArray(data.repairs)) {
+      const stmt = db.prepare(`
+        INSERT INTO repair_jobs (id, job_no, shop_id, repair_customer_id, device_brand, device_model, problem, estimate, advance_paid, final_price, status, payment_status, warranty_days, technician, created_at, updated_at)
+        VALUES (@id, @job_no, @shop_id, @repair_customer_id, @device_brand, @device_model, @problem, @estimate, @advance_paid, @final_price, @status, @payment_status, @warranty_days, @technician, @created_at, @updated_at)
+        ON CONFLICT(id) DO UPDATE SET status = excluded.status, final_price = excluded.final_price
+      `);
+      for (const item of data.repairs) {
+        try {
+          stmt.run({
+            id: item.id || crypto.randomUUID(),
+            job_no: item.job_no || item.job_number || "RJ-001",
+            shop_id: item.shop_id || "shop_1",
+            repair_customer_id: item.repair_customer_id || item.customer_id || null,
+            device_brand: item.device_brand || item.brand || "Device",
+            device_model: item.device_model || item.model || "",
+            problem: item.problem || item.problem_description || "Repair",
+            estimate: Number(item.estimate || item.total_cost || 0),
+            advance_paid: Number(item.advance_paid || 0),
+            final_price: Number(item.final_price || item.total_cost || 0),
+            status: item.status || "delivered",
+            payment_status: item.payment_status || "paid",
+            warranty_days: Number(item.warranty_days || 7),
+            technician: item.technician || "Main Workshop",
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: item.updated_at || new Date().toISOString()
+          });
+        } catch {}
+      }
+    }
+  })();
+
+  const imagesDir = path.join(tempDir, "images");
+  if (fs.existsSync(imagesDir)) {
+    fs.cpSync(imagesDir, PATHS.storageDir, { recursive: true });
+  }
+}
+
 /**
- * Restore from a backup file.
- * 1. validate the archive listing  2. safety backup of current data
- * 3. extract to temp  4. validate manifest  5. swap in  6. rollback on failure.
- *
- * The rollback is a REAL rollback: if the swap already started, the parked
- * database/ and storage/ folders are moved back before the database is reopened.
- * (Previously a failure halfway through the swap left an empty data folder and
- * reopened a brand-new database, which looked exactly like lost data.)
+ * Restore from a backup file (.zip or .tar.gz).
  */
-export function restoreBackup(backupName) {
+export async function restoreBackup(backupName) {
   const src = path.join(PATHS.backupsDir, path.basename(backupName));
   if (!fs.existsSync(src)) throw new AppError("That backup file could not be found.", 404);
 
-  assertSafeArchive(src);
+  await assertSafeArchive(src);
 
   const safety = createBackup();
   const temp = path.join(PATHS.dataDir, `.restore-${stamp()}`);
@@ -285,37 +422,51 @@ export function restoreBackup(backupName) {
   const swapped = [];
 
   try {
-    tar.x({
-      file: src,
-      cwd: temp,
-      sync: true,
-    });
+    if (isZipFile(src)) {
+      const zip = await unzipper.Open.file(src);
+      await zip.extract({ path: temp });
+    } else {
+      tar.x({
+        file: src,
+        cwd: temp,
+        sync: true,
+      });
+    }
 
     const manifestPath = path.join(temp, "manifest.json");
-    if (!fs.existsSync(manifestPath) || !fs.existsSync(path.join(temp, "database"))) {
+    const hasDatabase = fs.existsSync(path.join(temp, "database"));
+    const hasDataJson = fs.existsSync(path.join(temp, "data.json"));
+
+    if (!hasDatabase && !hasDataJson && !fs.existsSync(manifestPath)) {
       throw new AppError(
-        "This file is not a valid PhoneZone backup. Please use a file created with \"Create Full Backup\".",
+        'This file is not a valid PhoneZone backup. Please use a file created with "Create Full Backup" or JSON Backup with Images.',
         400,
       );
     }
 
-    // Discard SQLite WAL sidecar files from the extracted DB so the complete
-    // main .db file is restored cleanly (stale -wal/-shm would otherwise make
-    // the reopened database appear empty).
-    for (const suffix of ["-wal", "-shm", "-journal"]) {
-      fs.rmSync(path.join(temp, "database", `phonezone.db${suffix}`), { force: true });
+    if (hasDatabase) {
+      for (const suffix of ["-wal", "-shm", "-journal"]) {
+        fs.rmSync(path.join(temp, "database", `phonezone.db${suffix}`), { force: true });
+      }
+
+      closeDatabase();
+      parked = path.join(PATHS.dataDir, `.previous-${stamp()}`);
+      fs.mkdirSync(parked, { recursive: true });
+      for (const dir of ["database", "storage"]) {
+        const current = path.join(PATHS.dataDir, dir);
+        if (fs.existsSync(current)) fs.renameSync(current, path.join(parked, dir));
+        if (fs.existsSync(path.join(temp, dir))) {
+          fs.renameSync(path.join(temp, dir), current);
+          swapped.push(dir);
+        }
+      }
+      initDatabase();
+    } else if (hasDataJson) {
+      const jsonStr = fs.readFileSync(path.join(temp, "data.json"), "utf8");
+      const data = JSON.parse(jsonStr);
+      restoreFromJsonData(data, temp);
     }
 
-    closeDatabase();
-    parked = path.join(PATHS.dataDir, `.previous-${stamp()}`);
-    fs.mkdirSync(parked, { recursive: true });
-    for (const dir of ["database", "storage"]) {
-      const current = path.join(PATHS.dataDir, dir);
-      if (fs.existsSync(current)) fs.renameSync(current, path.join(parked, dir));
-      fs.renameSync(path.join(temp, dir), current);
-      swapped.push(dir);
-    }
-    initDatabase(); // applies any newer migrations to the restored database
     fs.rmSync(temp, { recursive: true, force: true });
     logger.info("Restore completed", { backupName, safetyBackup: safety.name, parked });
     return { restored: backupName, safetyBackup: safety.name, previousDataKeptAt: parked };
@@ -323,7 +474,6 @@ export function restoreBackup(backupName) {
     logger.error("Restore failed - rolling back", err);
     fs.rmSync(temp, { recursive: true, force: true });
 
-    // Move the parked folders back BEFORE reopening the database.
     if (parked) {
       for (const dir of swapped) {
         const current = path.join(PATHS.dataDir, dir);
@@ -339,9 +489,9 @@ export function restoreBackup(backupName) {
 
     try {
       initDatabase();
-    } catch { /* surfaced below */ }
+    } catch {}
     throw new AppError(
-      `Restore failed, your existing data was left in place. A safety backup was saved as ${safety.name}.`,
+      `Restore failed: ${err.message || 'Unknown error'}. Existing data was preserved.`,
       500,
     );
   }

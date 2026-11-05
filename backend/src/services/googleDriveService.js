@@ -192,7 +192,7 @@ export function syncToGoogleDrive() {
  * Restores a snapshot file from Google Drive / Cloud sync folder.
  * Safely copies the archive to the local backups directory and applies it.
  */
-export function restoreFromCloudBackup(backupFileName) {
+export async function restoreFromCloudBackup(backupFileName) {
   if (!backupFileName) throw new AppError("Backup file name is required.", 400);
   const status = getCloudBackupStatus();
   const targetDir = status.targetDir;
@@ -215,7 +215,7 @@ export function restoreFromCloudBackup(backupFileName) {
   }
 
   logger.info("Restoring from cloud backup", { safeName, cloudFilePath, localTarget });
-  return restoreBackup(safeName);
+  return await restoreBackup(safeName);
 }
 
 export const uploadBackupToDrive = syncToGoogleDrive;
