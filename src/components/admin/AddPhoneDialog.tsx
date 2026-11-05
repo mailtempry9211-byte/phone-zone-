@@ -1019,15 +1019,15 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[92dvh] p-3 sm:p-6 overflow-y-auto bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800">
         <DialogHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 border-slate-200 dark:border-slate-800">
             <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-blue-600" />
+              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 Add New Phone (नया फोन खरीद)
               </DialogTitle>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {step === 1 ? "Step 1: Phone Specifications & Documents (फोन का विवरण)" : "Step 2: Seller KYC & Legal Sapath Patra (विक्रेता एवं शपथ पत्र)"}
               </p>
             </div>
@@ -1039,14 +1039,14 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   step === 1
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
                 <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">1</span>
                 <span>Phone Details</span>
               </button>
 
-              <ArrowRight className="h-3 w-3 text-gray-400" />
+              <ArrowRight className="h-3 w-3 text-slate-400 dark:text-slate-500" />
 
               <button
                 type="button"
@@ -1056,7 +1056,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   step === 2
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
                 <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">2</span>
@@ -1123,7 +1123,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-6 px-2 text-[11px] bg-white border-gray-300"
+                        className="h-6 px-2 text-[11px] bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                         onClick={() => setRepairHistoryModalOpen(true)}
                       >
                         <History className="h-3 w-3 mr-1" />
@@ -1913,7 +1913,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="bg-white px-2.5 py-1 rounded border border-blue-200 font-bold text-blue-900 text-sm" title="Total Purchase Payout">
+                <span className="bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-blue-200 dark:border-blue-800 font-bold text-blue-900 dark:text-blue-300 text-sm" title="Total Purchase Payout">
                   ₹{(Number(formData.purchase_price || 0) + extraPhones.reduce((s, p) => s + (Number(p.purchase_price) || 0), 0)).toLocaleString()}
                 </span>
                 <Button
@@ -1921,7 +1921,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                   variant="ghost"
                   size="sm"
                   onClick={() => setStep(1)}
-                  className="h-7 text-xs text-blue-700 hover:bg-blue-100"
+                  className="h-7 text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50"
                 >
                   Edit Phones
                 </Button>
@@ -1929,10 +1929,10 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
             </div>
 
             {/* Seller Information */}
-            <div className="border rounded-lg p-4 bg-white shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
-                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  <User className="h-4 w-4 text-blue-600" />
+            <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   Seller Information (विक्रेता विवरण)
                 </h3>
                 <AadhaarScanButton
@@ -1943,7 +1943,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
               </div>
 
               {/* Existing Seller Toggle */}
-              <div className="p-3 bg-gray-50 border rounded-lg">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="use-existing-seller"
@@ -1955,7 +1955,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       }
                     }}
                   />
-                  <Label htmlFor="use-existing-seller" className="cursor-pointer text-sm font-medium">
+                  <Label htmlFor="use-existing-seller" className="cursor-pointer text-sm font-medium text-slate-800 dark:text-slate-200">
                     Select from existing registered sellers (पुराने विक्रेता से चुनें)
                   </Label>
                 </div>
@@ -1965,15 +1965,15 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                     <button
                       type="button"
                       id="existing_seller"
-                      className="w-full flex items-center justify-between gap-2 border bg-white rounded-md px-3 py-2 text-sm hover:bg-gray-100 mt-1"
+                      className="w-full flex items-center justify-between gap-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-md px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 mt-1"
                       onClick={() => setSellerPickerOpen(true)}
                     >
-                      <span className={formData.seller_id ? "font-medium text-gray-900" : "text-gray-400"}>
+                      <span className={formData.seller_id ? "font-medium text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}>
                         {formData.seller_id
                           ? `${formData.seller_name}${formData.seller_phone ? ` - ${formData.seller_phone}` : ""}`
                           : "Search & select an existing seller..."}
                       </span>
-                      <Search className="h-4 w-4 text-gray-400 shrink-0" />
+                      <Search className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
                     </button>
                     <PartyPicker
                       role="seller"
@@ -2112,18 +2112,18 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
             {/* Seller Photo & Digital Signature Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Seller Profile Photo */}
-              <div className="border rounded-lg p-4 bg-white shadow-sm space-y-3">
-                <Label className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <Camera className="h-4 w-4 text-blue-600" />
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+                <Label className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Camera className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   Seller Profile Photo (विक्रेता की फोटो)
                 </Label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Live customer photo. Appears <strong>only</strong> on legal Sapath Patra, not on invoice.
                 </p>
 
                 {formData.seller_photo_url ? (
-                  <div className="flex items-center gap-4 p-2 bg-blue-50/50 rounded-lg border">
-                    <div className="w-20 h-24 border rounded overflow-hidden bg-white shrink-0">
+                  <div className="flex items-center gap-4 p-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="w-20 h-24 border border-slate-200 dark:border-slate-700 rounded overflow-hidden bg-white dark:bg-slate-800 shrink-0">
                       <img
                         src={formData.seller_photo_url}
                         alt="Seller Photo"
@@ -2162,9 +2162,9 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                       variant="outline"
                       onClick={() => document.getElementById("seller_photo_upload")?.click()}
                       disabled={isUploadingSellerPhoto}
-                      className="w-full h-16 border-dashed border-2 flex flex-col items-center justify-center gap-1 hover:bg-blue-50 hover:border-blue-400"
+                      className="w-full h-16 border-dashed border-2 flex flex-col items-center justify-center gap-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:border-blue-400 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                     >
-                      <Camera className="h-5 w-5 text-blue-600" />
+                      <Camera className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                       <span className="text-xs font-medium">
                         {isUploadingSellerPhoto ? "Uploading Photo..." : "Take / Upload Seller Photo"}
                       </span>
@@ -2174,20 +2174,20 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
               </div>
 
               {/* Digital Signature */}
-              <div className="border rounded-lg p-4 bg-white shadow-sm space-y-3">
-                <Label className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <PenTool className="h-4 w-4 text-purple-600" />
+              <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+                <Label className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <PenTool className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                   Seller Digital Signature (डिजिटल हस्ताक्षर)
                 </Label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Touch/mouse signature. Appears on <strong>both</strong> Purchase Invoice &amp; Sapath Patra.
                 </p>
 
                 {/* Saved Signature Prompt if existing seller has signature on record */}
                 {savedSignatureFound && !formData.seller_signature_url && (
-                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-24 bg-white border border-purple-200 rounded p-1 flex items-center justify-center shrink-0 shadow-xs">
+                      <div className="h-12 w-24 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 rounded p-1 flex items-center justify-center shrink-0 shadow-xs">
                         <img
                           src={savedSignatureFound}
                           alt="Saved Signature"
@@ -2195,8 +2195,8 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                         />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-purple-900">Saved Seller Signature Found</p>
-                        <p className="text-[11px] text-purple-700">A signature is already saved on file for this seller. Do you want to use it?</p>
+                        <p className="text-xs font-bold text-purple-900 dark:text-purple-300">Saved Seller Signature Found</p>
+                        <p className="text-[11px] text-purple-700 dark:text-purple-400">A signature is already saved on file for this seller. Do you want to use it?</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -2215,7 +2215,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-8 px-2.5 text-xs text-gray-700 hover:bg-gray-100"
+                        className="h-8 px-2.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-300 dark:border-slate-700"
                         onClick={() => {
                           setSignatureModalOpen(true);
                         }}
@@ -2227,8 +2227,8 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                 )}
 
                 {formData.seller_signature_url ? (
-                  <div className="p-3 bg-purple-50/40 rounded-lg border flex items-center justify-between gap-3">
-                    <div className="h-16 w-36 bg-white border rounded p-1 flex items-center justify-center">
+                  <div className="p-3 bg-purple-50/40 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800/50 flex items-center justify-between gap-3">
+                    <div className="h-16 w-36 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded p-1 flex items-center justify-center">
                       <img
                         src={formData.seller_signature_url}
                         alt="Seller Signature"
@@ -2241,7 +2241,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                         variant="outline"
                         size="sm"
                         onClick={() => setSignatureModalOpen(true)}
-                        className="h-7 text-xs border-purple-300 text-purple-700 hover:bg-purple-50"
+                        className="h-7 text-xs border-purple-300 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
                       >
                         Change
                       </Button>
@@ -2250,7 +2250,7 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                         variant="ghost"
                         size="sm"
                         onClick={() => setFormData({ ...formData, seller_signature_url: "" })}
-                        className="h-7 text-xs text-red-600 hover:bg-red-50"
+                        className="h-7 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                       >
                         Remove
                       </Button>
@@ -2261,9 +2261,9 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
                     type="button"
                     variant="outline"
                     onClick={() => setSignatureModalOpen(true)}
-                    className="w-full h-16 border-dashed border-2 flex flex-col items-center justify-center gap-1 hover:bg-purple-50 hover:border-purple-400 text-purple-900"
+                    className="w-full h-16 border-dashed border-2 flex flex-col items-center justify-center gap-1 hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:border-purple-400 dark:border-purple-800/60 text-purple-900 dark:text-purple-300"
                   >
-                    <PenTool className="h-5 w-5 text-purple-600" />
+                    <PenTool className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     <span className="text-xs font-semibold">Click to Take Digital Signature (हस्ताक्षर लें)</span>
                   </Button>
                 )}
@@ -2271,24 +2271,24 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
             </div>
 
             {/* Legal Sapath Patra Controls */}
-            <div className="border rounded-lg p-4 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 space-y-3">
+            <div className="border border-blue-200 dark:border-blue-900/50 rounded-lg p-3 sm:p-4 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 dark:from-blue-950/40 dark:to-indigo-950/40 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-bold text-blue-950 flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4 text-blue-700" />
+                  <h4 className="text-sm font-bold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                     Legal Sapath Patra — 8 Statutory Clauses (कानूनी शपथ पत्र)
                   </h4>
-                  <p className="text-xs text-blue-800 mt-0.5">
+                  <p className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">
                     Protects shop against IPC 411/412 &amp; BNS. Confirms device ownership, no theft/crime, and no pending finance.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs font-semibold text-blue-900 shrink-0">Language:</Label>
+                  <Label className="text-xs font-semibold text-blue-900 dark:text-blue-300 shrink-0">Language:</Label>
                   <Select
                     value={formData.sapath_patra_language}
                     onValueChange={(val: any) => setFormData({ ...formData, sapath_patra_language: val })}
                   >
-                    <SelectTrigger className="h-8 w-36 bg-white text-xs">
+                    <SelectTrigger className="h-8 w-36 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs border-slate-300 dark:border-slate-700">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
