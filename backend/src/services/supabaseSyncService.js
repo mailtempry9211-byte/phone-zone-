@@ -1,30 +1,357 @@
 /**
  * Two-way Cloud Persistence & Synchronization Service (SQLite <-> Supabase)
  *
- * Ensures that all shop settings, user accounts, phones, invoices, and customers
- * survive across Render container deploys and restarts.
+ * Ensures that all shop settings, user accounts, phones, invoices, customers,
+ * sellers, and repairs survive across Render container deploys and restarts.
  */
 import { getDb } from "../db/index.js";
 import { logger } from "../lib/logger.js";
 
-function getSupabaseConfig() {
-  const url = (process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  const key = (
+export function getSupabaseConfig() {
+  let url = (process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  let key = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     ""
   ).trim();
+
+  // If not found in process.env, check admin_settings in DB
+  if (!url || !key) {
+    try {
+      const db = getDb();
+      const s = db.prepare("SELECT supabase_url, supabase_anon_key FROM admin_settings LIMIT 1").get();
+      if (s) {
+        if (!url && s.supabase_url) url = s.supabase_url.trim().replace(/\/+$/, "");
+        if (!key && s.supabase_anon_key) key = s.supabase_anon_key.trim();
+      }
+    } catch {}
+  }
+
   return { url, key, isConfigured: !!(url && key) };
 }
 
-function supabaseHeaders(key) {
+export function supabaseHeaders(key) {
   return {
     "apikey": key,
     "Authorization": `Bearer ${key}`,
     "Content-Type": "application/json",
-    "Prefer": "resolution=merge-duplicates,return=representation",
+    "Prefer": "resolution=merge-duplicates,return=minimal",
   };
+}
+
+/** Valid columns in Supabase / Postgres schema */
+const SUPABASE_COLUMNS = {
+  admin_settings: [
+    "id", "business_name", "business_tagline", "owner_name", "address",
+    "phone_primary", "phone_secondary", "email", "instagram", "whatsapp_number",
+    "google_business_url", "udyam_number", "logo_url", "signature_url",
+    "terms_and_conditions", "terms_and_conditions_sale", "terms_and_conditions_purchase",
+    "invoice_prefix_purchase", "invoice_prefix_sale", "invoice_prefix_return",
+    "currency_code", "bank_name", "account_holder_name", "account_number", "ifsc_code",
+    "setup_completed", "updated_at"
+  ],
+  sellers: [
+    "id", "name", "phone", "address", "id_proof_type", "id_number",
+    "seller_photo_url", "aadhaar_photo_url", "bank_account_number",
+    "bank_ifsc", "bank_name", "account_holder_name", "is_verified",
+    "created_at", "updated_at"
+  ],
+  customers: [
+    "id", "name", "phone", "address", "id_proof_type", "id_number",
+    "customer_photo_url", "created_at", "updated_at"
+  ],
+  dealers: [
+    "id", "business_name", "contact_person", "phone", "email", "address",
+    "gstin", "created_at", "updated_at"
+  ],
+  dealer_batches: [
+    "id", "dealer_id", "batch_number", "batch_date", "total_phones",
+    "total_amount", "payment_status", "created_at", "updated_at"
+  ],
+  phones: [
+    "id", "phone_name", "model", "imei_number", "condition", "purchase_price",
+    "selling_price", "purchase_date", "rating", "bill_available", "box_available",
+    "charger_available", "features", "product_photos", "payment_proof_photos",
+    "payment_method", "seller_id", "customer_id", "dealer_id", "is_dealer",
+    "batch_purchase_id", "is_sold", "sold_date", "financial_year", "color",
+    "storage", "notes", "created_at", "updated_at"
+  ],
+  repair_customers: [
+    "id", "name", "phone", "address", "id_proof_type", "id_number",
+    "created_at", "updated_at"
+  ],
+  repair_jobs: [
+    "id", "job_no", "customer_id", "phone_model", "imei", "issue_description",
+    "condition", "status", "estimated_cost", "final_cost", "received_at",
+    "delivered_at", "created_at", "updated_at"
+  ],
+  repair_job_items: [
+    "id", "repair_id", "description", "cost", "created_at"
+  ],
+  returns: [
+    "id", "phone_id", "return_date", "reason", "refund_amount", "processed_by", "created_at"
+  ],
+  user_roles: [
+    "id", "user_id", "role"
+  ]
+};
+
+/**
+ * Format SQLite row into clean Postgres/Supabase schema format
+ */
+export function sanitizeRowForSupabase(table, rawRow) {
+  if (!rawRow || typeof rawRow !== "object") return null;
+  const allowed = SUPABASE_COLUMNS[table];
+  const out = {};
+
+  const source = { ...rawRow };
+  if (table === "phones") {
+    // Map phone_name <-> brand if needed
+    if (!source.phone_name && source.brand) source.phone_name = source.brand;
+    if (source.colour && !source.color) source.color = source.colour;
+    if (source.variant && !source.storage) source.storage = source.variant;
+  }
+
+  const parseArray = (val) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string" && val.trim().startsWith("[")) {
+      try { return JSON.parse(val); } catch { return []; }
+    }
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  };
+
+  const parseBool = (val) => {
+    if (typeof val === "boolean") return val;
+    return val === 1 || val === "1" || val === "true";
+  };
+
+  for (const key of Object.keys(source)) {
+    if (allowed && !allowed.includes(key)) continue;
+    let v = source[key];
+
+    // Array columns
+    if (["product_photos", "payment_proof_photos", "features"].includes(key)) {
+      v = parseArray(v);
+    }
+    // Boolean columns
+    else if (["is_sold", "bill_available", "box_available", "charger_available"].includes(key)) {
+      v = parseBool(v);
+    }
+    // Dates
+    else if (["purchase_date", "sold_date", "received_at", "delivered_at", "created_at", "updated_at"].includes(key)) {
+      if (v === "" || v === undefined) v = null;
+    }
+    // Numeric
+    else if (["purchase_price", "selling_price", "rating", "estimated_cost", "final_cost", "refund_amount"].includes(key)) {
+      if (v !== null && v !== undefined && v !== "") v = Number(v) || 0;
+    }
+
+    out[key] = v;
+  }
+
+  return out;
+}
+
+/**
+ * Push a single row to Supabase REST API in real time
+ */
+export async function pushSingleRowToSupabase(table, rawRow) {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured || !table || !rawRow) return;
+
+  const payload = sanitizeRowForSupabase(table, rawRow);
+  if (!payload || !payload.id) return;
+
+  try {
+    const res = await fetch(`${url}/rest/v1/${table}`, {
+      method: "POST",
+      headers: supabaseHeaders(key),
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => "");
+      logger.warn(`[SupabaseSync] Push single row failed (${table}):`, errTxt.slice(0, 150));
+    }
+  } catch (err) {
+    logger.warn(`[SupabaseSync] Push single row network error (${table}):`, err.message);
+  }
+}
+
+/**
+ * Delete a row from Supabase REST API
+ */
+export async function deleteRowFromSupabase(table, id) {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured || !table || !id) return;
+
+  try {
+    await fetch(`${url}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(key),
+    });
+  } catch (err) {
+    logger.warn(`[SupabaseSync] Delete row network error (${table}):`, err.message);
+  }
+}
+
+/**
+ * Push a batch of rows to Supabase
+ */
+export async function pushBatchToSupabase(table, rows) {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured || !rows || rows.length === 0) return { ok: false, count: 0 };
+
+  const chunkSize = 50;
+  let totalUploaded = 0;
+
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize)
+      .map((r) => sanitizeRowForSupabase(table, r))
+      .filter(Boolean);
+
+    if (chunk.length === 0) continue;
+
+    try {
+      const res = await fetch(`${url}/rest/v1/${table}`, {
+        method: "POST",
+        headers: supabaseHeaders(key),
+        body: JSON.stringify(chunk),
+      });
+
+      if (res.ok) {
+        totalUploaded += chunk.length;
+      } else {
+        const errTxt = await res.text().catch(() => "");
+        logger.warn(`[SupabaseSync] Batch chunk upload warning for ${table}:`, errTxt.slice(0, 150));
+      }
+    } catch (e) {
+      logger.warn(`[SupabaseSync] Batch network error for ${table}:`, e.message);
+    }
+  }
+
+  return { ok: true, count: totalUploaded };
+}
+
+/**
+ * Comprehensive Two-Way Push: Pushes all local SQLite tables to Supabase Cloud
+ */
+export async function pushAllToSupabase() {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured) return { ok: false, reason: "not_configured" };
+
+  const db = getDb();
+  const results = {};
+
+  try {
+    logger.info("[SupabaseSync] Starting Full Push to Supabase Cloud...");
+
+    // 1. admin_settings
+    try {
+      const settings = db.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+      if (settings) {
+        await pushSettingsToSupabase(settings);
+        results.admin_settings = 1;
+      }
+    } catch (e) { logger.warn("[SupabaseSync] settings sync:", e.message); }
+
+    // 2. sellers
+    try {
+      const sellers = db.prepare("SELECT * FROM sellers WHERE deleted_at IS NULL").all();
+      if (sellers.length > 0) {
+        const r = await pushBatchToSupabase("sellers", sellers);
+        results.sellers = r.count;
+      }
+    } catch (e) { logger.warn("[SupabaseSync] sellers sync:", e.message); }
+
+    // 3. customers
+    try {
+      const customers = db.prepare("SELECT * FROM customers WHERE deleted_at IS NULL").all();
+      if (customers.length > 0) {
+        const r = await pushBatchToSupabase("customers", customers);
+        results.customers = r.count;
+      }
+    } catch (e) { logger.warn("[SupabaseSync] customers sync:", e.message); }
+
+    // 4. dealers
+    try {
+      const dealers = db.prepare("SELECT * FROM dealers").all();
+      if (dealers.length > 0) {
+        const r = await pushBatchToSupabase("dealers", dealers);
+        results.dealers = r.count;
+      }
+    } catch {}
+
+    // 5. dealer_batches
+    try {
+      const batches = db.prepare("SELECT * FROM dealer_batches").all();
+      if (batches.length > 0) {
+        const r = await pushBatchToSupabase("dealer_batches", batches);
+        results.dealer_batches = r.count;
+      }
+    } catch {}
+
+    // 6. phones (inventory & sold)
+    try {
+      const phones = db.prepare("SELECT * FROM phones").all();
+      if (phones.length > 0) {
+        const r = await pushBatchToSupabase("phones", phones);
+        results.phones = r.count;
+      }
+    } catch (e) { logger.warn("[SupabaseSync] phones sync:", e.message); }
+
+    // 7. repair_customers
+    try {
+      const repCust = db.prepare("SELECT * FROM repair_customers").all();
+      if (repCust.length > 0) {
+        const r = await pushBatchToSupabase("repair_customers", repCust);
+        results.repair_customers = r.count;
+      }
+    } catch {}
+
+    // 8. repair_jobs
+    try {
+      const repJobs = db.prepare("SELECT * FROM repair_jobs").all();
+      if (repJobs.length > 0) {
+        const r = await pushBatchToSupabase("repair_jobs", repJobs);
+        results.repair_jobs = r.count;
+      }
+    } catch {}
+
+    // 9. repair_job_items
+    try {
+      const repItems = db.prepare("SELECT * FROM repair_job_items").all();
+      if (repItems.length > 0) {
+        const r = await pushBatchToSupabase("repair_job_items", repItems);
+        results.repair_job_items = r.count;
+      }
+    } catch {}
+
+    // 10. returns
+    try {
+      const rets = db.prepare("SELECT * FROM returns").all();
+      if (rets.length > 0) {
+        const r = await pushBatchToSupabase("returns", rets);
+        results.returns = r.count;
+      }
+    } catch {}
+
+    // 11. user_roles
+    try {
+      const roles = db.prepare("SELECT * FROM user_roles").all();
+      if (roles.length > 0) {
+        const r = await pushBatchToSupabase("user_roles", roles);
+        results.user_roles = r.count;
+      }
+    } catch {}
+
+    logger.info("[SupabaseSync] Full Push to Supabase Cloud Complete:", results);
+    return { ok: true, synced: results };
+  } catch (err) {
+    logger.error("[SupabaseSync] Full push critical error:", err);
+    return { ok: false, error: err.message };
+  }
 }
 
 /**
@@ -63,7 +390,6 @@ export async function syncFromSupabaseOnBoot() {
               udyam_number = COALESCE(?, udyam_number),
               logo_url = COALESCE(?, logo_url),
               signature_url = COALESCE(?, signature_url),
-              business_hours = COALESCE(?, business_hours),
               terms_and_conditions = COALESCE(?, terms_and_conditions),
               terms_and_conditions_sale = COALESCE(?, terms_and_conditions_sale),
               terms_and_conditions_purchase = COALESCE(?, terms_and_conditions_purchase),
@@ -91,7 +417,6 @@ export async function syncFromSupabaseOnBoot() {
             s.udyam_number || null,
             s.logo_url || null,
             s.signature_url || null,
-            typeof s.business_hours === "object" ? JSON.stringify(s.business_hours) : s.business_hours || null,
             s.terms_and_conditions || null,
             s.terms_and_conditions_sale || null,
             s.terms_and_conditions_purchase || null,
@@ -201,14 +526,14 @@ export async function syncFromSupabaseOnBoot() {
       for (const p of phones) {
         try {
           db.prepare(`
-            INSERT INTO phones (id, brand, model, imei_number, purchase_price, selling_price, condition, is_sold, seller_id, customer_id, purchase_date, payment_method)
+            INSERT INTO phones (id, phone_name, model, imei_number, purchase_price, selling_price, condition, is_sold, seller_id, customer_id, purchase_date, payment_method)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               is_sold = excluded.is_sold,
               selling_price = excluded.selling_price
           `).run(
             p.id,
-            p.brand || "",
+            p.phone_name || p.brand || "",
             p.model || "",
             p.imei_number || "",
             p.purchase_price || 0,
@@ -240,7 +565,7 @@ export async function pushSettingsToSupabase(settingsRow) {
   if (!isConfigured || !settingsRow) return;
 
   try {
-    const payload = {
+    const payload = sanitizeRowForSupabase("admin_settings", {
       id: "00000000-0000-0000-0000-000000000001",
       business_name: settingsRow.business_name || settingsRow.businessName || "",
       business_tagline: settingsRow.business_tagline || settingsRow.businessTagline || "",
@@ -267,7 +592,7 @@ export async function pushSettingsToSupabase(settingsRow) {
       account_number: settingsRow.account_number || settingsRow.accountNumber || "",
       ifsc_code: settingsRow.ifsc_code || settingsRow.ifscCode || "",
       setup_completed: 1,
-    };
+    });
 
     const res = await fetch(`${url}/rest/v1/admin_settings`, {
       method: "POST",
@@ -324,5 +649,60 @@ export async function pushUserToSupabase(user, role = "admin") {
     logger.info("[SupabaseSync] Pushed user & role to Supabase: " + user.email);
   } catch (err) {
     logger.warn("[SupabaseSync] pushUserToSupabase error", err);
+  }
+}
+
+/**
+ * Check Supabase Live Connection Status & Row Counts
+ */
+export async function getSupabaseSyncStatus() {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured) {
+    return {
+      connected: false,
+      isConfigured: false,
+      reason: "SUPABASE_URL or SUPABASE_ANON_KEY not set",
+      rowCounts: { phones: 0, sellers: 0, customers: 0, repairs: 0 },
+    };
+  }
+
+  try {
+    const [phonesRes, sellersRes, custRes] = await Promise.all([
+      fetch(`${url}/rest/v1/phones?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }),
+      fetch(`${url}/rest/v1/sellers?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }),
+      fetch(`${url}/rest/v1/customers?select=id`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}`, Range: "0-0", Prefer: "count=exact" },
+      }),
+    ]);
+
+    const getCount = (res) => {
+      const range = res.headers.get("content-range") || "";
+      const match = range.match(/\/(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const connected = phonesRes.ok || sellersRes.ok || custRes.ok;
+
+    return {
+      connected,
+      isConfigured: true,
+      url: url.replace(/^https?:\/\//, ""),
+      rowCounts: {
+        phones: getCount(phonesRes),
+        sellers: getCount(sellersRes),
+        customers: getCount(custRes),
+      },
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      isConfigured: true,
+      error: err.message,
+      rowCounts: { phones: 0, sellers: 0, customers: 0, repairs: 0 },
+    };
   }
 }

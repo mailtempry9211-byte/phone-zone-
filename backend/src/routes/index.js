@@ -378,6 +378,7 @@ export function buildRouter() {
     logger.info("Restore request received", { backupName: path.basename(targetPath), sizeBytes: req.file.size });
     const result = restoreBackup(path.basename(targetPath));
     logger.info("Restore succeeded", { result });
+    supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
     res.json({ restored: true, backupName: path.basename(targetPath), ...result });
   }));
 
@@ -793,7 +794,18 @@ export function buildRouter() {
     const name = `uploaded_restore_${Date.now()}_${safeName}`;
     const target = pathMod.join(PATHS.backupsDir, name);
     fsMod.writeFileSync(target, req.file.buffer);
-    res.json(backups.restoreBackup(pathMod.basename(target)));
+    const restoreRes = backups.restoreBackup(pathMod.basename(target));
+    supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
+    res.json(restoreRes);
+  }));
+
+  // ---------------- supabase cloud database sync ----------------
+  r.get("/supabase/status", requireAuth, wrap(async (_req, res) => {
+    res.json(await supabaseSync.getSupabaseSyncStatus());
+  }));
+  r.post("/supabase/sync-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {
+    const result = await supabaseSync.pushAllToSupabase();
+    res.json(result);
   }));
 
   // ---------------- google drive / cloud backup ----------------

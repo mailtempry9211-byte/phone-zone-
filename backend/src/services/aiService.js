@@ -227,34 +227,53 @@ export async function processSmartIntake({ images = [], message = "" }) {
     throw new Error("AI API Key is missing. Please configure your AI Key in Settings > Jarvis AI.");
   }
 
-  const prompt = `You are an expert mobile shop intake assistant for PhoneZone ERP.
-Examine the attached photos and user notes: "${message}".
-Classify each image and extract all second-hand smartphone purchase details.
+  const prompt = `You are an expert mobile shop AI intake assistant for PhoneZone ERP.
+Carefully examine the attached photos (up to 10 images) and user notes: "${message}".
+Classify each individual image accurately and extract second-hand smartphone purchase details.
 
-Images can be:
-- Smartphone packaging box sticker / screen showing *#06#
-- Smartphone physical condition (front, back, screen)
-- Aadhaar Card (Front or Back)
-- Payment receipt / UPI transaction screenshot
+IMAGE TYPES (Use strictly one of these for each image):
+- "product_photo": Smartphone hardware physical device (back cover, front screen, camera lenses, sides). Max 4 will be used on storefront.
+- "box_sticker": Smartphone packaging box sticker, barcode label, or phone screen displaying *#06# IMEI numbers. Extract IMEI1 and IMEI2 here. DO NOT classify as product_photo.
+- "aadhaar_front": Government Aadhaar card front side showing photo, name, and 12-digit Aadhaar number.
+- "aadhaar_back": Government Aadhaar card back side showing full permanent address and pincode.
+- "seller_photo": Photo of a human face / customer selling the phone.
+- "seller_signature": Handwritten signature on paper or digital pad.
+- "payment_proof": Screenshot or photo of UPI payment, Amazon Pay, PhonePe, Google Pay, Paytm, or bank transfer receipt.
+- "purchase_document": Shop bill, purchase receipt, or cash memo.
+
+EXTRACTION RULES:
+- brand: Phone brand (e.g. Apple, Vivo, Oppo, Realme, Samsung, OnePlus, Xiaomi).
+- model: Phone model name (e.g. iPhone 12 Pro, T2 Pro 5G, Reno 11).
+- color: Physical color of the phone.
+- imei1: Primary 15-digit IMEI number.
+- imei2: Secondary 15-digit IMEI number (if dual SIM).
+- seller_name: Customer full name from Aadhaar card.
+- seller_phone: 10-digit mobile number from message or bill.
+- seller_aadhaar: 12-digit Aadhaar number.
+- seller_address: Complete address with pincode from Aadhaar back.
+- purchase_price: Numeric purchase cost paid to seller (e.g. 19000).
+- condition: Physical condition ("excellent", "good", "fair", "poor"). Default to "good" if clean.
+- payment_method: "cash" or "upi" (set "upi" if payment_proof is detected).
 
 Return a STRICT JSON object only. No markdown formatting.
 Schema:
 {
-  "brand": "detected brand (e.g. Vivo, Oppo, Realme, Apple, Samsung)",
-  "model": "detected model and variant (e.g. 12X 5G 8GB/128GB)",
-  "color": "detected color",
-  "imei1": "15-digit primary IMEI",
-  "imei2": "15-digit secondary IMEI if found",
-  "seller_name": "Full name from Aadhaar card",
-  "seller_phone": "10-digit mobile number if found",
-  "seller_aadhaar": "Aadhaar number if found",
-  "seller_address": "Full address from Aadhaar back if found",
+  "brand": string,
+  "model": string,
+  "color": string,
+  "imei1": string,
+  "imei2": string,
+  "seller_name": string,
+  "seller_phone": string,
+  "seller_aadhaar": string,
+  "seller_address": string,
   "purchase_price": number or null,
-  "payment_method": "cash" or "upi",
+  "condition": "excellent" | "good" | "fair" | "poor",
+  "payment_method": "cash" | "upi",
   "classifications": [
     {
       "index": 0,
-      "type": "product_photo" | "purchase_document" | "payment_proof" | "box_sticker"
+      "type": "product_photo" | "box_sticker" | "aadhaar_front" | "aadhaar_back" | "seller_photo" | "seller_signature" | "payment_proof" | "purchase_document"
     }
   ]
 }`;
@@ -283,8 +302,8 @@ Schema:
     },
   };
 
-  let model = config.model && config.model.includes("gemini") ? config.model : "gemini-3.1-flash-lite";
-  const candidateModels = [model, "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite"].filter(
+  let model = config.model && config.model.includes("gemini") ? config.model : "gemini-1.5-flash";
+  const candidateModels = [model, "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"].filter(
     (m, idx, arr) => arr.indexOf(m) === idx
   );
 
@@ -326,22 +345,58 @@ Schema:
     if (phoneMatch) extracted.seller_phone = phoneMatch[1];
   }
 
-  // Auto-bucket images based on classifications
+  // Calculate Selling Price with 20% margin + increasing round figure to nearest ₹500
+  const pPrice = Number(extracted.purchase_price) || 0;
+  let sPrice = extracted.selling_price ? Number(extracted.selling_price) : null;
+  if (!sPrice && pPrice > 0) {
+    sPrice = Math.ceil((pPrice * 1.20) / 500) * 500;
+  }
+
+  // Smart Auto-Defaults
+  const purchase_date = new Date().toISOString().split("T")[0]; // Auto Today's date
+  const condition = extracted.condition || "good";
+  const id_proof_type = extracted.seller_aadhaar ? "aadhaar" : "aadhaar";
+
+  // Classify attached photos into exact destinations
   const product_photos = [];
   const purchase_documents = [];
   const payment_proof_photos = [];
+  let seller_photo_url = "";
+  let seller_signature_url = "";
 
   const classes = extracted.classifications || [];
   images.forEach((img, idx) => {
     const t = classes.find((c) => c.index === idx)?.type || "product_photo";
-    if (t === "purchase_document" || t === "aadhaar_front" || t === "aadhaar_back") {
-      purchase_documents.push(img);
+
+    if (t === "seller_photo") {
+      if (!seller_photo_url) seller_photo_url = img;
+    } else if (t === "seller_signature") {
+      if (!seller_signature_url) seller_signature_url = img;
     } else if (t === "payment_proof") {
       payment_proof_photos.push(img);
+    } else if (t === "aadhaar_front" || t === "aadhaar_back" || t === "purchase_document") {
+      purchase_documents.push(img);
+    } else if (t === "box_sticker") {
+      // Box sticker / IMEI barcode is ONLY used to read IMEI, NOT added to product photos!
+      // (Optionally added to documents for audit safety)
+      purchase_documents.push(img);
     } else {
-      product_photos.push(img);
+      // Physical product photos (max 4 on storefront)
+      if (product_photos.length < 4) {
+        product_photos.push(img);
+      } else {
+        purchase_documents.push(img);
+      }
     }
   });
+
+  // Determine Payment Method
+  let payment_method = "cash";
+  if (payment_proof_photos.length > 0 || /upi|gpay|paytm|phonepe|online|amazon\s*pay/i.test(message)) {
+    payment_method = "upi";
+  } else if (/cash|nakad/i.test(message)) {
+    payment_method = "cash";
+  }
 
   return {
     brand: extracted.brand || "",
@@ -353,8 +408,14 @@ Schema:
     seller_phone: extracted.seller_phone || "",
     seller_aadhaar: extracted.seller_aadhaar || "",
     seller_address: extracted.seller_address || "",
-    purchase_price: extracted.purchase_price || null,
-    payment_method: extracted.payment_method || "cash",
+    purchase_price: pPrice || null,
+    selling_price: sPrice,
+    purchase_date,
+    condition,
+    payment_method,
+    id_proof_type,
+    seller_photo_url,
+    seller_signature_url,
     product_photos,
     purchase_documents,
     payment_proof_photos,

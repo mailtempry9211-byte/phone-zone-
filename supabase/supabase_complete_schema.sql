@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.sellers (
     id_proof_type id_proof_type NOT NULL DEFAULT 'aadhaar',
     id_number TEXT NOT NULL,
     seller_photo_url TEXT,
+    seller_signature_url TEXT,
     aadhaar_photo_url TEXT,
     bank_account_number TEXT,
     bank_ifsc TEXT,
@@ -403,3 +404,7 @@ CREATE POLICY "Allow public updates in phonezone storage" ON storage.objects
 DROP POLICY IF EXISTS "Allow public deletes in phonezone storage" ON storage.objects;
 CREATE POLICY "Allow public deletes in phonezone storage" ON storage.objects
     FOR DELETE USING (bucket_id IN ('phonezone-uploads', 'dealer-photos', 'signatures', 'sale-documents', 'purchase-documents'));
+
+-- Add column migrations for existing instances
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS seller_signature_url TEXT;
+

@@ -31,6 +31,7 @@ import ShopSwitcher from "./ShopSwitcher";
 import PasswordChangeDialog from "./PasswordChangeDialog";
 import LicenseActivationModal from "./LicenseActivationModal";
 import JarvisOrb from "@/components/jarvis/JarvisOrb";
+import { SupabaseCloudSyncPill } from "./SupabaseCloudSyncPill";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -1006,6 +1007,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>License & Device HWID</span>
                   </DropdownMenuItem>
 
+                  {/* Supabase Cloud Sync */}
+                  <div className="px-1 py-1">
+                    <SupabaseCloudSyncPill isDark={isDark} className="w-full justify-start h-8" />
+                  </div>
+
                   {/* Password Change Dialog */}
                   <div className="px-1 py-1">
                     <PasswordChangeDialog
@@ -1107,6 +1113,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                       }`}
                     />
+                  </div>
+                )}
+
+                {/* Supabase Cloud Database Status & 1-Click Sync Pill */}
+                {isAdminOrOwner && (
+                  <div className="shrink-0">
+                    <SupabaseCloudSyncPill isDark={isDark} />
                   </div>
                 )}
 

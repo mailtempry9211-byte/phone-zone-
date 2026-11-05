@@ -14,6 +14,7 @@ import { SERVER } from "../config/business.js";
 import { activeFyLabel, isPreviousYearActive, recordPreviousYearChange } from "../services/financialYearService.js";
 import { badRequest, forbidden, AppError } from "../lib/errors.js";
 import { makeLimiter } from "../lib/rateLimit.js";
+import { pushSingleRowToSupabase, deleteRowFromSupabase } from "../services/supabaseSyncService.js";
 
 /**
  * Accounting tables that are stamped with (and read from) a financial year.
@@ -433,8 +434,10 @@ export function buildCompatRouter(staff, canRead = staff) {
 
         const sql = `INSERT INTO ${t} (${keys.map((k) => `"${k}"`).join(",")}) VALUES (${keys.map(() => "?").join(",")})`;
         db.prepare(sql).run(...keys.map((k) => valueIn(row[k])));
-        out.push(db.prepare(`SELECT * FROM ${t} WHERE id = ?`).get(row.id));
+        const inserted = db.prepare(`SELECT * FROM ${t} WHERE id = ?`).get(row.id);
+        out.push(inserted);
         checkAndSetPreviousYear(res, t, row.id, "insert", row);
+        pushSingleRowToSupabase(t, inserted).catch(() => {});
       }
 
     })();
@@ -495,6 +498,7 @@ export function buildCompatRouter(staff, canRead = staff) {
     const updated = db.prepare(`SELECT * FROM ${t}${where.sql}`).all(...where.params);
     for (const u of updated) {
       checkAndSetPreviousYear(res, t, u.id, "update", values);
+      pushSingleRowToSupabase(t, u).catch(() => {});
     }
     res.json(updated.map(rowOut));
   }));
@@ -536,13 +540,20 @@ export function buildCompatRouter(staff, canRead = staff) {
       // Business history is never destroyed - mark the row as archived instead.
       const rows = db.prepare(`SELECT id FROM ${t}${where.sql}`).all(...where.params);
       const info = db.prepare(`UPDATE ${t} SET deleted_at = datetime('now')${where.sql}`).run(...where.params);
-      for (const r of rows) checkAndSetPreviousYear(res, t, r.id, "delete", {});
+      for (const r of rows) {
+        checkAndSetPreviousYear(res, t, r.id, "delete", {});
+        deleteRowFromSupabase(t, r.id).catch(() => {});
+      }
       return res.json({ ok: true, softDeleted: info.changes });
     }
     if (!HARD_DELETE_TABLES.has(t)) {
       throw badRequest("This table keeps its full history and cannot be deleted from here.");
     }
+    const toDeleteRows = db.prepare(`SELECT id FROM ${t}${where.sql}`).all(...where.params);
     const info = db.prepare(`DELETE FROM ${t}${where.sql}`).run(...where.params);
+    for (const r of toDeleteRows) {
+      deleteRowFromSupabase(t, r.id).catch(() => {});
+    }
     res.json({ ok: true, deleted: info.changes });
   }));
 

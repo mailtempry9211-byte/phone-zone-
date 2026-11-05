@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate, Cloud, Database } from "lucide-react";
 import { toast } from "sonner";
 import { EvolutionApiGuideModal } from "./EvolutionApiGuideModal";
 import JarvisSettingsCard from "./JarvisSettingsCard";
@@ -38,7 +38,17 @@ const SettingsTab = () => {
       toast.success(mode === "scroll" ? "Header set to Horizontal Scroll" : "Header set to 3-Line Condensed Menu");
     }
   };
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: supabaseStatus, refetch: refetchSupabaseStatus } = useQuery({
+    queryKey: ['supabase-status'],
+    queryFn: async () => {
+      const res = await fetch('/api/supabase/status');
+      return res.ok ? res.json() : null;
+    },
+    refetchInterval: 30000,
+  });
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -1586,6 +1596,86 @@ const SettingsTab = () => {
           </CardContent>
         </Card>
       )}
+      {/* Supabase Cloud Sync Card */}
+      <Card className="border-emerald-500/40 bg-gradient-to-br from-emerald-950/20 via-slate-900 to-slate-950 text-white shadow-lg">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-emerald-400 flex items-center gap-2 text-base sm:text-lg">
+              <Cloud className="h-5 w-5 text-emerald-400" />
+              Supabase Cloud Database & Two-Way Sync
+            </CardTitle>
+            <Badge className={supabaseStatus?.configured ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
+              {supabaseStatus?.configured ? "🟢 Cloud Connected" : "🟡 Not Configured"}
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-300">
+            Aapka sara local data (phones, repair jobs, sellers, customers, dealer records) Supabase Cloud PostgreSQL me mirror hota hai. Agar aapne backup restore kiya hai ya cloud tables khali hain, toh neeche &quot;Sync All Data to Supabase Now&quot; dabayein.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+            <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+              <span className="text-slate-400 block">Phones</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.phones ?? "-"}</span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+              <span className="text-slate-400 block">Repair Jobs</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.repair_jobs ?? "-"}</span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+              <span className="text-slate-400 block">Sellers</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.sellers ?? "-"}</span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+              <span className="text-slate-400 block">Customers</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.customers ?? "-"}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <span className="text-[11px] text-slate-400 font-mono">
+              Project: {supabaseStatus?.url ? supabaseStatus.url.replace(/^https?:\/\//, '').split('.')[0] : "Local/Env"}
+            </span>
+            <Button
+              type="button"
+              disabled={isSyncingSupabase}
+              onClick={async () => {
+                setIsSyncingSupabase(true);
+                try {
+                  const res = await fetch("/api/supabase/sync-now", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                  });
+                  const json = await res.json();
+                  if (!res.ok || !json.ok) {
+                    throw new Error(json.error || "Sync failed");
+                  }
+                  toast.success("✅ Supabase Cloud Sync Completed!", {
+                    description: `Pushed ${json.totalPushed || 0} records across all tables into Supabase PostgreSQL.`
+                  });
+                  refetchSupabaseStatus();
+                } catch (err: any) {
+                  toast.error("Supabase sync failed: " + err.message);
+                } finally {
+                  setIsSyncingSupabase(false);
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 text-xs gap-1.5 shadow-md"
+            >
+              {isSyncingSupabase ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Syncing to Supabase...
+                </>
+              ) : (
+                <>
+                  <Database className="h-4 w-4" /> ⚡ Sync All Data to Supabase Now
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* New Company Setup & Onboarding Wizard (Master Admin Password Protected) */}
       <Card className="border-red-500/40 bg-gradient-to-br from-red-950/20 via-slate-900 to-slate-950 text-white shadow-lg">
         <CardHeader>

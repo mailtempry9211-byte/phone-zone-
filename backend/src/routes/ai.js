@@ -9,6 +9,7 @@ import { handleJarvisChat } from "../services/jarvisAgent.js";
 import { saveSettings } from "../services/settingsService.js";
 import { getDb } from "../db/index.js";
 import * as baileysService from "../services/baileysService.js";
+import { pushSingleRowToSupabase } from "../services/supabaseSyncService.js";
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -130,6 +131,28 @@ export function buildAiRouter(staffAuth, adminAuth) {
       JSON.stringify(payment_proof_photos),
       seller_signature
     );
+
+    const phoneRow = {
+      id: phoneId,
+      phone_name: brand,
+      model,
+      imei_number: cleanImei,
+      imei2_number: (imei2 || "").replace(/\D/g, ""),
+      purchase_price: Number(purchase_price),
+      selling_price: Number(sellPrice),
+      condition,
+      is_sold: false,
+      seller_id: sellerId,
+      purchase_date: new Date().toISOString().split("T")[0],
+      payment_method,
+      product_photos,
+      purchase_documents,
+      payment_proof_photos,
+      seller_signature_url: seller_signature,
+    };
+
+    // Mirror to Supabase Cloud in real time
+    pushSingleRowToSupabase("phones", phoneRow).catch(() => {});
 
     // Optional WhatsApp acknowledgment
     if (seller_phone && seller_phone.length >= 10 && baileysService.isReady()) {

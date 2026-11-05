@@ -117,6 +117,29 @@ export async function execute2Plus1Purge({ actorUserId = null, forceCloudUpload 
   let deletedLogs = 0;
   let deletedMsgs = 0;
 
+  // Collect IDs to delete from Supabase cloud if connected
+  let purgedPhoneIds = [];
+  let purgedRepairIds = [];
+  try {
+    purgedPhoneIds = db
+      .prepare(
+        `SELECT id FROM phones 
+         WHERE is_sold = 1 AND (purchase_date < ? OR (purchase_date IS NULL AND created_at < ?))`
+      )
+      .all(cutoffDate.split("T")[0], cutoffDate)
+      .map((r) => r.id);
+
+    purgedRepairIds = db
+      .prepare(
+        `SELECT id FROM repair_jobs 
+         WHERE status IN ('delivered', 'cancelled') AND created_at < ?`
+      )
+      .all(cutoffDate)
+      .map((r) => r.id);
+  } catch (e) {
+    logger.warn("Could not pre-fetch purge IDs:", e);
+  }
+
   const purgeTx = db.transaction(() => {
     // A. Delete only SOLD phones older than cutoff (In-stock inventory is NEVER purged)
     const phoneStmt = db.prepare(
@@ -134,12 +157,35 @@ export async function execute2Plus1Purge({ actorUserId = null, forceCloudUpload 
     const repairRes = repairStmt.run(cutoffDate);
     deletedRepairs = repairRes.changes;
 
-    // C. Clean old audit logs and message history
+    // C. Clean old audit logs and message history (Customers and Sellers are NEVER deleted!)
     deletedLogs = db.prepare(`DELETE FROM audit_logs WHERE created_at < ?`).run(cutoffDate).changes;
     deletedMsgs = db.prepare(`DELETE FROM messages WHERE created_at < ?`).run(cutoffDate).changes;
   });
 
   purgeTx();
+
+  // Purge from Supabase Cloud as well so cloud storage also reclaims space
+  try {
+    const { getSupabaseConfig, supabaseHeaders } = await import("./supabaseSyncService.js");
+    const { url, key, isConfigured } = getSupabaseConfig();
+    if (isConfigured) {
+      for (const id of purgedPhoneIds) {
+        fetch(`${url}/rest/v1/phones?id=eq.${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: supabaseHeaders(key),
+        }).catch(() => {});
+      }
+      for (const id of purgedRepairIds) {
+        fetch(`${url}/rest/v1/repair_jobs?id=eq.${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: supabaseHeaders(key),
+        }).catch(() => {});
+      }
+      logger.info(`[Purge] Purged ${purgedPhoneIds.length} phones & ${purgedRepairIds.length} repairs from Supabase`);
+    }
+  } catch (cloudErr) {
+    logger.warn("Supabase purge error:", cloudErr);
+  }
 
   // 4. Reclaim disk space
   try {

@@ -156,6 +156,12 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
       const d = e.detail;
       if (!d) return;
       onOpenChange(true);
+      const calcSellingPrice = d.selling_price
+        ? String(d.selling_price)
+        : d.purchase_price
+          ? String(Math.ceil((Number(d.purchase_price) * 1.20) / 500) * 500)
+          : prev.selling_price;
+
       setFormData((prev) => ({
         ...prev,
         phone_name: d.brand || d.phone_name || prev.phone_name,
@@ -163,16 +169,19 @@ const AddPhoneDialog = ({ open, onOpenChange, initialImei }: AddPhoneDialogProps
         imei_number: d.imei1 || d.imei_number || prev.imei_number,
         imei2_number: d.imei2 || d.imei2_number || prev.imei2_number,
         purchase_price: d.purchase_price ? String(d.purchase_price) : prev.purchase_price,
-        selling_price: d.selling_price ? String(d.selling_price) : prev.selling_price,
-        payment_method: d.payment_mode || prev.payment_method,
+        selling_price: calcSellingPrice,
+        condition: d.condition || prev.condition || "good",
+        purchase_date: d.purchase_date || prev.purchase_date || new Date().toISOString().split("T")[0],
+        payment_method: d.payment_method || d.payment_mode || prev.payment_method || "cash",
         seller_name: d.seller_name || prev.seller_name,
         seller_phone: d.seller_phone || prev.seller_phone,
         id_number: d.seller_aadhaar || d.id_number || prev.id_number,
-        id_proof_type: d.seller_aadhaar ? "Aadhaar" : prev.id_proof_type,
+        id_proof_type: (d.seller_aadhaar || d.id_number) ? "aadhaar" : (prev.id_proof_type || "aadhaar"),
         seller_address: d.seller_address || prev.seller_address,
         product_photos: Array.isArray(d.product_photos) && d.product_photos.length > 0 ? d.product_photos : prev.product_photos,
         purchase_documents: Array.isArray(d.purchase_documents) && d.purchase_documents.length > 0 ? d.purchase_documents : prev.purchase_documents,
         payment_proof_photos: Array.isArray(d.payment_proof_photos) && d.payment_proof_photos.length > 0 ? d.payment_proof_photos : prev.payment_proof_photos,
+        seller_photo_url: d.seller_photo_url || prev.seller_photo_url,
         seller_signature_url: d.seller_signature_url || prev.seller_signature_url,
       }));
       toast.success("AI Pre-fill Form Loaded!", { description: `${d.brand || ""} ${d.model || ""}`.trim() });

@@ -738,7 +738,17 @@ export const JarvisOrb: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      const respText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(respText);
+      } catch {
+        throw new Error(
+          res.status === 413
+            ? "Payload too large. Images are being compressed."
+            : `Server error (${res.status}): ${respText.slice(0, 100)}`
+        );
+      }
       if (!res.ok) throw new Error(data.error || "Failed to confirm deal");
 
       toast.success(`Deal Locked! ${deal.brand} ${deal.model} added to stock!`, {
