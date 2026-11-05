@@ -29,6 +29,7 @@ const WRITABLE_COLUMNS = [
   "tac_fetch_mode", "whatsapp_channel",
   "evolution_api_url", "evolution_api_key", "evolution_instance_name",
   "homepage_theme", "homepage_config", "repair_services_catalog",
+  "ai_provider", "ai_api_key", "ai_model", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak",
 ];
 
 const TAC_FETCH_MODES = new Set(["ask", "auto", "off"]);
@@ -108,6 +109,12 @@ export function getSettings() {
       } catch (_e) {}
       return null;
     })(),
+    aiProvider: empty(row?.ai_provider) || "gemini",
+    aiApiKey: empty(row?.ai_api_key),
+    aiModel: empty(row?.ai_model) || "gemini-1.5-flash",
+    aiCustomUrl: empty(row?.ai_custom_url),
+    aiVoiceEnabled: row?.ai_voice_enabled !== 0,
+    aiAutoSpeak: !!row?.ai_auto_speak,
     messageTemplates: shipped.messageTemplates || {},
   };
 }

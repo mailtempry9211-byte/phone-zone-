@@ -30,6 +30,7 @@ import FinancialYearSwitcher from "./FinancialYearSwitcher";
 import ShopSwitcher from "./ShopSwitcher";
 import PasswordChangeDialog from "./PasswordChangeDialog";
 import LicenseActivationModal from "./LicenseActivationModal";
+import JarvisOrb from "@/components/jarvis/JarvisOrb";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -1431,6 +1432,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         forceOpen={licenseModalOpen}
         onOpenChange={setLicenseModalOpen}
       />
+
+      {/* Floating JARVIS AI Store Copilot & Voice Assistant */}
+      <JarvisOrb />
     </div>
   );
 };

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { EvolutionApiGuideModal } from "./EvolutionApiGuideModal";
+import JarvisSettingsCard from "./JarvisSettingsCard";
 
 const SettingsTab = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1095,6 +1096,9 @@ const SettingsTab = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* PhoneZone JARVIS AI Copilot & Vision Settings */}
+      <JarvisSettingsCard />
 
       {/* WhatsApp Central Channel Control (Fix 4) */}
       <Card>

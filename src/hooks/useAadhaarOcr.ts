@@ -479,7 +479,55 @@ export const useAadhaarOcr = () => {
       // Shrink a huge phone photo ONCE; every pass below works on this copy.
       const workFile = await downscaleForScan(file);
 
-      // Fast-path: try Backend Native OCR first (<1.5s, no heavy WASM/memory exhaustion on mobile)
+      // Ultra-Fast Path 1: AI Vision OCR (Google Gemini / AI Studio / Multi-Provider)
+      try {
+        setState((s) => ({ ...s, status: "reading", progress: 0.15, error: "AI Vision analysis in progress..." }));
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(workFile);
+        });
+
+        const aiResp = await fetch("/api/ai/ocr-aadhaar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: b64, side: side || "front" }),
+          credentials: "include",
+        });
+
+        if (aiResp.ok) {
+          const aiJson = await aiResp.json();
+          const d = aiJson?.data;
+          if (d && (d.id_number || d.name || d.address)) {
+            const rawId = (d.id_number || "").replace(/\D/g, "");
+            const ok = rawId ? verhoeffValidate(rawId) : false;
+            const data: AadhaarData = {
+              idNumber: rawId,
+              name: side === "back" ? undefined : d.name,
+              dob: side === "back" ? undefined : d.dob,
+              yob: side === "back" ? undefined : (d.dob ? d.dob.slice(-4) : undefined),
+              gender: side === "back" ? undefined : d.gender,
+              address: side === "front" ? undefined : d.address,
+              checksumOk: ok,
+            };
+
+            setState({
+              status: "done",
+              progress: 1,
+              data,
+              raw: JSON.stringify(d),
+              error: "",
+              viaQr: false,
+            });
+            return;
+          }
+        }
+      } catch (_aiErr) {
+        // Gracefully falls through to regular OCR if offline or AI key not configured
+      }
+
+      // Fast-path 2: try Backend Native OCR (<1.5s, no heavy WASM/memory exhaustion on mobile)
       try {
         setState((s) => ({ ...s, status: "reading", progress: 0.1, error: "Scanning Aadhaar..." }));
         const form = new FormData();

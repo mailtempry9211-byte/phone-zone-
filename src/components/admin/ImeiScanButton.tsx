@@ -550,6 +550,36 @@ const ImeiScanButton = ({ onResult, disabled }: ImeiScanButtonProps) => {
     try {
       const bar = await decodeBarcode(file);
       if (!bar) {
+        // Fallback to AI Vision for reading printed IMEI sticker text!
+        try {
+          setStatusMsg("Analyzing sticker with AI Vision...");
+          const b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const aiResp = await fetch("/api/ai/ocr-imei", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: b64 }),
+            credentials: "include",
+          });
+
+          if (aiResp.ok) {
+            const aiData = await aiResp.json();
+            const d = aiData?.data;
+            const imeiCand = (d?.imei1 || d?.imei2 || "").replace(/\D/g, "");
+            if (imeiCand && imeiCand.length >= 14 && imeiCand.length <= 16) {
+              onResult({ imei: imeiCand, via: "ocr", checksumOk: true });
+              setLastScan(imeiCand);
+              toast.success(`IMEI (${imeiCand}) extracted via AI Vision!`);
+              return;
+            }
+          }
+        } catch (_aiErr) {}
+
         setError("No barcode found. Keep the barcode straight, sharp and well-lit.");
         toast.error("No barcode detected. Please hold the camera closer to the barcode.");
         return;

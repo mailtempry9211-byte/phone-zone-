@@ -31,6 +31,7 @@ import { buildCompatRouter } from "./compat.js";
 import { buildTacRouter } from "./tac.js";
 import { buildRepairsRouter } from "./repairs.js";
 import { buildWaRouter } from "./wa.js";
+import { buildAiRouter } from "./ai.js";
 import { buildOcrRouter } from "./ocr.js";
 import { logger } from "../lib/logger.js";
 
@@ -915,6 +916,9 @@ export function buildRouter() {
 
   // ---------------- WhatsApp Marketing module ----------------
   r.use("/wa", buildWaRouter(staff, admin));
+
+  // ---------------- Jarvis AI Assistant & AI Vision module ----------------
+  r.use("/ai", buildAiRouter(staff, admin));
 
   // ---------------- OCR recognition module (Aadhaar & IMEI) ----------------
   r.use("/ocr", buildOcrRouter(staff));
