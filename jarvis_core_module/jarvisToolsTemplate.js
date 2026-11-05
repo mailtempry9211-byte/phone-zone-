@@ -7,8 +7,8 @@
 import { getDb } from "../db/index.js";
 import { logger } from "../lib/logger.js";
 import * as baileysService from "./baileysService.js";
-import { getTacModel } from "./tacService.js";
-import { getInvoicePdf, generateInvoiceNumber } from "./invoiceService.js";
+import { lookupTac } from "./tacService.js";
+import { getInvoicePdf } from "./invoiceService.js";
 
 /**
  * Tool Specifications for LLM Function Calling
@@ -343,7 +343,7 @@ export async function executeJarvisTool(toolName, args = {}) {
           return { found: false, error: "IMEI must be at least 8 digits" };
         }
         const tac = clean.slice(0, 8);
-        const info = getTacModel(tac);
+        const info = lookupTac(tac);
         return {
           imei: clean,
           tac,
