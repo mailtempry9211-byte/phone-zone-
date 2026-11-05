@@ -127,10 +127,10 @@ export async function dispatchWhatsApp({
       }
     } catch {}
   }
-  const channel = effectiveChannel || "openwa";
+  const channel = effectiveChannel || "baileys";
 
-  // 1. Direct Gateway API (Evolution API / WPPConnect OR local OpenWA Gateway)
-  if (channel === "openwa" || channel === "evolution_api") {
+  // 1. Direct Gateway API (Native Baileys Gateway OR Evolution API)
+  if (channel === "baileys" || channel === "openwa" || channel === "evolution_api") {
     try {
       if (!pdfBase64 && pdfBlob) {
         pdfBase64 = await new Promise<string>((resolve, reject) => {
@@ -161,7 +161,7 @@ export async function dispatchWhatsApp({
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.ok) {
           backendSuccess = true;
-          const gatewayLabel = channel === "evolution_api" ? "Evolution API" : "OpenWA Gateway";
+          const gatewayLabel = channel === "evolution_api" ? "Evolution API" : "WhatsApp Gateway";
           if (data.type === "text_and_pdf") {
             toast.success(`Invoice text message and PDF document sent via ${gatewayLabel}!`);
           } else if (data.type === "pdf") {
@@ -209,7 +209,7 @@ export async function dispatchWhatsApp({
         }
       }
 
-      const label = channel === "evolution_api" ? "Evolution API Gateway" : "OpenWA Gateway";
+      const label = channel === "evolution_api" ? "Evolution API Gateway" : "WhatsApp Gateway (Baileys)";
       toast.warning(`${label} did not confirm delivery. Opening Click-to-Chat.`);
     } catch (err: any) {
       toast.warning("Gateway unreachable. Opening Click-to-Chat fallback.");

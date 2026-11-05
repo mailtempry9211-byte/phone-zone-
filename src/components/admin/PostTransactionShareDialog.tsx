@@ -56,11 +56,11 @@ export const PostTransactionShareDialog = ({
   const [includeSapathPatra, setIncludeSapathPatra] = useState<boolean>(true);
   const [sapathLanguage, setSapathLanguage] = useState<SapathTextLanguage>("both");
 
-  const channel = adminSettings?.whatsapp_channel || "openwa";
+  const channel = adminSettings?.whatsapp_channel || "baileys";
 
   useEffect(() => {
-    if (open && channel === "openwa") {
-      fetch("/api/wa/gateway/session-status/sales")
+    if (open && (channel === "baileys" || channel === "openwa")) {
+      fetch("/api/wa/gateway/session/sales")
         .then((r) => r.json())
         .then((data) => {
           if (data && (data.connected || data.status === "ready" || data.status === "authenticated")) {
@@ -162,7 +162,7 @@ export const PostTransactionShareDialog = ({
     }
   };
 
-  const isOpenWaReady = channel === "openwa" && gatewayStatus?.connected;
+  const isGatewayReady = (channel === "baileys" || channel === "openwa") && gatewayStatus?.connected;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -279,16 +279,16 @@ export const PostTransactionShareDialog = ({
         {/* Gateway Channel Indicator */}
         <div className="mt-3 flex items-center justify-between text-xs bg-slate-50 border rounded-md p-2.5">
           <span className="text-gray-600">WhatsApp Delivery:</span>
-          {channel === "openwa" ? (
-            isOpenWaReady ? (
+          {channel === "baileys" || channel === "openwa" ? (
+            isGatewayReady ? (
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 flex items-center gap-1 font-semibold">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                OpenWA Gateway (Ready)
+                WhatsApp Gateway (Ready)
               </Badge>
             ) : (
               <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                OpenWA (Click-to-chat Fallback)
+                Click-to-chat Fallback
               </Badge>
             )
           ) : (
@@ -312,10 +312,10 @@ export const PostTransactionShareDialog = ({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 व्हाट्सएप पर भेजा जा रहा है...
               </>
-            ) : channel === "openwa" && isOpenWaReady ? (
+            ) : (channel === "baileys" || channel === "openwa") && isGatewayReady ? (
               <>
                 <Send className="h-4 w-4" />
-                Send PDF &amp; Text directly via WhatsApp (OpenWA)
+                Send PDF &amp; Text directly via WhatsApp (Auto)
               </>
             ) : (
               <>

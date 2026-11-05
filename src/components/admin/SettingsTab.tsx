@@ -80,8 +80,8 @@ const SettingsTab = () => {
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
         toast.success(
-          value === "openwa"
-            ? "WhatsApp Channel saved: OpenWA Gateway active!"
+          value === "baileys" || value === "openwa"
+            ? "WhatsApp Channel saved: Native WhatsApp Gateway (Baileys) active!"
             : "WhatsApp Channel saved: Click-to-Chat active!"
         );
       }
@@ -1117,19 +1117,19 @@ const SettingsTab = () => {
                 hint: "Built directly into PhoneZone! No Chrome, no Docker, no external servers. Just scan QR in Marketing tab to send automated PDF bills & receipts 24/7.",
               },
               {
+                value: "baileys",
+                label: "Native WhatsApp Gateway (Baileys Engine) — Fast & Zero Browser (Recommended)",
+                hint: "In-process direct WhatsApp connection. Sends PDFs & receipts automatically across Render Cloud, Windows Desktop EXE, and Termux.",
+              },
+              {
                 value: "click_to_chat",
                 label: "Click-to-Chat (wa.me URL) — Manual WhatsApp App",
                 hint: "Direct link to WhatsApp. Opens official WhatsApp app on phone/PC with pre-filled message. Zero server setup required.",
               },
               {
                 value: "evolution_api",
-                label: "Evolution API / WPPConnect — 100% Free 24/7 Cloud Gateway (Recommended for Mobile APK & PC)",
-                hint: "Sends automated WhatsApp invoices & PDF bills in background without opening apps. Ideal for standalone mobile APK and 24/7 persistent dispatch without battery drain.",
-              },
-              {
-                value: "openwa",
-                label: "OpenWA Gateway API — Desktop Engine (PC EXE Only)",
-                hint: "Local Chromium browser engine on PC. Runs locally inside Electron desktop EXE.",
+                label: "Evolution API / External Server — Cloud Gateway",
+                hint: "External Evolution API or WPPConnect instance for remote multi-tenant setups.",
               },
             ].map(({ value, label, hint }) => (
               <label
@@ -1325,60 +1325,44 @@ const SettingsTab = () => {
             </div>
           )}
 
-          {formData.whatsapp_channel === "openwa" && (
+          {(formData.whatsapp_channel === "baileys" || formData.whatsapp_channel === "openwa" || !formData.whatsapp_channel) && (
             <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-950 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="font-semibold flex items-center gap-1.5">
                   <Radio className="h-4 w-4 text-emerald-600" />
-                  OpenWA Server Status: {serverStatus?.running ? (
+                  Native WhatsApp Gateway (Baileys Engine): {serverStatus?.connected ? (
                     <span className="text-emerald-700 font-bold flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Online (Port 2785)
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Connected &amp; Ready
                     </span>
                   ) : (
                     <span className="text-amber-700 font-bold flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-amber-500" /> Offline (Stopped)
+                      <span className="h-2 w-2 rounded-full bg-amber-500" /> Disconnected
                     </span>
                   )}
                 </span>
                 <div className="flex items-center gap-2">
-                  {serverStatus?.running ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-[11px] text-red-700 border-red-300 hover:bg-red-50"
-                      onClick={async () => {
-                        await fetch("/api/wa/gateway/stop-server", { method: "POST" });
-                        refetchServerStatus();
-                        toast.success("OpenWA Server stopped");
-                      }}
-                    >
-                      <Square className="h-2.5 w-2.5 mr-1 fill-red-600 text-red-600" /> Stop Server
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={async () => {
-                        const res = await fetch("/api/wa/gateway/start-server", { method: "POST" });
-                        const data = await res.json();
-                        refetchServerStatus();
-                        if (res.ok) toast.success(data.message || "OpenWA Server started!");
-                        else toast.error(data.error || "Failed to start OpenWA server");
-                      }}
-                    >
-                      <Play className="h-2.5 w-2.5 mr-1 fill-white text-white" /> Start Gateway Server
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-6 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => {
+                      // Navigate to marketing tab
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("tab", "marketing");
+                      window.history.pushState({}, "", url.toString());
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }}
+                  >
+                    Open WhatsApp QR &amp; Pairing
+                  </Button>
                 </div>
               </div>
 
-              {salesSession?.connected ? (
+              {serverStatus?.connected ? (
                 <div className="bg-white border border-emerald-200 p-2.5 rounded-md flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 font-medium text-emerald-900">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <strong>WhatsApp Linked:</strong> +{salesSession.phone} {salesSession.pushName ? `(${salesSession.pushName})` : ""}
+                    <strong>WhatsApp Linked:</strong> +{serverStatus.phone} {serverStatus.name ? `(${serverStatus.name})` : ""}
                   </span>
                   <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     Ready to Dispatch
@@ -1386,19 +1370,19 @@ const SettingsTab = () => {
                 </div>
               ) : (
                 <div className="bg-amber-50 border border-amber-200 p-2 rounded text-amber-800">
-                  ⚠️ WhatsApp not linked yet. Open the <strong>Marketing</strong> tab &rarr; <strong>OpenWA Gateway</strong> to scan QR code or enter Pairing Code.
+                  ⚠️ WhatsApp not linked yet. Open the <strong>Marketing</strong> tab to scan QR code or enter Pairing Code.
                 </div>
               )}
 
               <p className="text-gray-600 text-[11px]">
-                Invoices and Sapath Patra will now be dispatched automatically as <strong>BOTH Text Receipt and PDF Document</strong> via this WhatsApp connection!
+                Invoices and bills are dispatched automatically as <strong>BOTH Text Receipt and PDF Document</strong> via this WhatsApp connection!
               </p>
             </div>
           )}
 
           {formData.whatsapp_channel === "click_to_chat" && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800">
-              💡 <strong>Note for Marketing:</strong> With Click-to-Chat selected, bulk marketing requires opening each chat individually. For sending mass promotional messages, OpenWA Gateway is recommended.
+              💡 <strong>Note for Marketing:</strong> With Click-to-Chat selected, bulk marketing requires opening each chat individually. For sending automated promotional messages &amp; bills, Native WhatsApp Gateway (Baileys) is recommended.
             </div>
           )}
         </CardContent>

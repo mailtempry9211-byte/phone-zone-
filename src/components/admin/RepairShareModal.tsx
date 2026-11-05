@@ -198,7 +198,7 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
                 {badge}
               </Badge>
               <div className="text-[10px] text-gray-400 mt-0.5">
-                via {deliveryChannel === "openwa" ? "OpenWA Gateway" : "wa.me Click-to-Chat"}
+                via {deliveryChannel === "baileys" || deliveryChannel === "openwa" ? "WhatsApp Gateway (Auto)" : "wa.me Click-to-Chat"}
               </div>
             </div>
           </div>
@@ -221,8 +221,8 @@ export const RepairShareModal: React.FC<RepairShareModalProps> = ({
             <div className="p-2 rounded bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
               <span>
-                {deliveryChannel === "openwa"
-                  ? "OpenWA ke through formal PDF document + formatted text message dono ek sath direct bhejega."
+                {deliveryChannel === "baileys" || deliveryChannel === "openwa"
+                  ? "WhatsApp Gateway ke through formal PDF document + formatted text message dono ek sath direct bhejega."
                   : "Click-to-chat me WhatsApp chat open karega aur Desktop par PDF download karega."}
               </span>
             </div>

@@ -8,7 +8,6 @@ import express from "express";
 import { unauthorized, badRequest } from "../lib/errors.js";
 import { sessionUser } from "../services/authService.js";
 import * as waService from "../services/waService.js";
-import * as openWaService from "../services/openWaService.js";
 import * as evolutionWa from "../services/evolutionWaService.js";
 import * as baileysService from "../services/baileysService.js";
 import { getRawSettings } from "../services/settingsService.js";
@@ -136,83 +135,83 @@ export function buildWaRouter(staffAuth, adminAuth) {
     res.json(await baileysService.sendDocumentMessage({ phone, pdfBuffer: pdfBase64, filename, caption }));
   }));
 
-  // ---------------- OpenWA REST Gateway Dual Sessions ----------------
+  // ---------------- Native WhatsApp Engine (Baileys) Unified Gateway ----------------
   r.get("/gateway/server-status", staffAuth, wrap(async (_req, res) => {
-    res.json(await openWaService.getServerStatus());
+    let bStatus = baileysService.getStatus();
+    if (bStatus.state === "disconnected") {
+      baileysService.initBaileys().catch(() => {});
+      bStatus = baileysService.getStatus();
+    }
+    res.json({
+      running: bStatus.connected || bStatus.state === "qr_ready" || bStatus.state === "connecting",
+      connected: bStatus.connected,
+      managed: true,
+      engine: "baileys",
+      state: bStatus.state,
+      phone: bStatus.phone,
+      name: bStatus.name,
+    });
   }));
 
   r.post("/gateway/start-server", staffAuth, wrap(async (_req, res) => {
-    res.json(await openWaService.startOpenWaServer());
+    await baileysService.initBaileys(true);
+    res.json({ ok: true, message: "WhatsApp engine initialized with Baileys.", status: baileysService.getStatus() });
   }));
 
   r.post("/gateway/stop-server", staffAuth, wrap(async (_req, res) => {
-    res.json(await openWaService.stopOpenWaServer());
+    res.json(await baileysService.logout());
   }));
 
   r.post("/gateway/pairing-code", staffAuth, wrap(async (req, res) => {
-    const { channel, phone } = req.body || {};
+    const { phone } = req.body || {};
     if (!phone) throw badRequest("phone is required.");
-    res.json(await openWaService.requestPairingCode({ channel: channel || "sales", phone }));
+    const result = await baileysService.requestPairingCode(phone);
+    res.json({ ok: true, pairingCode: result.code, code: result.code, status: "code_ready" });
   }));
 
   r.get("/gateway/config", staffAuth, wrap((_req, res) => {
-    res.json(openWaService.getOpenWaConfig());
+    res.json({ ok: true, engine: "baileys", autoStart: true, unifiedMode: true });
   }));
 
   r.post("/gateway/config", adminAuth, wrap((req, res) => {
-    openWaService.saveOpenWaConfig(req.body || {});
-    res.json({ ok: true, config: openWaService.getOpenWaConfig() });
+    res.json({ ok: true, engine: "baileys", config: { engine: "baileys", autoStart: true } });
   }));
 
-  // Full Session Management API
   r.get("/gateway/sessions", staffAuth, wrap(async (_req, res) => {
-    res.json(await openWaService.listAllSessions());
-  }));
-
-  r.post("/gateway/sessions", staffAuth, wrap(async (req, res) => {
-    const { name } = req.body || {};
-    if (!name) throw badRequest("name is required.");
-    res.status(201).json(await openWaService.createSession(name));
-  }));
-
-  r.post("/gateway/sessions/:id/start", staffAuth, wrap(async (req, res) => {
-    res.json(await openWaService.startSession(req.params.id));
-  }));
-
-  r.post("/gateway/sessions/:id/stop", staffAuth, wrap(async (req, res) => {
-    res.json(await openWaService.stopSession(req.params.id));
-  }));
-
-  r.post("/gateway/sessions/:id/logout", staffAuth, wrap(async (req, res) => {
-    res.json(await openWaService.logoutSession(req.params.id));
-  }));
-
-  r.delete("/gateway/sessions/:id", staffAuth, wrap(async (req, res) => {
-    res.json(await openWaService.deleteSession(req.params.id));
-  }));
-
-  r.get("/gateway/sessions/:id/qr", staffAuth, wrap(async (req, res) => {
-    res.json(await openWaService.getSessionQr(req.params.id));
-  }));
-
-  r.post("/gateway/sessions/:id/pairing-code", staffAuth, wrap(async (req, res) => {
-    const { phone } = req.body || {};
-    if (!phone) throw badRequest("phone is required.");
-    res.json(await openWaService.requestPairingCodeForSession(req.params.id, phone));
+    const bStatus = baileysService.getStatus();
+    res.json({
+      sessions: [
+        {
+          id: "baileys",
+          name: "phonezone-primary",
+          status: bStatus.connected ? "ready" : bStatus.state,
+          phone: bStatus.phone,
+          pushName: bStatus.name,
+          engine: "baileys",
+        },
+      ],
+      engine: "baileys",
+    });
   }));
 
   r.get("/gateway/session/:channel", staffAuth, wrap(async (req, res) => {
     const channel = req.params.channel || "sales";
-    res.json(await openWaService.getSessionStatus(channel));
+    const bStatus = baileysService.getStatus();
+    res.json({
+      channel,
+      sessionId: "baileys",
+      connected: bStatus.connected,
+      status: bStatus.connected ? "ready" : bStatus.state,
+      phone: bStatus.phone,
+      pushName: bStatus.name,
+      qrCode: bStatus.qr,
+    });
   }));
 
   r.post("/gateway/send-text", staffAuth, wrap(async (req, res) => {
-    const { phone, message, channel } = req.body || {};
+    const { phone, message } = req.body || {};
     if (!phone || !message) throw badRequest("phone and message are required.");
-    if (baileysService.isConnected()) {
-      return res.json(await baileysService.sendTextMessage({ phone, message }));
-    }
-    res.json(await openWaService.sendTextMessage({ phone, message, channel: channel || "sales" }));
+    res.json(await baileysService.sendTextMessage({ phone, message }));
   }));
 
   r.post("/gateway/send-invoice-pdf", staffAuth, wrap(async (req, res) => {
@@ -277,25 +276,22 @@ export function buildWaRouter(staffAuth, adminAuth) {
           } catch (_err) {}
         }
       } else {
-        // Fallback to local OpenWA Gateway
+        // Fallback to attempting direct Baileys send (in case auto-reconnect needed)
         if (textToSend) {
           try {
-            textResult = await openWaService.sendTextMessage({
-              phone,
-              message: textToSend,
-              channel: channel || "sales",
-            });
+            textResult = await baileysService.sendTextMessage({ phone, message: textToSend });
           } catch (err) {}
         }
 
         if (pdfBuf) {
-          pdfResult = await openWaService.sendDocumentMessage({
-            phone,
-            pdfBuffer: pdfBuf,
-            filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
-            caption: "",
-            channel: channel || "sales",
-          });
+          try {
+            pdfResult = await baileysService.sendDocumentMessage({
+              phone,
+              pdfBuffer: pdfBuf,
+              filename: filename || (invoiceId ? `Invoice_${invoiceId.slice(0, 8)}.pdf` : "PhoneZone_Invoice.pdf"),
+              caption: "",
+            });
+          } catch (err) {}
         }
       }
     }
@@ -325,10 +321,9 @@ export function buildWaRouter(staffAuth, adminAuth) {
 
     if (textToSend) {
       try {
-        textResult = await openWaService.sendTextMessage({
+        textResult = await baileysService.sendTextMessage({
           phone,
           message: textToSend,
-          channel: channel || "sales",
         });
       } catch (err) {
         // Continue
@@ -338,13 +333,14 @@ export function buildWaRouter(staffAuth, adminAuth) {
     if (pdfBase64) {
       const cleanB64 = String(pdfBase64).replace(/^data:application\/pdf;base64,/, "");
       const pdfBuf = Buffer.from(cleanB64, "base64");
-      pdfResult = await openWaService.sendDocumentMessage({
-        phone,
-        pdfBuffer: pdfBuf,
-        filename: filename || "PhoneZone_Document.pdf",
-        caption: "",
-        channel: channel || "sales",
-      });
+      try {
+        pdfResult = await baileysService.sendDocumentMessage({
+          phone,
+          pdfBuffer: pdfBuf,
+          filename: filename || "PhoneZone_Document.pdf",
+          caption: "",
+        });
+      } catch (err) {}
     }
 
     return res.json({

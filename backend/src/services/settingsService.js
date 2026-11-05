@@ -123,11 +123,11 @@ export function saveSettings(updates, userId) {
   if (updates.tac_fetch_mode !== undefined && !TAC_FETCH_MODES.has(updates.tac_fetch_mode)) {
     throw badRequest("tac_fetch_mode must be ask, auto or off.");
   }
-  if (updates.whatsapp_channel === "chrome_extension") {
-    updates.whatsapp_channel = "openwa";
+  if (updates.whatsapp_channel === "chrome_extension" || updates.whatsapp_channel === "openwa") {
+    updates.whatsapp_channel = "baileys";
   }
   if (updates.whatsapp_channel !== undefined && !WHATSAPP_CHANNELS.has(updates.whatsapp_channel)) {
-    throw badRequest("whatsapp_channel must be click_to_chat, openwa, or evolution_api.");
+    throw badRequest("whatsapp_channel must be baileys, click_to_chat, or evolution_api.");
   }
   if (updates.instagram !== undefined) {
     updates.instagram = empty(updates.instagram).trim();

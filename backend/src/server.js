@@ -148,12 +148,9 @@ if (isMain) {
       .then((m) => m.syncFromSupabaseOnBoot().catch((err) => logger.warn("Supabase boot sync error", err)))
       .catch(() => {});
 
-    // Auto-start background services (OpenWA & Ngrok) if configured by owner
+    // Auto-start background services (Native Baileys WhatsApp & Ngrok)
     import("./services/baileysService.js")
       .then((m) => m.initBaileys().catch((err) => logger.warn("Baileys init error", err)))
-      .catch(() => {});
-    import("./services/openWaService.js")
-      .then((m) => m.autoStartOpenWaOnBoot().catch((err) => logger.warn("OpenWA auto-start error", err)))
       .catch(() => {});
     import("./services/ngrokService.js")
       .then((m) => m.autoStartTunnelOnBoot().catch((err) => logger.warn("Ngrok auto-start error", err)))

@@ -10,141 +10,150 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   MessageSquare,
-  Play,
-  Square,
   RefreshCw,
-  ExternalLink,
   QrCode,
   Phone,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Radio,
-  Power,
+  Zap,
+  LogOut,
+  Send,
+  Copy,
 } from "lucide-react";
 import { LOCAL_API_BASE } from "@/lib/data";
+
+interface BaileysStatus {
+  connected: boolean;
+  state: "disconnected" | "connecting" | "qr_ready" | "connected";
+  qr: string | null;
+  phone?: string | null;
+  name?: string | null;
+  user: {
+    id: string;
+    name: string;
+  } | null;
+}
 
 export const OpenWaUniversalControl: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [open, setOpen] = useState(false);
   const [pairingPhone, setPairingPhone] = useState("");
   const [generatedPairingCode, setGeneratedPairingCode] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
   const queryClient = useQueryClient();
 
-  // Poll server status every 5 seconds
-  const { data: serverStatus, isFetching, refetch } = useQuery({
-    queryKey: ["openwa-server-status"],
+  // Poll status from Baileys engine
+  const { data: status, isFetching, refetch } = useQuery<BaileysStatus>({
+    queryKey: ["baileys-status"],
     queryFn: async () => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/server-status`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch OpenWA status");
+      const res = await fetch(`${LOCAL_API_BASE}/wa/baileys/status`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch WhatsApp status");
       return res.json();
     },
-    refetchInterval: open ? 3000 : 8000,
+    refetchInterval: open ? 3000 : 10000,
   });
 
-  const { data: configData } = useQuery({
-    queryKey: ["openwa-config"],
-    queryFn: async () => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/config`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch OpenWA config");
-      return res.json();
-    },
-  });
+  const isConnected = Boolean(status?.connected);
+  const connectedPhone = status?.user?.id?.split("@")[0] || status?.phone;
+  const connectedName = status?.user?.name || status?.name;
 
-  // Start Server Mutation
-  const startServerMutation = useMutation({
+  // Restart / Re-init mutation
+  const initMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/start-server`, {
+      const res = await fetch(`${LOCAL_API_BASE}/wa/baileys/init`, {
         method: "POST",
         credentials: "include",
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start OpenWA server");
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success(data.message || "OpenWA Server started!");
-      queryClient.invalidateQueries({ queryKey: ["openwa-server-status"] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || "Error starting OpenWA server");
-    },
-  });
-
-  // Stop Server Mutation
-  const stopServerMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/stop-server`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to stop OpenWA server");
+      if (!res.ok) throw new Error(data.error || "Failed to restart engine");
       return data;
     },
     onSuccess: () => {
-      toast.info("OpenWA Server stopped");
-      queryClient.invalidateQueries({ queryKey: ["openwa-server-status"] });
+      toast.success("WhatsApp engine restarted. Generating QR code...");
+      refetch();
     },
     onError: (err: any) => {
-      toast.error(err.message || "Error stopping OpenWA server");
+      toast.error(err.message || "Failed to restart engine");
     },
   });
 
-  // Auto-Start Toggle Mutation
-  const autoStartMutation = useMutation({
-    mutationFn: async (autoStart: boolean) => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/config`, {
+  // Logout / Disconnect mutation
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${LOCAL_API_BASE}/wa/baileys/logout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ autoStart }),
       });
-      if (!res.ok) throw new Error("Failed to update auto-start setting");
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to logout");
+      return data;
     },
-    onSuccess: (_data, autoStart) => {
-      toast.success(autoStart ? "OpenWA auto-start enabled" : "OpenWA auto-start disabled");
-      queryClient.invalidateQueries({ queryKey: ["openwa-config"] });
-      queryClient.invalidateQueries({ queryKey: ["openwa-server-status"] });
+    onSuccess: () => {
+      toast.info("WhatsApp disconnected. You can scan QR code to re-link.");
+      setGeneratedPairingCode(null);
+      refetch();
     },
     onError: (err: any) => {
-      toast.error(err.message || "Failed to update setting");
+      toast.error(err.message || "Failed to logout");
     },
   });
 
   // Request Pairing Code Mutation
   const pairingCodeMutation = useMutation({
     mutationFn: async (phone: string) => {
-      const res = await fetch(`${LOCAL_API_BASE}/wa/gateway/pairing-code`, {
+      const clean = phone.replace(/\D/g, "");
+      const res = await fetch(`${LOCAL_API_BASE}/wa/baileys/pairing-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ phone, channel: "sales" }),
+        body: JSON.stringify({ phone: clean }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to request pairing code");
+      if (!res.ok) throw new Error(data.error || "Failed to generate pairing code");
       return data;
     },
     onSuccess: (data) => {
-      setGeneratedPairingCode(data.pairingCode || "CODE_SENT");
-      toast.success("Pairing code generated! Check your WhatsApp on mobile.");
-      queryClient.invalidateQueries({ queryKey: ["openwa-server-status"] });
+      setGeneratedPairingCode(data.code || "CODE_SENT");
+      toast.success("Pairing code generated! Enter it in WhatsApp on your phone.");
+      refetch();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to generate pairing code");
     },
   });
 
-  const isServerRunning = Boolean(serverStatus?.running);
-  const sessionInfo = serverStatus?.session;
-  const isConnected = Boolean(sessionInfo?.connected);
-  const autoStart = Boolean(configData?.autoStart ?? serverStatus?.autoStart ?? true);
+  const handleSendTest = async () => {
+    const clean = testPhone.replace(/\D/g, "");
+    if (!clean) {
+      toast.error("Enter a valid mobile number for test message");
+      return;
+    }
+    setSendingTest(true);
+    try {
+      const res = await fetch(`${LOCAL_API_BASE}/wa/baileys/send-text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          phone: clean,
+          message: "🎉 Hello from PhoneZone ERP! Your Native WhatsApp gateway is active and working perfectly.",
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Test dispatch failed");
+      toast.success(`Test message sent successfully to +${clean}!`);
+      setTestPhone("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to dispatch test message");
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   return (
     <>
@@ -153,219 +162,211 @@ export const OpenWaUniversalControl: React.FC<{ className?: string }> = ({ class
         type="button"
         variant="outline"
         size="sm"
-        className={className || `h-8 px-2.5 text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm ${
-          isServerRunning && isConnected
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-            : isServerRunning
-            ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-            : "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800"
-        }`}
+        className={
+          className ||
+          `h-8 px-2.5 text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm ${
+            isConnected
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+              : status?.state === "connecting"
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+              : "border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800"
+          }`
+        }
         onClick={() => setOpen(true)}
       >
-        <MessageSquare
-          className={`h-4 w-4 ${
-            isServerRunning && isConnected
-              ? "text-emerald-600"
-              : isServerRunning
-              ? "text-amber-500 animate-pulse"
-              : "text-slate-500"
+        <span
+          className={`h-2 w-2 rounded-full ${
+            isConnected
+              ? "bg-emerald-500 animate-pulse"
+              : status?.state === "connecting"
+              ? "bg-amber-500 animate-ping"
+              : "bg-slate-400"
           }`}
         />
-        <span className="hidden sm:inline">WhatsApp:</span>
-        {isServerRunning && isConnected ? (
-          <span className="flex items-center gap-1 text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-            Ready
-          </span>
-        ) : isServerRunning ? (
-          <span className="flex items-center gap-1 text-amber-700">
-            <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping"></span>
-            Linking
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-slate-500">
-            <span className="h-2 w-2 rounded-full bg-slate-400"></span>
-            Stopped
-          </span>
-        )}
+        <MessageSquare className="h-3.5 w-3.5" />
+        <span>
+          {isConnected
+            ? `WA: +${connectedPhone?.slice(-4) || "Live"}`
+            : status?.state === "connecting"
+            ? "WA: Connecting..."
+            : "WA: Offline"}
+        </span>
       </Button>
 
-      {/* Control Modal */}
+      {/* WhatsApp Control Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md sm:max-w-lg">
           <DialogHeader>
-            <div className="flex items-center justify-between pr-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
-                  <MessageSquare className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-base font-bold text-slate-900">
-                    OpenWA WhatsApp Gateway
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-gray-500">
-                    Automated background PDF bills &amp; text dispatch
-                  </DialogDescription>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-500 hover:text-slate-800"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <Zap className="h-5 w-5 text-emerald-600" /> WhatsApp Gateway Control (Baileys Engine)
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Direct WebSocket WhatsApp connection. 100% browser-free, instant startup, works on Cloud &amp; Desktop.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Status Card */}
-            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+            {/* Live Status Card */}
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600">Gateway Service (Port 2785):</span>
-                {isServerRunning ? (
-                  <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] gap-1">
-                    <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Running {serverStatus?.pid ? `(PID: ${serverStatus.pid})` : ""}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-rose-100 text-rose-800 border-rose-300 font-bold text-[11px] gap-1">
-                    <Power className="h-3 w-3 text-rose-500" /> Offline / Stopped
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between border-t border-slate-200/80 pt-2">
-                <span className="text-xs font-semibold text-slate-600">WhatsApp Session:</span>
+                <span className="text-xs font-bold text-slate-700">Gateway Status:</span>
                 {isConnected ? (
-                  <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] gap-1">
-                    <Radio className="h-3 w-3 text-emerald-600" /> Connected {sessionInfo?.phone ? `(${sessionInfo.phone})` : ""}
+                  <Badge className="bg-emerald-600 text-white font-semibold text-xs flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Connected &amp; Ready
                   </Badge>
-                ) : isServerRunning ? (
-                  <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-[11px] gap-1">
-                    <AlertCircle className="h-3 w-3 text-amber-600" /> Scan QR / Pairing Code Needed
+                ) : status?.state === "qr_ready" ? (
+                  <Badge className="bg-blue-600 text-white font-semibold text-xs flex items-center gap-1">
+                    <QrCode className="h-3 w-3" /> QR Ready to Scan
+                  </Badge>
+                ) : status?.state === "connecting" ? (
+                  <Badge className="bg-amber-500 text-white font-semibold text-xs flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Connecting...
                   </Badge>
                 ) : (
-                  <span className="text-xs text-gray-400">Server not started</span>
+                  <Badge variant="outline" className="text-slate-600 border-slate-300 text-xs">
+                    Disconnected
+                  </Badge>
                 )}
               </div>
 
-              {sessionInfo?.pushName && (
-                <div className="flex items-center justify-between border-t border-slate-200/80 pt-2 text-xs">
-                  <span className="text-slate-500">Account Name:</span>
-                  <span className="font-semibold text-slate-800">{sessionInfo.pushName}</span>
+              {isConnected && (
+                <div className="border-t border-slate-200/80 pt-2 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Connected Phone:</span>
+                    <span className="font-mono font-bold text-emerald-700">+{connectedPhone}</span>
+                  </div>
+                  {connectedName && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">WhatsApp Name:</span>
+                      <span className="font-semibold text-slate-800">{connectedName}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Auto-Start on App Launch Toggle */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white shadow-xs">
-              <div className="space-y-0.5">
-                <Label htmlFor="openwa_autostart" className="text-xs font-bold text-slate-800 cursor-pointer">
-                  Auto-start on Application Launch
-                </Label>
-                <p className="text-[11px] text-gray-500">
-                  PhoneZone start hote hi OpenWA server aur session automatically shuru ho jayega.
-                </p>
-              </div>
-              <Switch
-                id="openwa_autostart"
-                checked={autoStart}
-                disabled={autoStartMutation.isPending}
-                onCheckedChange={(checked) => autoStartMutation.mutate(checked)}
-              />
-            </div>
+            {/* If NOT connected: Show QR or Pairing Code options */}
+            {!isConnected && (
+              <div className="border rounded-xl p-4 bg-white space-y-4">
+                {status?.qr && (
+                  <div className="flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 space-y-2">
+                    <img
+                      src={status.qr}
+                      alt="WhatsApp QR Code"
+                      className="w-48 h-48 rounded border border-emerald-300 p-1 bg-white shadow-xs"
+                    />
+                    <p className="text-[11px] text-gray-500 text-center">
+                      Open WhatsApp &gt; Linked Devices &gt; Link a Device &gt; Scan this QR.
+                    </p>
+                  </div>
+                )}
 
-            {/* Server Controls */}
-            <div className="flex gap-2">
-              {!isServerRunning ? (
-                <Button
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9"
-                  onClick={() => startServerMutation.mutate()}
-                  disabled={startServerMutation.isPending}
-                >
-                  {startServerMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Starting Server...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-1.5 fill-current" /> Start WhatsApp Gateway
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="flex-1 border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold text-xs h-9"
-                  onClick={() => stopServerMutation.mutate()}
-                  disabled={stopServerMutation.isPending}
-                >
-                  {stopServerMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Stopping...
-                    </>
-                  ) : (
-                    <>
-                      <Square className="h-4 w-4 mr-1.5 fill-current text-rose-600" /> Stop Gateway Service
-                    </>
-                  )}
-                </Button>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-3 text-xs"
-                asChild
-              >
-                <a
-                  href="http://127.0.0.1:2785/dashboard"
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Open Official OpenWA Web Dashboard"
-                >
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Dashboard
-                </a>
-              </Button>
-            </div>
-
-            {/* Quick Pairing Section if Not Connected */}
-            {isServerRunning && !isConnected && (
-              <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/60 space-y-2">
-                <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 text-amber-700" /> Link WhatsApp via Phone Pairing Code
+                {/* Pairing Code by Phone Number */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <Phone className="h-3.5 w-3.5 text-emerald-600" /> Or Link with Phone Number (Pairing Code)
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="10-digit mobile number"
+                      value={pairingPhone}
+                      onChange={(e) => setPairingPhone(e.target.value)}
+                      maxLength={10}
+                      className="h-8 text-xs bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs shrink-0"
+                      disabled={pairingCodeMutation.isPending || !pairingPhone.trim()}
+                      onClick={() => pairingCodeMutation.mutate(pairingPhone.trim())}
+                    >
+                      {pairingCodeMutation.isPending ? "Generating..." : "Get Code"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter 10-digit Phone (e.g. 8418944572)"
-                    value={pairingPhone}
-                    onChange={(e) => setPairingPhone(e.target.value)}
-                    className="h-8 text-xs bg-white"
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs shrink-0"
-                    disabled={pairingCodeMutation.isPending || !pairingPhone.trim()}
-                    onClick={() => pairingCodeMutation.mutate(pairingPhone.trim())}
-                  >
-                    {pairingCodeMutation.isPending ? "Generating..." : "Get Code"}
-                  </Button>
-                </div>
+
                 {generatedPairingCode && (
-                  <div className="p-2 bg-white rounded border border-amber-300 text-center">
-                    <span className="text-[10px] text-gray-500 block">Enter this code in WhatsApp &gt; Linked Devices:</span>
-                    <span className="text-lg font-mono font-bold tracking-widest text-slate-900">{generatedPairingCode}</span>
+                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-300 text-center space-y-1.5">
+                    <span className="text-[11px] text-emerald-900 font-medium block">
+                      Enter this 8-digit code in WhatsApp &gt; Linked Devices:
+                    </span>
+                    <div className="flex items-center justify-center gap-2">
+                      <code className="text-2xl font-mono font-bold tracking-widest text-emerald-950 bg-white px-4 py-1 rounded border border-emerald-400 select-all">
+                        {generatedPairingCode}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedPairingCode);
+                          toast.success("Pairing code copied!");
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
+
+            {/* Quick Test Message Dispatcher */}
+            {isConnected && (
+              <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2">
+                <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Send className="h-3.5 w-3.5 text-emerald-600" /> Send Quick Test Message
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Recipient 10-digit mobile number"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    maxLength={10}
+                    className="h-8 text-xs bg-white border-emerald-300"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 bg-emerald-700 hover:bg-emerald-800 text-white text-xs shrink-0"
+                    disabled={sendingTest || !testPhone.trim()}
+                    onClick={handleSendTest}
+                  >
+                    {sendingTest ? <Loader2 className="h-3 w-3 animate-spin" /> : "Send"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Controls / Actions */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs h-8 border-slate-300"
+                onClick={() => initMutation.mutate()}
+                disabled={initMutation.isPending}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1 ${initMutation.isPending ? "animate-spin" : ""}`} />
+                Restart Engine
+              </Button>
+
+              {isConnected && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs h-8 border-rose-300 text-rose-700 hover:bg-rose-50"
+                  onClick={() => logoutMutation.mutate()}
+                  disabled={logoutMutation.isPending}
+                >
+                  <LogOut className="h-3.5 w-3.5 mr-1" /> Disconnect Number
+                </Button>
+              )}
+            </div>
           </div>
 
           <DialogFooter className="sm:justify-between border-t pt-3">
-            <span className="text-[11px] text-gray-400">
-              {isConnected ? "Direct auto-send active for bills & repairs" : "Offline fallback: wa.me click-to-chat"}
+            <span className="text-[11px] text-gray-500">
+              {isConnected ? "✅ Automated billing & PDF dispatch active" : "Offline: Click-to-chat fallback active"}
             </span>
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               Close
@@ -378,4 +379,3 @@ export const OpenWaUniversalControl: React.FC<{ className?: string }> = ({ class
 };
 
 export default OpenWaUniversalControl;
-

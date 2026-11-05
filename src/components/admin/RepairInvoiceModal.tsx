@@ -320,7 +320,7 @@ export const RepairInvoiceModal: React.FC<RepairInvoiceModalProps> = ({
             <Label className="text-xs font-semibold text-gray-800 flex items-center justify-between mb-1">
               <span>WhatsApp Message Text (Sent with or without PDF)</span>
               <span className="text-[11px] text-gray-500 font-normal">
-                via {deliveryChannel === "openwa" ? "OpenWA Gateway (Auto)" : "wa.me Click-to-Chat"}
+                via {deliveryChannel === "baileys" || deliveryChannel === "openwa" ? "WhatsApp Gateway (Auto)" : "wa.me Click-to-Chat"}
               </span>
             </Label>
             <Textarea
