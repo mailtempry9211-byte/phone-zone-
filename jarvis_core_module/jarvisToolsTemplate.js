@@ -127,11 +127,17 @@ export const JARVIS_TOOLS = [
  * Parse human date reference to SQLite date string range
  */
 function resolveDateRange(ref) {
+  if (!ref) return { start: null, end: null };
+
+  const lower = String(ref).toLowerCase().trim();
+  if (!lower || lower === "all" || lower === "all_time" || lower === "total" || lower === "sab" || lower === "abhi_tak" || lower === "ever") {
+    return { start: null, end: null };
+  }
+
   const now = new Date();
   const format = (d) => d.toISOString().split("T")[0];
 
-  const lower = (ref || "").toLowerCase().trim();
-  if (!lower || lower === "today" || lower === "aaj") {
+  if (lower === "today" || lower === "aaj") {
     const today = format(now);
     return { start: today, end: today };
   }
@@ -358,64 +364,104 @@ export async function executeJarvisTool(toolName, args = {}) {
       // 5. Business Financial Summary
       // -------------------------------------------------------------
       case "get_business_summary": {
-        const { date_reference = "today" } = args;
+        const { date_reference } = args;
         const dateRange = resolveDateRange(date_reference);
-        const dStart = dateRange.start || new Date().toISOString().split("T")[0];
-        const dEnd = dateRange.end || dStart;
+        const dStart = dateRange.start;
+        const dEnd = dateRange.end;
 
-        const sales = db.prepare(`
+        // All-time lifetime statistics
+        const lifetimeSales = db.prepare(`
           SELECT COUNT(*) as count, COALESCE(SUM(selling_price), 0) as total_sales,
                  COALESCE(SUM(selling_price - purchase_price), 0) as gross_profit
           FROM phones
-          WHERE is_sold = 1 AND date(sold_date) >= date(?) AND date(sold_date) <= date(?)
-        `).get(dStart, dEnd);
-
-        const purchases = db.prepare(`
-          SELECT COUNT(*) as count, COALESCE(SUM(purchase_price), 0) as total_purchases
-          FROM phones
-          WHERE date(purchase_date) >= date(?) AND date(purchase_date) <= date(?)
-        `).get(dStart, dEnd);
+          WHERE is_sold = 1
+        `).get();
 
         const activeStock = db.prepare(`
           SELECT COUNT(*) as count, COALESCE(SUM(purchase_price), 0) as valuation
           FROM phones WHERE is_sold = 0
         `).get();
 
+        const allTimePurchases = db.prepare(`
+          SELECT COUNT(*) as count, COALESCE(SUM(purchase_price), 0) as total_purchases
+          FROM phones
+        `).get();
+
+        // Period-specific statistics
+        let periodSales = lifetimeSales;
+        if (dStart && dEnd) {
+          periodSales = db.prepare(`
+            SELECT COUNT(*) as count, COALESCE(SUM(selling_price), 0) as total_sales,
+                   COALESCE(SUM(selling_price - purchase_price), 0) as gross_profit
+            FROM phones
+            WHERE is_sold = 1 AND date(sold_date) >= date(?) AND date(sold_date) <= date(?)
+          `).get(dStart, dEnd);
+        }
+
         return {
-          period: date_reference,
-          date_start: dStart,
-          date_end: dEnd,
-          sales_count: sales?.count || 0,
-          total_revenue: sales?.total_sales || 0,
-          gross_profit: sales?.gross_profit || 0,
-          purchases_count: purchases?.count || 0,
-          total_purchase_expense: purchases?.total_purchases || 0,
+          period: date_reference || "all_time",
+          date_start: dStart || "all_time",
+          date_end: dEnd || "all_time",
+          period_sales_count: periodSales?.count || 0,
+          period_revenue: periodSales?.total_sales || 0,
+          period_profit: periodSales?.gross_profit || 0,
+          all_time_sold_phones_count: lifetimeSales?.count || 0,
+          all_time_sales_revenue: lifetimeSales?.total_sales || 0,
+          all_time_gross_profit: lifetimeSales?.gross_profit || 0,
           current_stock_count: activeStock?.count || 0,
           stock_valuation: activeStock?.valuation || 0,
+          total_phones_purchased_ever: allTimePurchases?.count || 0,
         };
       }
 
       // -------------------------------------------------------------
-      // 6. Search Repairs
+      // 6. Search Repairs (Tickets & All-time count)
       // -------------------------------------------------------------
       case "search_repairs": {
         const { query = "", status } = args;
-        let sql = `SELECT id, customer_name, customer_phone, device_model, problem_description, status, estimated_cost, advance_paid, created_at FROM repair_jobs WHERE 1=1`;
+
+        // All-time repair summary statistics
+        const summary = db.prepare(`
+          SELECT 
+            COUNT(*) as total_count,
+            SUM(CASE WHEN status = 'delivered' OR status = 'completed' THEN 1 ELSE 0 END) as completed_count,
+            SUM(CASE WHEN status = 'in_progress' OR status = 'pending' THEN 1 ELSE 0 END) as active_count,
+            COALESCE(SUM(final_price), 0) as total_revenue
+          FROM repair_jobs
+          WHERE deleted_at IS NULL
+        `).get();
+
+        let sql = `
+          SELECT rj.id, rj.job_no, rc.name as customer_name, rc.phone as customer_phone,
+                 rj.device_brand, rj.device_model, rj.problem as problem_description,
+                 rj.status, rj.estimate as estimated_cost, rj.advance_paid, rj.final_price,
+                 rj.created_at
+          FROM repair_jobs rj
+          LEFT JOIN repair_customers rc ON rj.repair_customer_id = rc.id
+          WHERE rj.deleted_at IS NULL
+        `;
         const params = [];
 
         if (status) {
-          sql += ` AND status = ?`;
+          sql += ` AND rj.status = ?`;
           params.push(status);
         }
         if (query.trim()) {
-          sql += ` AND (customer_name LIKE ? OR customer_phone LIKE ? OR device_model LIKE ? OR problem_description LIKE ?)`;
+          sql += ` AND (rc.name LIKE ? OR rc.phone LIKE ? OR rj.device_brand LIKE ? OR rj.device_model LIKE ? OR rj.problem LIKE ? OR rj.job_no LIKE ?)`;
           const w = `%${query.trim()}%`;
-          params.push(w, w, w, w);
+          params.push(w, w, w, w, w, w);
         }
-        sql += ` ORDER BY created_at DESC LIMIT 5`;
+        sql += ` ORDER BY rj.created_at DESC LIMIT 10`;
 
         const repairs = db.prepare(sql).all(...params);
-        return { count: repairs.length, repairs };
+        return {
+          all_time_repairs_count: summary?.total_count || 0,
+          completed_repairs_count: summary?.completed_count || 0,
+          active_repairs_count: summary?.active_count || 0,
+          total_repair_revenue: summary?.total_revenue || 0,
+          matching_count: repairs.length,
+          repairs,
+        };
       }
 
       // -------------------------------------------------------------
