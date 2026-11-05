@@ -60,6 +60,7 @@ const DatabaseTab = () => {
   const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [selectedSellers, setSelectedSellers] = useState<string[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [repairJobs, setRepairJobs] = useState<any[]>([]);
   const [repairCustomers, setRepairCustomers] = useState<any[]>([]);
   const [dealers, setDealers] = useState<any[]>([]);
@@ -152,6 +153,7 @@ const DatabaseTab = () => {
       setSelectedPhones((phonesRes.data || []).map((p: any) => p.id));
       setSelectedSellers((sellersRes.data || []).map((s: any) => s.id));
       setSelectedCustomers((customersRes.data || []).map((c: any) => c.id));
+      setSelectedMessages((messagesRes.data || []).map((m: any) => m.id));
       setSelectedRepairJobs((repairsRes.data || []).map((r: any) => r.id));
       setSelectedDealers((dealersRes.data || []).map((d: any) => d.id));
       setSelectedDealerBatches((batchesRes.data || []).map((b: any) => b.id));
