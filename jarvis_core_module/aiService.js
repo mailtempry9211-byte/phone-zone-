@@ -259,12 +259,17 @@ Schema:
   ]
 }`;
 
-  const b64Parts = images.map((img) => ({
-    inline_data: {
-      mime_type: "image/jpeg",
-      data: cleanBase64(img),
-    },
-  }));
+  const b64Parts = images.map((img) => {
+    let mime = "image/jpeg";
+    const match = typeof img === "string" ? img.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,/) : null;
+    if (match) mime = match[1];
+    return {
+      inline_data: {
+        mime_type: mime,
+        data: cleanBase64(img),
+      },
+    };
+  });
 
   const payload = {
     contents: [

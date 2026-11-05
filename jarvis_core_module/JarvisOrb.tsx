@@ -24,6 +24,7 @@ import {
   PenTool,
   RotateCcw,
   ExternalLink,
+  Upload,
 } from "lucide-react";
 
 interface Message {
@@ -35,6 +36,46 @@ interface Message {
   attachedImages?: string[];
   timestamp: Date;
 }
+
+// -------------------------------------------------------------
+// Client-Side Image Compressor (Ensures super-fast upload & 0 latency)
+// -------------------------------------------------------------
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.75));
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+};
 
 // -------------------------------------------------------------
 // Interactive Signature Pad Canvas
@@ -119,7 +160,7 @@ const SignaturePad: React.FC<{
     <div className="space-y-1.5 pt-1">
       <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300">
         <span className="font-semibold flex items-center gap-1 text-indigo-900 dark:text-indigo-300">
-          <PenTool className="h-3 w-3" /> Customer / Seller Signature:
+          <PenTool className="h-3 w-3" /> Draw Signature on Screen:
         </span>
         {hasSignature && (
           <button
@@ -146,6 +187,199 @@ const SignaturePad: React.FC<{
       />
       {!hasSignature && (
         <p className="text-[10px] text-slate-400 italic">Finger ya mouse se screen par sign karein</p>
+      )}
+    </div>
+  );
+};
+
+// -------------------------------------------------------------
+// 3 Signature Options Component (Draw, Upload, Saved/Mobile)
+// -------------------------------------------------------------
+const SignatureSelector: React.FC<{
+  dealId: string;
+  savedSignature?: string | null;
+  onSave: (dataUrl: string) => void;
+  onClear: () => void;
+}> = ({ dealId, savedSignature, onSave, onClear }) => {
+  const [mode, setMode] = useState<"draw" | "upload" | "saved">(savedSignature ? "saved" : "draw");
+  const [currentSig, setCurrentSig] = useState<string | null>(savedSignature || null);
+  const uploadSigInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (savedSignature && !currentSig) {
+      setCurrentSig(savedSignature);
+      onSave(savedSignature);
+    }
+  }, [savedSignature]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCurrentSig(reader.result);
+        onSave(reader.result);
+        toast.success("Signature photo uploaded successfully!");
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleApplySaved = () => {
+    if (savedSignature) {
+      setCurrentSig(savedSignature);
+      onSave(savedSignature);
+      toast.success("Saved signature applied from previous records!");
+    }
+  };
+
+  const handleRemove = () => {
+    setCurrentSig(null);
+    onClear();
+  };
+
+  return (
+    <div className="space-y-2 pt-1 border-t border-indigo-200 dark:border-indigo-800/60">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-[11px] text-indigo-950 dark:text-indigo-200 flex items-center gap-1">
+          <PenTool className="h-3.5 w-3.5 text-indigo-600" />
+          Customer Digital Signature (3 Options):
+        </span>
+        {currentSig && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="text-[10px] text-rose-500 hover:text-rose-700 font-semibold flex items-center gap-0.5"
+          >
+            <RotateCcw className="h-2.5 w-2.5" /> Remove
+          </button>
+        )}
+      </div>
+
+      {/* 3 Option Switcher Tabs */}
+      <div className="grid grid-cols-3 gap-1 bg-slate-200/70 dark:bg-slate-900 p-0.5 rounded-lg text-[10px] font-semibold">
+        <button
+          type="button"
+          onClick={() => setMode("draw")}
+          className={`py-1 rounded text-center transition-colors ${
+            mode === "draw"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-xs font-bold"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+          }`}
+        >
+          ✍️ Draw (Screen)
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          className={`py-1 rounded text-center transition-colors ${
+            mode === "upload"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-xs font-bold"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+          }`}
+        >
+          📁 Upload Photo
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("saved")}
+          className={`py-1 rounded text-center transition-colors ${
+            mode === "saved"
+              ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-xs font-bold"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+          }`}
+        >
+          📱 Saved / Mobile
+        </button>
+      </div>
+
+      {/* Current signature preview banner if set */}
+      {currentSig && (
+        <div className="flex items-center gap-2 p-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+          <div className="h-10 w-24 bg-white rounded border border-emerald-300 p-0.5 flex items-center justify-center shrink-0">
+            <img src={currentSig} alt="Signature" className="max-h-full max-w-full object-contain" />
+          </div>
+          <div className="flex-1 text-[10px] text-emerald-800 dark:text-emerald-300">
+            <span className="font-bold flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Signature Attached
+            </span>
+            <span className="text-[9px] text-slate-500">Ready for legal Sapath Patra & purchase bill</span>
+          </div>
+        </div>
+      )}
+
+      {/* Option 1: Draw on Canvas */}
+      {mode === "draw" && (
+        <SignaturePad
+          onSave={(dataUrl) => {
+            setCurrentSig(dataUrl);
+            onSave(dataUrl);
+          }}
+          onClear={handleRemove}
+        />
+      )}
+
+      {/* Option 2: Upload Signature Image */}
+      {mode === "upload" && (
+        <div className="space-y-1.5">
+          <input
+            ref={uploadSigInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => uploadSigInputRef.current?.click()}
+            className="w-full h-12 border-dashed border-2 border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 flex items-center justify-center gap-2 text-xs"
+          >
+            <Upload className="h-4 w-4" />
+            <span>Kagaz par sign ki photo ya signature file upload karein</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Option 3: Saved Signature or Mobile */}
+      {mode === "saved" && (
+        <div className="p-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2 text-xs">
+          {savedSignature ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-20 bg-slate-50 border rounded p-0.5 flex items-center justify-center">
+                  <img src={savedSignature} alt="Saved" className="max-h-full max-w-full object-contain" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                    Previous Saved Signature
+                  </p>
+                  <p className="text-[9px] text-slate-400">Seller ke purane purchase record se</p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleApplySaved}
+                className="h-7 text-[10px] bg-purple-700 hover:bg-purple-800 text-white font-bold"
+              >
+                Apply
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center py-2 space-y-1">
+              <p className="text-[11px] text-slate-500">
+                Is seller ka koi purana signature nahi mila.
+              </p>
+              <p className="text-[10px] text-indigo-600 font-medium">
+                Kripya <b>Draw</b> ya <b>Upload Photo</b> tab use karke sign lein.
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -326,21 +560,24 @@ export const JarvisOrb: React.FC = () => {
     toast.info(next ? "AI Audio Muted 🔇" : "AI Audio Unmuted 🔊");
   };
 
-  // Image Upload Handler
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Image Upload Handler with Instant Client-Side Compression
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setAttachedFiles((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
+    toast.loading("Compressing & preparing photos...", { id: "compress-img" });
+    const compressedList: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const c = await compressImage(file);
+        if (c) compressedList.push(c);
+      } catch {
+        // skip corrupted
+      }
+    }
+    setAttachedFiles((prev) => [...prev, ...compressedList]);
+    toast.success(`${compressedList.length} photos ready for AI Intake!`, { id: "compress-img" });
     e.target.value = "";
   };
 
@@ -359,12 +596,22 @@ export const JarvisOrb: React.FC = () => {
           credentials: "include",
           body: JSON.stringify({ images, message: text }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Smart Intake failed");
+        const respText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(respText);
+        } catch {
+          throw new Error(
+            res.status === 413
+              ? "Photos payload is too large. Image optimizer is compressing them."
+              : `Server error (${res.status}): ${respText.slice(0, 120)}`
+          );
+        }
+        if (!res.ok || !data.ok) throw new Error(data.error || "Smart Intake failed");
         return {
           type: "smart_intake",
           deal: data.data,
-          reply: `Bhaiya, maine saare photos analyze kar liye hain! Phone: ${data.data.brand} ${data.data.model}, IMEI: ${data.data.imei1 || "N/A"}, Price: ₹${data.data.purchase_price || 0}. Kripya neeche verify karke customer ke signature lein aur Confirm dabayein.`,
+          reply: `Bhaiya, maine saare photos analyze kar liye hain! Phone: ${data.data.brand || ""} ${data.data.model || ""}, IMEI: ${data.data.imei1 || "N/A"}, Price: ₹${data.data.purchase_price || 0}. Kripya neeche verify karke customer ke signature lein aur Confirm dabayein.`,
         };
       }
 
@@ -381,7 +628,13 @@ export const JarvisOrb: React.FC = () => {
         body: JSON.stringify({ message: text, history: historyPayload }),
       });
 
-      const data = await res.json();
+      const respText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(respText);
+      } catch {
+        throw new Error(`Server error (${res.status}): ${respText.slice(0, 120)}`);
+      }
       if (!res.ok) throw new Error(data.error || "JARVIS failed to process request");
       return {
         type: "chat",
@@ -902,8 +1155,10 @@ export const JarvisOrb: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Interactive Signature Pad */}
-                      <SignaturePad
+                      {/* 3 Signature Options (Draw, Upload, Saved/Mobile) */}
+                      <SignatureSelector
+                        dealId={m.id}
+                        savedSignature={m.dealData.saved_signature}
                         onSave={(sigDataUrl) => {
                           setDealSignatures((prev) => ({ ...prev, [m.id]: sigDataUrl }));
                         }}

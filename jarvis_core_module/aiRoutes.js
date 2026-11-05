@@ -37,6 +37,25 @@ export function buildAiRouter(staffAuth, adminAuth) {
       throw badRequest("At least 1 image is required for smart intake.");
     }
     const result = await processSmartIntake({ images, message });
+
+    // Check if seller already exists with a saved signature
+    try {
+      const db = getDb();
+      if (result.seller_phone) {
+        const cleanPhone = String(result.seller_phone).replace(/\D/g, "");
+        const exSeller = db.prepare(
+          "SELECT id, name, address, id_number, signature_url FROM sellers WHERE phone LIKE ? OR phone = ? LIMIT 1"
+        ).get(`%${cleanPhone}%`, cleanPhone);
+
+        if (exSeller) {
+          result.saved_signature = exSeller.signature_url || null;
+          if (!result.seller_name && exSeller.name) result.seller_name = exSeller.name;
+          if (!result.seller_address && exSeller.address) result.seller_address = exSeller.address;
+          if (!result.seller_aadhaar && exSeller.id_number) result.seller_aadhaar = exSeller.id_number;
+        }
+      }
+    } catch {}
+
     res.json({ ok: true, data: result });
   }));
 

@@ -54,7 +54,8 @@ export function createServer() {
       crossOriginResourcePolicy: false,
     }),
   );
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
 
   // CORS support for Mobile APK & remote clients
