@@ -3,7 +3,7 @@
 
 ALTER TABLE admin_settings ADD COLUMN ai_provider TEXT DEFAULT 'gemini';
 ALTER TABLE admin_settings ADD COLUMN ai_api_key TEXT DEFAULT '';
-ALTER TABLE admin_settings ADD COLUMN ai_model TEXT DEFAULT 'gemini-1.5-flash';
+ALTER TABLE admin_settings ADD COLUMN ai_model TEXT DEFAULT 'gemini-2.5-flash-lite';
 ALTER TABLE admin_settings ADD COLUMN ai_custom_url TEXT DEFAULT '';
 ALTER TABLE admin_settings ADD COLUMN ai_voice_enabled INTEGER DEFAULT 1;
 ALTER TABLE admin_settings ADD COLUMN ai_auto_speak INTEGER DEFAULT 0;

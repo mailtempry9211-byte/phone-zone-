@@ -74,59 +74,64 @@ export async function handleJarvisChat({ conversationId, userId, message, histor
   } catch {}
 
   // 1. Initial LLM Call with Tools
-  const initialResponse = await callLLMWithTools({
+  let currentResponse = await callLLMWithTools({
     messages,
     tools: JARVIS_TOOLS,
     systemPrompt: SYSTEM_PROMPT,
   });
 
   // If no tools requested, return text response directly
-  if (!initialResponse.toolCalls || initialResponse.toolCalls.length === 0) {
-    saveAssistantMessage(db, convId, initialResponse.content);
+  if (!currentResponse.toolCalls || currentResponse.toolCalls.length === 0) {
+    saveAssistantMessage(db, convId, currentResponse.content);
     return {
       conversationId: convId,
-      reply: initialResponse.content,
+      reply: currentResponse.content,
       toolResults: [],
       autoSpeak: config.autoSpeak,
     };
   }
 
-  // 2. Execute requested tools
+  // 2. Multi-turn Autonomous Tool Execution Loop (up to 4 steps)
   const toolResults = [];
   const followUpMessages = [...messages];
+  let steps = 0;
+  const maxSteps = 4;
 
-  // Push assistant's tool-calling intent
-  followUpMessages.push({
-    role: "assistant",
-    content: initialResponse.content || "",
-    toolCalls: initialResponse.toolCalls,
-  });
-
-  for (const tc of initialResponse.toolCalls) {
-    logger.info(`[JarvisAgent] Executing tool: ${tc.name} with args: ${JSON.stringify(tc.args)}`);
-    const result = await executeJarvisTool(tc.name, tc.args);
-    toolResults.push({
-      toolName: tc.name,
-      args: tc.args,
-      result,
+  while (steps < maxSteps && currentResponse.toolCalls && currentResponse.toolCalls.length > 0) {
+    steps++;
+    followUpMessages.push({
+      role: "assistant",
+      content: currentResponse.content || "",
+      toolCalls: currentResponse.toolCalls,
+      rawParts: currentResponse.rawParts,
     });
 
-    followUpMessages.push({
-      role: "tool",
-      name: tc.name,
-      tool_call_id: tc.id,
-      content: result,
+    for (const tc of currentResponse.toolCalls) {
+      logger.info(`[JarvisAgent Step ${steps}] Executing tool: ${tc.name} with args: ${JSON.stringify(tc.args)}`);
+      const result = await executeJarvisTool(tc.name, tc.args);
+      toolResults.push({
+        toolName: tc.name,
+        args: tc.args,
+        result,
+      });
+
+      followUpMessages.push({
+        role: "tool",
+        name: tc.name,
+        tool_call_id: tc.id,
+        content: result,
+      });
+    }
+
+    // Call LLM again with tool results
+    currentResponse = await callLLMWithTools({
+      messages: followUpMessages,
+      tools: JARVIS_TOOLS,
+      systemPrompt: SYSTEM_PROMPT,
     });
   }
 
-  // 3. Second LLM Call with Tool Results to synthesize final human reply
-  const finalResponse = await callLLMWithTools({
-    messages: followUpMessages,
-    tools: JARVIS_TOOLS,
-    systemPrompt: SYSTEM_PROMPT,
-  });
-
-  const finalReply = finalResponse.content || "Kaam pura ho gaya hai sir!";
+  const finalReply = currentResponse.content || (toolResults.length > 0 ? "Maine records check kar liye hain sir." : "Main aapki kya madad kar sakta hoon?");
   saveAssistantMessage(db, convId, finalReply, JSON.stringify(toolResults));
 
   return {

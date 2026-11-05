@@ -180,7 +180,7 @@ export async function executeJarvisTool(toolName, args = {}) {
         const dateRange = resolveDateRange(date_reference);
 
         let sql = `
-          SELECT p.id, p.brand, p.model, p.imei_number, p.selling_price, p.sale_date,
+          SELECT p.id, p.phone_name as brand, p.model, p.imei_number, p.selling_price, p.sold_date as sale_date,
                  c.name as customer_name, c.phone as customer_phone
           FROM phones p
           LEFT JOIN customers c ON p.customer_id = c.id
@@ -189,17 +189,17 @@ export async function executeJarvisTool(toolName, args = {}) {
         const params = [];
 
         if (dateRange.start && dateRange.end) {
-          sql += ` AND date(p.sale_date) >= date(?) AND date(p.sale_date) <= date(?)`;
+          sql += ` AND date(p.sold_date) >= date(?) AND date(p.sold_date) <= date(?)`;
           params.push(dateRange.start, dateRange.end);
         }
 
         if (query.trim()) {
-          sql += ` AND (p.brand LIKE ? OR p.model LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR p.imei_number LIKE ?)`;
+          sql += ` AND (p.phone_name LIKE ? OR p.model LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR p.imei_number LIKE ?)`;
           const wildcard = `%${query.trim()}%`;
           params.push(wildcard, wildcard, wildcard, wildcard, wildcard);
         }
 
-        sql += ` ORDER BY p.sale_date DESC LIMIT ?`;
+        sql += ` ORDER BY p.sold_date DESC LIMIT ?`;
         params.push(limit);
 
         const rows = db.prepare(sql).all(...params);
@@ -208,10 +208,10 @@ export async function executeJarvisTool(toolName, args = {}) {
         // pull ALL other phones sold on that date so Jarvis can clarify with user!
         if (rows.length === 0 && dateRange.start && query.trim()) {
           const allSoldOnDate = db.prepare(`
-            SELECT p.id, p.brand, p.model, p.selling_price, c.name as customer_name, c.phone as customer_phone
+            SELECT p.id, p.phone_name as brand, p.model, p.selling_price, c.name as customer_name, c.phone as customer_phone
             FROM phones p
             LEFT JOIN customers c ON p.customer_id = c.id
-            WHERE p.is_sold = 1 AND date(p.sale_date) >= date(?) AND date(p.sale_date) <= date(?)
+            WHERE p.is_sold = 1 AND date(p.sold_date) >= date(?) AND date(p.sold_date) <= date(?)
           `).all(dateRange.start, dateRange.end);
 
           return {
@@ -280,7 +280,7 @@ export async function executeJarvisTool(toolName, args = {}) {
             await baileysService.sendDocumentMessage({
               phone: cleanPhone,
               pdfBuffer: pdfBuf,
-              filename: `Invoice_${invoiceRecord?.brand || "Phone"}_${invoiceRecord?.model || "Zone"}.pdf`,
+              filename: `Invoice_${invoiceRecord?.phone_name || "Phone"}_${invoiceRecord?.model || "Zone"}.pdf`,
               caption: "Official Tax Invoice Receipt",
             });
             pdfSent = true;
@@ -293,7 +293,7 @@ export async function executeJarvisTool(toolName, args = {}) {
           ok: true,
           recipient_phone: cleanPhone,
           customer_name: invoiceRecord?.customer_name || "Customer",
-          device: invoiceRecord ? `${invoiceRecord.brand} ${invoiceRecord.model}` : "Mobile Phone",
+          device: invoiceRecord ? `${invoiceRecord.phone_name} ${invoiceRecord.model}` : "Mobile Phone",
           text_sent: true,
           pdf_sent: pdfSent,
           message: `Invoice successfully dispatched to +${cleanPhone} via WhatsApp!`,
@@ -305,14 +305,14 @@ export async function executeJarvisTool(toolName, args = {}) {
       // -------------------------------------------------------------
       case "search_inventory": {
         const { query = "", max_price, min_price, in_stock_only = true } = args;
-        let sql = `SELECT id, brand, model, imei_number, purchase_price, selling_price, condition, is_sold FROM phones WHERE 1=1`;
+        let sql = `SELECT id, phone_name as brand, model, imei_number, purchase_price, selling_price, condition, is_sold FROM phones WHERE 1=1`;
         const params = [];
 
         if (in_stock_only) {
           sql += ` AND is_sold = 0`;
         }
         if (query.trim()) {
-          sql += ` AND (brand LIKE ? OR model LIKE ? OR imei_number LIKE ?)`;
+          sql += ` AND (phone_name LIKE ? OR model LIKE ? OR imei_number LIKE ?)`;
           const w = `%${query.trim()}%`;
           params.push(w, w, w);
         }
@@ -367,7 +367,7 @@ export async function executeJarvisTool(toolName, args = {}) {
           SELECT COUNT(*) as count, COALESCE(SUM(selling_price), 0) as total_sales,
                  COALESCE(SUM(selling_price - purchase_price), 0) as gross_profit
           FROM phones
-          WHERE is_sold = 1 AND date(sale_date) >= date(?) AND date(sale_date) <= date(?)
+          WHERE is_sold = 1 AND date(sold_date) >= date(?) AND date(sold_date) <= date(?)
         `).get(dStart, dEnd);
 
         const purchases = db.prepare(`
@@ -461,7 +461,7 @@ export async function executeJarvisTool(toolName, args = {}) {
 
         db.prepare(`
           INSERT INTO phones (
-            id, brand, model, imei_number, purchase_price, selling_price,
+            id, phone_name, model, imei_number, purchase_price, selling_price,
             condition, is_sold, seller_id, purchase_date, payment_method, shop_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now'), ?, 'all')
         `).run(
