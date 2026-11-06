@@ -554,7 +554,58 @@ export async function syncFromSupabaseOnBoot() {
       }
     }
 
-    // 6. Sync phones (inventory)
+    // 6. Sync dealers
+    try {
+      const dealersRes = await fetch(`${url}/rest/v1/dealers?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (dealersRes.ok) {
+        const dealers = await dealersRes.json().catch(() => []);
+        for (const d of dealers) {
+          try {
+            db.prepare(`
+              INSERT INTO dealers (id, business_name, contact_person, phone, email, address, city, state, pincode, gstin, pan_number, photo_url, signature_url, notes, is_active, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                business_name = excluded.business_name,
+                phone = excluded.phone,
+                email = excluded.email
+            `).run(
+              d.id, d.business_name || "", d.contact_person || null, d.phone || "", d.email || null,
+              d.address || "", d.city || "Sitapur", d.state || "Uttar Pradesh", d.pincode || "261001",
+              d.gst_number || d.gstin || null, d.pan_number || null, d.photo_url || null, d.signature_url || null,
+              d.notes || null, d.is_active === 0 ? 0 : 1, d.created_at || new Date().toISOString(), d.updated_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // 7. Sync dealer_batches
+    try {
+      const batchesRes = await fetch(`${url}/rest/v1/dealer_batches?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (batchesRes.ok) {
+        const batches = await batchesRes.json().catch(() => []);
+        for (const b of batches) {
+          try {
+            db.prepare(`
+              INSERT INTO dealer_batches (id, dealer_id, batch_number, batch_date, total_phones, total_amount, payment_method, payment_status, notes, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO NOTHING
+            `).run(
+              b.id, b.dealer_id, b.invoice_number || b.batch_number || "BATCH-001",
+              b.purchase_date || b.batch_date || new Date().toISOString().slice(0, 10),
+              b.total_phones || 1, b.total_amount || 0, b.payment_method || "UPI",
+              b.payment_status || "completed", b.notes || null, b.created_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // 8. Sync phones (complete inventory & sold records with photos)
     const phonesRes = await fetch(`${url}/rest/v1/phones?select=*`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
@@ -562,36 +613,331 @@ export async function syncFromSupabaseOnBoot() {
       const phones = await phonesRes.json().catch(() => []);
       for (const p of phones) {
         try {
+          const productPhotos = Array.isArray(p.product_photos) ? JSON.stringify(p.product_photos) : (p.product_photos || "[]");
+          const paymentPhotos = Array.isArray(p.payment_proof_photos) ? JSON.stringify(p.payment_proof_photos) : (p.payment_proof_photos || "[]");
+          const features = Array.isArray(p.features) ? JSON.stringify(p.features) : (p.features || "[]");
+
           db.prepare(`
-            INSERT INTO phones (id, phone_name, model, imei_number, purchase_price, selling_price, condition, is_sold, seller_id, customer_id, purchase_date, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO phones (
+              id, phone_name, model, imei_number, condition, purchase_price, selling_price,
+              purchase_date, rating, bill_available, box_available, charger_available,
+              features, product_photos, payment_proof_photos, payment_method, seller_id, customer_id,
+              dealer_id, is_dealer, batch_purchase_id, is_sold, sold_date, financial_year, color, storage, notes,
+              created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               is_sold = excluded.is_sold,
-              selling_price = excluded.selling_price
+              sold_date = excluded.sold_date,
+              selling_price = excluded.selling_price,
+              customer_id = excluded.customer_id,
+              product_photos = excluded.product_photos
           `).run(
             p.id,
             p.phone_name || p.brand || "",
             p.model || "",
             p.imei_number || "",
-            p.purchase_price || 0,
-            p.selling_price || 0,
             p.condition || "good",
-            p.is_sold ? 1 : 0,
-            p.seller_id,
+            Number(p.purchase_price) || 0,
+            Number(p.selling_price) || 0,
+            p.purchase_date || new Date().toISOString().slice(0, 10),
+            Number(p.rating) || 5.0,
+            p.bill_available ? 1 : 0,
+            p.box_available ? 1 : 0,
+            p.charger_available ? 1 : 0,
+            features,
+            productPhotos,
+            paymentPhotos,
+            p.payment_method || "cash",
+            p.seller_id || null,
             p.customer_id || null,
-            p.purchase_date || new Date().toISOString(),
-            p.payment_method || "cash"
+            p.dealer_id || null,
+            p.is_dealer ? 1 : 0,
+            p.batch_purchase_id || null,
+            p.is_sold ? 1 : 0,
+            p.sold_date || null,
+            p.financial_year || null,
+            p.color || p.colour || null,
+            p.storage || p.variant || null,
+            p.notes || null,
+            p.created_at || new Date().toISOString(),
+            p.updated_at || new Date().toISOString()
           );
         } catch {}
       }
     }
 
-    logger.info("[SupabaseSync] Auto-sync from Supabase completed successfully!");
+    // 9. Sync repair_customers
+    try {
+      const repCustRes = await fetch(`${url}/rest/v1/repair_customers?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (repCustRes.ok) {
+        const repCusts = await repCustRes.json().catch(() => []);
+        for (const rc of repCusts) {
+          try {
+            db.prepare(`
+              INSERT INTO repair_customers (id, name, phone, address, id_proof_type, id_number, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone
+            `).run(
+              rc.id, rc.name, rc.phone, rc.address || "", rc.id_proof_type || "aadhaar",
+              rc.id_number || "", rc.created_at || new Date().toISOString(), rc.updated_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // 10. Sync repair_jobs
+    try {
+      const repJobsRes = await fetch(`${url}/rest/v1/repair_jobs?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (repJobsRes.ok) {
+        const jobs = await repJobsRes.json().catch(() => []);
+        for (const j of jobs) {
+          try {
+            let customerId = j.repair_customer_id || null;
+            if (!customerId && j.customer_phone) {
+              const matchedCust = db.prepare("SELECT id FROM repair_customers WHERE phone = ?").get(j.customer_phone);
+              if (matchedCust) customerId = matchedCust.id;
+            }
+
+            db.prepare(`
+              INSERT INTO repair_jobs (
+                id, job_no, shop_id, repair_customer_id, device_brand, device_model, imei, problem,
+                estimate, advance_paid, parts_cost, labour_cost, final_price, status, payment_status,
+                warranty_days, technician, received_at, delivered_at, notes, financial_year, created_at, updated_at
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                final_price = excluded.final_price,
+                payment_status = excluded.payment_status
+            `).run(
+              j.id, j.job_no || "RJ-001", "shop_1", customerId,
+              j.device_brand || "Device", j.device_model || "", j.imei || null,
+              j.problem || j.issue_description || "Repair",
+              Number(j.estimate) || 0, Number(j.advance_paid) || 0, Number(j.parts_cost) || 0,
+              Number(j.labour_cost) || 0, Number(j.final_price) || 0, j.status || "delivered",
+              j.payment_status || "paid", Number(j.warranty_days) || 7, j.technician || "Workshop",
+              j.received_at || new Date().toISOString(), j.delivered_at || null, j.notes || null,
+              j.financial_year || null, j.created_at || new Date().toISOString(), j.updated_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // 11. Sync repair_job_items
+    try {
+      const itemsRes = await fetch(`${url}/rest/v1/repair_job_items?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (itemsRes.ok) {
+        const items = await itemsRes.json().catch(() => []);
+        for (const item of items) {
+          try {
+            db.prepare(`
+              INSERT INTO repair_job_items (id, job_id, kind, description, qty, unit_price, total_price, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO NOTHING
+            `).run(
+              item.id, item.job_id, item.kind || "part", item.description || "Part",
+              Number(item.qty) || 1, Number(item.unit_price) || 0, Number(item.total_price) || 0,
+              item.created_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // 12. Sync returns
+    try {
+      const retsRes = await fetch(`${url}/rest/v1/returns?select=*`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (retsRes.ok) {
+        const rets = await retsRes.json().catch(() => []);
+        for (const r of rets) {
+          try {
+            db.prepare(`
+              INSERT INTO returns (id, phone_id, return_date, reason, refund_amount, processed_by, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO NOTHING
+            `).run(
+              r.id, r.phone_id, r.return_date || new Date().toISOString(),
+              r.reason || "Return", Number(r.refund_amount) || 0, r.processed_by || null,
+              r.created_at || new Date().toISOString()
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+
+    logger.info("[SupabaseSync] Auto-sync from Supabase completed successfully! All tables restored.");
     return { ok: true, synced: true };
   } catch (err) {
     logger.warn("[SupabaseSync] Boot sync error", err);
     return { ok: false, error: err.message };
   }
+}
+
+/**
+ * Check if Supabase Cloud has an active business configured
+ */
+export async function checkSupabaseSetupStatus() {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured) return { isConfigured: false, hasCloudSetup: false };
+
+  try {
+    const res = await fetch(`${url}/rest/v1/admin_settings?select=business_name,setup_completed,owner_name,phone_primary&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }
+    });
+    if (res.ok) {
+      const rows = await res.json().catch(() => []);
+      if (Array.isArray(rows) && rows.length > 0) {
+        const s = rows[0];
+        if (s.setup_completed || (s.business_name && s.business_name.trim() !== "" && s.business_name.trim() !== "PhoneZone")) {
+          return {
+            isConfigured: true,
+            hasCloudSetup: true,
+            businessName: s.business_name,
+            ownerName: s.owner_name,
+            phonePrimary: s.phone_primary
+          };
+        }
+      }
+    }
+
+    // Check if phones exist in Supabase
+    const phonesRes = await fetch(`${url}/rest/v1/phones?select=id&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }
+    });
+    if (phonesRes.ok) {
+      const phones = await phonesRes.json().catch(() => []);
+      if (Array.isArray(phones) && phones.length > 0) {
+        return { isConfigured: true, hasCloudSetup: true, businessName: "Cloud Store" };
+      }
+    }
+    return { isConfigured: true, hasCloudSetup: false };
+  } catch (err) {
+    return { isConfigured: true, hasCloudSetup: false, error: err.message };
+  }
+}
+
+/**
+ * Permanently wipe Supabase Cloud database tables and Storage buckets,
+ * plus reset local SQLite, to cleanly free up all quota for a fresh store.
+ */
+export async function wipeSupabaseCloudData() {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  const db = getDb();
+
+  logger.info("[SupabaseSync] Starting complete Cloud and Local Storage Wipe...");
+
+  if (isConfigured) {
+    const tablesToWipe = [
+      "repair_job_items",
+      "repair_jobs",
+      "repair_customers",
+      "returns",
+      "phones",
+      "dealer_batches",
+      "dealers",
+      "customers",
+      "sellers",
+      "messages",
+      "audit_logs",
+      "user_roles",
+      "admin_settings"
+    ];
+
+    for (const tbl of tablesToWipe) {
+      try {
+        await fetch(`${url}/rest/v1/${tbl}?id=not.is.null`, {
+          method: "DELETE",
+          headers: supabaseHeaders(key)
+        });
+      } catch (e) {
+        logger.warn(`[SupabaseSync] Wipe table ${tbl} warning:`, e.message);
+      }
+    }
+
+    // Wipe storage buckets
+    const buckets = ["phones", "sellers", "customers", "invoices", "repairs", "documents", "signatures", "product-photos"];
+    for (const b of buckets) {
+      try {
+        const listRes = await fetch(`${url}/storage/v1/object/list/${b}`, {
+          method: "POST",
+          headers: supabaseHeaders(key),
+          body: JSON.stringify({ prefix: "", limit: 1000 })
+        });
+        if (listRes.ok) {
+          const files = await listRes.json().catch(() => []);
+          if (Array.isArray(files) && files.length > 0) {
+            const prefixes = files.map((f) => f.name).filter(Boolean);
+            await fetch(`${url}/storage/v1/object/${b}`, {
+              method: "DELETE",
+              headers: supabaseHeaders(key),
+              body: JSON.stringify({ prefixes })
+            });
+          }
+        }
+      } catch (e) {
+        logger.warn(`[SupabaseSync] Wipe bucket ${b} warning:`, e.message);
+      }
+    }
+  }
+
+  // Wipe local SQLite data
+  const localTables = [
+    "repair_job_items", "repair_jobs", "repair_customers", "returns",
+    "phones", "dealer_batches", "dealers", "customers", "sellers",
+    "messages", "audit_logs", "sessions"
+  ];
+  for (const t of localTables) {
+    try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
+  }
+
+  // Reset admin_settings
+  try {
+    db.prepare(`
+      UPDATE admin_settings SET
+        business_name = 'PhoneZone',
+        business_tagline = 'Second Hand Mobile & Repair Hub',
+        owner_name = '',
+        address = '',
+        phone_primary = '',
+        phone_secondary = '',
+        email = '',
+        instagram = '',
+        whatsapp_number = '',
+        google_business_url = '',
+        udyam_number = '',
+        logo_url = '',
+        signature_url = '',
+        setup_completed = 0
+      WHERE id = '00000000-0000-0000-0000-000000000001'
+    `).run();
+  } catch {}
+
+  // Clean local storage files
+  try {
+    const fs = await import("node:fs");
+    const pathMod = await import("node:path");
+    const { PATHS } = await import("../config/paths.js");
+    if (fs.existsSync(PATHS.storageDir)) {
+      const entries = fs.readdirSync(PATHS.storageDir);
+      for (const e of entries) {
+        try { fs.rmSync(pathMod.join(PATHS.storageDir, e), { recursive: true, force: true }); } catch {}
+      }
+    }
+  } catch {}
+
+  logger.info("[SupabaseSync] Complete Cloud & Local Wipe finished successfully!");
+  return { ok: true, wiped: true };
 }
 
 /**

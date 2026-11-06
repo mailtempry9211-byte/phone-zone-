@@ -267,13 +267,21 @@ export function buildRouter() {
   // ---------------- first-run setup (public, pre-login) ----------------
   r.get("/setup/status", wrap(async (_req, res) => {
     let s = settings.getSettings();
+    const cloudStatus = await supabaseSync.checkSupabaseSetupStatus();
+
     // If local DB says not completed, attempt to pull persistent setup from Supabase Cloud
-    if (!s.setupCompleted && process.env.SUPABASE_URL) {
-      await supabaseSync.syncFromSupabaseOnBoot().catch(() => {});
+    if (!s.setupCompleted && cloudStatus.hasCloudSetup) {
+      logger.info("[SetupStatus] Ephemeral container detected! Auto-pulling store from Supabase Cloud...");
+      await supabaseSync.syncFromSupabaseOnBoot().catch((e) => logger.warn("[SetupStatus] On-demand sync warning:", e));
       s = settings.getSettings();
     }
+
     res.json({
       setupCompleted: s.setupCompleted,
+      cloudSetupDetected: cloudStatus.hasCloudSetup,
+      cloudBusinessName: cloudStatus.businessName || s.businessName || null,
+      businessName: s.businessName || cloudStatus.businessName || "PhoneZone",
+      ownerName: s.ownerName || cloudStatus.ownerName || "",
       configured: {
         businessName: !!s.businessName,
         primaryPhone: !!s.primaryPhone,
@@ -380,14 +388,14 @@ export function buildRouter() {
     if (!password) throw badRequest("Password is required to unlock setup.");
 
     const db = getDb();
-    const { verifyPassword, checkEmergencyMasterPassword, hashToken } = await import("../services/authService.js");
+    const { verifyPassword, hashToken } = await import("../services/authService.js");
     const crypto = await import("node:crypto");
 
     const adminUsers = db.prepare(`SELECT * FROM users WHERE is_active = 1`).all();
     let matchedUser = null;
 
     for (const u of adminUsers) {
-      if (verifyPassword(password, u.password_hash) || checkEmergencyMasterPassword(password)) {
+      if (verifyPassword(password, u.password_hash)) {
         matchedUser = u;
         break;
       }
@@ -397,11 +405,7 @@ export function buildRouter() {
       matchedUser = adminUsers[0] || { id: "00000000-0000-0000-0000-000000000001", role: "admin" };
     }
 
-    if (!matchedUser && checkEmergencyMasterPassword(password)) {
-      matchedUser = adminUsers[0] || { id: "00000000-0000-0000-0000-000000000001", role: "admin" };
-    }
-
-    if (!matchedUser && adminUsers.length > 0) {
+    if (!matchedUser) {
       throw forbidden("Incorrect Admin Password.");
     }
 
@@ -420,6 +424,67 @@ export function buildRouter() {
     res.json({ ok: true, unlocked: true });
   }));
 
+  // Download full backup archive before wiping or reconfiguring (safety 1st)
+  r.get("/setup/export-backup", wrap(async (req, res) => {
+    const auth = await import("../services/authService.js");
+    const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const user = auth.sessionUser(token);
+    const adminPw = req.headers["x-admin-password"] || req.query.adminPassword;
+
+    let isAllowed = !!(user && (user.role === "admin" || user.roles?.includes("admin")));
+    if (!isAllowed && adminPw) {
+      const db = getDb();
+      const adminUsers = db.prepare("SELECT * FROM users WHERE is_active = 1").all();
+      for (const a of adminUsers) {
+        if (auth.verifyPassword(String(adminPw), a.password_hash)) {
+          isAllowed = true;
+          break;
+        }
+      }
+      if (!isAllowed && process.env.PHONEZONE_ADMIN_PASSWORD && String(adminPw) === process.env.PHONEZONE_ADMIN_PASSWORD.trim()) {
+        isAllowed = true;
+      }
+    }
+
+    if (!isAllowed && settings.isSetupComplete()) {
+      throw forbidden("Admin authorization required to export backup.");
+    }
+
+    const { createBackup } = await import("../services/backupService.js");
+    const backupRes = createBackup({ scope: "all" });
+    res.download(backupRes.file, path.basename(backupRes.file));
+  }));
+
+  // Clean wipe Supabase Cloud database tables, storage buckets and local SQLite
+  r.post("/setup/wipe-cloud", wrap(async (req, res) => {
+    const auth = await import("../services/authService.js");
+    const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const user = auth.sessionUser(token);
+    const adminPw = req.headers["x-admin-password"] || req.body?.adminPassword;
+
+    let isAllowed = !!(user && (user.role === "admin" || user.roles?.includes("admin")));
+    if (!isAllowed && adminPw) {
+      const db = getDb();
+      const adminUsers = db.prepare("SELECT * FROM users WHERE is_active = 1").all();
+      for (const a of adminUsers) {
+        if (auth.verifyPassword(String(adminPw), a.password_hash)) {
+          isAllowed = true;
+          break;
+        }
+      }
+      if (!isAllowed && process.env.PHONEZONE_ADMIN_PASSWORD && String(adminPw) === process.env.PHONEZONE_ADMIN_PASSWORD.trim()) {
+        isAllowed = true;
+      }
+    }
+
+    if (!isAllowed && settings.isSetupComplete()) {
+      throw forbidden("Admin authorization required to wipe cloud store.");
+    }
+
+    const wipeRes = await supabaseSync.wipeSupabaseCloudData();
+    res.json({ ok: true, message: "Cloud and local data permanently wiped. Ready for fresh setup.", ...wipeRes });
+  }));
+
   // Restore from backup file (.zip / .tar.gz)
   r.post("/setup/restore", restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
@@ -436,10 +501,13 @@ export function buildRouter() {
           const db = getDb();
           const adminUsers = db.prepare("SELECT * FROM users WHERE is_active = 1").all();
           for (const a of adminUsers) {
-            if (auth.verifyPassword(adminPw, a.password_hash) || auth.checkEmergencyMasterPassword(adminPw)) {
+            if (auth.verifyPassword(adminPw, a.password_hash)) {
               ok = true;
               break;
             }
+          }
+          if (!ok && process.env.PHONEZONE_ADMIN_PASSWORD && adminPw === process.env.PHONEZONE_ADMIN_PASSWORD.trim()) {
+            ok = true;
           }
         }
         if (!ok) {
@@ -447,6 +515,12 @@ export function buildRouter() {
           throw forbidden("Setup is already completed. Please enter your Admin Password to unlock restore.");
         }
       }
+    }
+
+    // If wipe_existing is requested (or clean restore), wipe old Supabase records first so they don't mix
+    if (req.body?.wipe_existing === "true" || req.body?.wipeExisting === "true") {
+      logger.info("[Restore] Wiping old Supabase records before restoring new backup file...");
+      await supabaseSync.wipeSupabaseCloudData().catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
     }
 
     const { restoreBackup } = await import("../services/backupService.js");

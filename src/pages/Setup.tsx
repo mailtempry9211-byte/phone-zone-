@@ -36,6 +36,14 @@ const Setup = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [cloudStoreInfo, setCloudStoreInfo] = useState<{
+    setupCompleted: boolean;
+    cloudSetupDetected: boolean;
+    businessName: string;
+    cloudBusinessName?: string;
+  } | null>(null);
+  const [isWipingCloud, setIsWipingCloud] = useState(false);
+  const [wipeBeforeRestore, setWipeBeforeRestore] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -128,7 +136,8 @@ const Setup = () => {
       const res = await fetch('/api/setup/status', { credentials: 'include' });
       if (res.ok) {
         const status = await res.json();
-        if (status.setupCompleted) {
+        setCloudStoreInfo(status);
+        if (status.setupCompleted || status.cloudSetupDetected) {
           // If already authenticated as admin, allow access
           try {
             const authRes = await fetch('/api/auth/me', { credentials: 'include' });
@@ -179,6 +188,50 @@ const Setup = () => {
     }
   };
 
+  const handleExportCloudBackup = () => {
+    toast.info("Generating full safety backup from database...");
+    const url = `/api/setup/export-backup?adminPassword=${encodeURIComponent(unlockPassword)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PhoneZone_Safety_Backup_${Date.now()}.tar.gz`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success("Backup download started!");
+  };
+
+  const handleWipeCloudAndStartFresh = async () => {
+    if (!confirm(
+      "⚠️ PERMANENT WIPE WARNING:\n\nThis will permanently delete all phones, repair jobs, sellers, customers, and photos from Supabase Cloud and local storage to cleanly free up all quota.\n\nAre you sure you want to completely wipe all existing cloud data?"
+    )) {
+      return;
+    }
+
+    setIsWipingCloud(true);
+    try {
+      const res = await fetch('/api/setup/wipe-cloud', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': unlockPassword,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ adminPassword: unlockPassword }),
+      });
+      if (!res.ok) {
+        throw new Error(await readError(res, 'Failed to wipe cloud data'));
+      }
+      toast.success("✅ Supabase Cloud & Local storage permanently wiped! All quota is 100% free.");
+      setCloudStoreInfo(null);
+      setMode('choose');
+      setStep(1);
+    } catch (err: any) {
+      toast.error(err.message || 'Wipe failed');
+    } finally {
+      setIsWipingCloud(false);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
@@ -219,6 +272,9 @@ const Setup = () => {
     try {
       const fd = new FormData();
       fd.append('backup', restoreFile);
+      if (wipeBeforeRestore) {
+        fd.append('wipe_existing', 'true');
+      }
       const headers: Record<string, string> = {};
       if (unlockPassword) headers['x-admin-password'] = unlockPassword;
 
@@ -376,6 +432,53 @@ const Setup = () => {
   return (
     <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-12 px-4'>
       <div className='max-w-2xl mx-auto'>
+        {/* Active Cloud Business Management Card (Download Backup, Continue, or Wipe Cloud) */}
+        {cloudStoreInfo && (cloudStoreInfo.cloudSetupDetected || cloudStoreInfo.setupCompleted) && (
+          <Card className="mb-6 border-blue-500/30 bg-blue-950/20 text-slate-100 shadow-md">
+            <CardHeader className="py-3 px-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-5 h-5 text-blue-400" />
+                    <span className="font-bold text-sm text-blue-300">
+                      Active Cloud Store: {cloudStoreInfo.businessName || cloudStoreInfo.cloudBusinessName || "PhoneZone"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Supabase cloud database has active store data. You can continue, download a safety backup, or wipe cloud storage clean.
+                  </p>
+                </div>
+                <div className="flex items-center flex-wrap gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                    onClick={handleExportCloudBackup}
+                  >
+                    📥 Download Backup
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                    onClick={() => navigate('/')}
+                  >
+                    ← Continue with Store
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-8 text-xs"
+                    onClick={handleWipeCloudAndStartFresh}
+                    disabled={isWipingCloud}
+                  >
+                    {isWipingCloud ? "Wiping..." : "🗑️ Wipe Cloud Clean"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
         <div className='text-center mb-8'>
           <Store className='h-12 w-12 text-blue-600 mx-auto mb-4' />
           <h1 className='text-3xl font-bold text-gray-900 mb-2'>Welcome to PhoneZone</h1>
@@ -773,6 +876,19 @@ const Setup = () => {
                   className="mt-1"
                 />
                 <p className='text-xs text-gray-500 mt-1'>Select the backup file downloaded from drive.google.com or exported from Admin Panel</p>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1 bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                <input
+                  type="checkbox"
+                  id="wipeBeforeRestore"
+                  checked={wipeBeforeRestore}
+                  onChange={(e) => setWipeBeforeRestore(e.target.checked)}
+                  className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <Label htmlFor="wipeBeforeRestore" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium">
+                  Wipe old cloud records &amp; photos first (Recommended: avoids mixing old and new store data)
+                </Label>
               </div>
 
               <div className='flex justify-between pt-2'>
