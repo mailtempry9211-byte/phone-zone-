@@ -634,12 +634,19 @@ export function buildRouter() {
     res.json(row);
   }));
   r.get("/public/files/:id", wrap(async (req, res) => {
-    const file = storage.getFileRecord(req.params.id);
-    if (!file.is_public) return res.status(403).json({ error: "This file is not public." });
-    setSafeFileHeaders(res, file.mime_type);
-    const buf = await storage.readFileSafe(file.id, file.relative_path);
+    let file = null;
+    try {
+      file = storage.getFileRecord(req.params.id);
+    } catch {}
+
+    const fileId = req.params.id;
+    const relPath = file?.relative_path || `recovered/${fileId}`;
+    const buf = await storage.readFileSafe(fileId, relPath);
     if (!buf) return res.status(404).json({ error: "That file could not be found." });
-    res.type(file.mime_type).send(buf);
+
+    const mime = storage.sniffMimeType(buf) || file?.mime_type || "image/jpeg";
+    setSafeFileHeaders(res, mime);
+    res.type(mime).send(buf);
   }));
   r.post("/public/messages", wrap((req, res) => {
     if (!checkMessageRate(req.ip)) throw new AppError("Too many messages sent. Please try again in a minute.", 429, "too_many_messages");
@@ -1127,10 +1134,6 @@ export function buildRouter() {
     const result = await supabaseSync.syncFromSupabaseOnBoot();
     res.json(result);
   }));
-  r.post("/supabase/pull-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {
-    const result = await supabaseSync.syncFromSupabaseOnBoot();
-    res.json(result);
-  }));
 
   // ---------------- google drive / cloud backup ----------------
   r.get("/google-drive/status", requireAuth, wrap((_req, res) => {
@@ -1197,6 +1200,21 @@ export function buildRouter() {
         }
       };
 
+      const getStorageCount = async () => {
+        try {
+          const r = await fetch(`${url.replace(/\/+$/, "")}/storage/v1/object/list/phonezone-uploads`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ prefix: "", limit: 1000 }),
+          });
+          if (!r.ok) return { ok: false, status: r.status };
+          const data = await r.json();
+          return { ok: true, count: Array.isArray(data) ? data.length : 0 };
+        } catch (e) {
+          return { ok: false, error: e.message };
+        }
+      };
+
       const supabaseCounts = {
         admin_settings: await getCount("admin_settings"),
         customers: await getCount("customers"),
@@ -1204,6 +1222,7 @@ export function buildRouter() {
         dealers: await getCount("dealers"),
         dealer_batches: await getCount("dealer_batches"),
         phones: await getCount("phones"),
+        storage_uploads: await getStorageCount(),
       };
 
       // Run syncFromSupabaseOnBoot to pull data right now

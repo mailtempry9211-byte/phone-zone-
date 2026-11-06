@@ -8,6 +8,7 @@ import { getDb } from "../db/index.js";
 import { newId, badRequest, notFound } from "../lib/errors.js";
 import { PATHS, resolveStoragePath } from "../config/paths.js";
 import { SERVER } from "../config/business.js";
+import { logger } from "../lib/logger.js";
 import { getSupabaseConfig } from "./supabaseSyncService.js";
 
 // NOTE: text/html is deliberately NOT accepted. An uploaded HTML file served
@@ -175,26 +176,58 @@ export function getFileRecord(id) {
 }
 
 export async function readFileSafe(id, relativePath) {
-  try {
-    const abs = resolveStoragePath(relativePath);
-    if (fs.existsSync(abs)) return fs.readFileSync(abs);
-  } catch {}
+  // 1. Check specified relative path
+  if (relativePath) {
+    try {
+      const abs = resolveStoragePath(relativePath);
+      if (fs.existsSync(abs)) return fs.readFileSync(abs);
+    } catch {}
+  }
 
-  // Cloud fallback: fetch from Supabase Storage
+  // 2. Check fallback recovered location
+  if (id) {
+    try {
+      const recoveredPath = resolveStoragePath(`recovered/${id}`);
+      if (fs.existsSync(recoveredPath)) return fs.readFileSync(recoveredPath);
+    } catch {}
+  }
+
+  // 3. Cloud fallback: fetch from Supabase Storage (both public and authenticated)
   try {
     const { url, key, isConfigured } = getSupabaseConfig();
     if (isConfigured && id) {
-      const res = await fetch(`${url}/storage/v1/object/public/phonezone-uploads/${id}`, {
-        headers: { apikey: key, Authorization: `Bearer ${key}` },
-        signal: AbortSignal.timeout(5000),
+      const headers = { apikey: key, Authorization: `Bearer ${key}` };
+      let res = await fetch(`${url}/storage/v1/object/public/phonezone-uploads/${id}`, {
+        headers,
+        signal: AbortSignal.timeout(6000),
       });
+
+      if (!res.ok) {
+        res = await fetch(`${url}/storage/v1/object/authenticated/phonezone-uploads/${id}`, {
+          headers,
+          signal: AbortSignal.timeout(6000),
+        });
+      }
+
       if (res.ok) {
         const ab = await res.arrayBuffer();
         const buf = Buffer.from(ab);
         try {
-          const abs = resolveStoragePath(relativePath);
+          const saveRel = relativePath || `recovered/${id}`;
+          const abs = resolveStoragePath(saveRel);
           fs.mkdirSync(path.dirname(abs), { recursive: true });
           fs.writeFileSync(abs, buf);
+
+          // Index file in SQLite so next time it is instant
+          const db = getDb();
+          const exists = db.prepare("SELECT 1 FROM files WHERE id = ?").get(id);
+          if (!exists) {
+            const mime = sniffMimeType(buf) || "image/jpeg";
+            db.prepare(`
+              INSERT OR IGNORE INTO files (id, owner_type, category, relative_path, original_name, mime_type, size_bytes, is_public)
+              VALUES (?, 'bucket', 'recovered', ?, ?, ?, ?, 1)
+            `).run(id, saveRel, `${id}.jpg`, mime, buf.length);
+          }
         } catch {}
         return buf;
       }
@@ -202,6 +235,72 @@ export async function readFileSafe(id, relativePath) {
   } catch {}
 
   return null;
+}
+
+/**
+ * Uploads all local files from SQLite files table to Supabase Storage bucket 'phonezone-uploads'
+ */
+export async function pushAllFilesToSupabaseStorage() {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured) return { ok: false, reason: "not_configured" };
+
+  const db = getDb();
+  let uploaded = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  try {
+    const files = db.prepare("SELECT * FROM files").all();
+    if (!files || files.length === 0) return { ok: true, count: 0 };
+
+    logger.info(`[SupabaseStorage] Starting sync of ${files.length} local files to Supabase Storage...`);
+
+    // Ensure bucket exists
+    try {
+      await fetch(`${url}/storage/v1/bucket`, {
+        method: "POST",
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "phonezone-uploads", name: "phonezone-uploads", public: true }),
+      });
+    } catch {}
+
+    for (const f of files) {
+      try {
+        const abs = resolveStoragePath(f.relative_path);
+        if (!fs.existsSync(abs)) {
+          skipped++;
+          continue;
+        }
+        const buffer = fs.readFileSync(abs);
+        if (!buffer || buffer.length === 0) continue;
+
+        const res = await fetch(`${url}/storage/v1/object/phonezone-uploads/${f.id}`, {
+          method: "POST",
+          headers: {
+            "apikey": key,
+            "Authorization": `Bearer ${key}`,
+            "Content-Type": f.mime_type || "application/octet-stream",
+            "x-upsert": "true",
+          },
+          body: buffer,
+        });
+
+        if (res.ok) {
+          uploaded++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    logger.info(`[SupabaseStorage] Sync complete: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed.`);
+    return { ok: true, uploaded, skipped, failed };
+  } catch (err) {
+    logger.error("[SupabaseStorage] Error during file push:", err);
+    return { ok: false, error: err.message };
+  }
 }
 
 export function readFile(relativePath) {

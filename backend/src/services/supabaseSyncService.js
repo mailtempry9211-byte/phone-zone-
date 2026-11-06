@@ -68,7 +68,7 @@ const SUPABASE_COLUMNS = {
     "customer_photo_url", "created_at", "updated_at"
   ],
   dealers: [
-    "id", "business_name", "contact_person", "phone", "email", "address",
+    "id", "shop_name", "business_name", "proprietor_name", "contact_person", "phone", "alternate_phone", "email", "address",
     "city", "state", "pincode", "gst_number", "pan_number", "photo_url",
     "signature_url", "notes", "is_active", "created_at", "updated_at"
   ],
@@ -181,6 +181,10 @@ export function sanitizeRowForSupabase(table, rawRow) {
     } catch {}
   }
   if (table === "dealers") {
+    if (source.shop_name && !source.business_name) source.business_name = source.shop_name;
+    if (source.business_name && !source.shop_name) source.shop_name = source.business_name;
+    if (source.proprietor_name && !source.contact_person) source.contact_person = source.proprietor_name;
+    if (source.contact_person && !source.proprietor_name) source.proprietor_name = source.contact_person;
     if (source.gstin && !source.gst_number) source.gst_number = source.gstin;
   }
   if (table === "dealer_batches") {
@@ -332,7 +336,7 @@ export async function pushBatchToSupabase(table, rows) {
     if (chunk.length === 0) continue;
 
     try {
-      const res = await fetch(`${url}/rest/v1/${table}`, {
+      const res = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
         method: "POST",
         headers: supabaseHeaders(key),
         body: JSON.stringify(chunk),
@@ -346,15 +350,49 @@ export async function pushBatchToSupabase(table, rows) {
         // Fallback: push item by item so 1 bad row doesn't kill the whole batch!
         for (const item of chunk) {
           try {
-            const singleRes = await fetch(`${url}/rest/v1/${table}`, {
+            let singlePayload = { ...item };
+            let singleRes = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
               method: "POST",
               headers: supabaseHeaders(key),
-              body: JSON.stringify(item),
+              body: JSON.stringify(singlePayload),
             });
+
             if (singleRes.ok) {
               totalUploaded++;
             } else {
-              const singleErr = await singleRes.text().catch(() => "");
+              let singleErr = await singleRes.text().catch(() => "");
+
+              // Self-healing: Strip unmigrated column if missing in Supabase schema
+              const match = singleErr.match(/Could not find the '([^']+)' column/i) || singleErr.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
+              if (match && match[1] && singlePayload[match[1]] !== undefined) {
+                delete singlePayload[match[1]];
+                singleRes = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
+                  method: "POST",
+                  headers: supabaseHeaders(key),
+                  body: JSON.stringify(singlePayload),
+                });
+                if (singleRes.ok) {
+                  totalUploaded++;
+                  continue;
+                }
+                singleErr = await singleRes.text().catch(() => "");
+              }
+
+              // Self-healing: Foreign key violation on phones (e.g. dealer_id or batch_purchase_id)
+              if (table === "phones" && (singleErr.includes("dealer_id") || singleErr.includes("dealers") || singleErr.includes("batch_purchase_id") || singleErr.includes("foreign key"))) {
+                singlePayload.dealer_id = null;
+                singlePayload.batch_purchase_id = null;
+                const fkRetry = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
+                  method: "POST",
+                  headers: supabaseHeaders(key),
+                  body: JSON.stringify(singlePayload),
+                });
+                if (fkRetry.ok) {
+                  totalUploaded++;
+                  continue;
+                }
+              }
+
               logger.warn(`[SupabaseSync] Single item push rejected (${table} ${item.id}): ${singleErr.slice(0, 120)}`);
             }
           } catch {}
@@ -479,6 +517,15 @@ export async function pushAllToSupabase() {
         results.user_roles = r.count;
       }
     } catch {}
+
+    // 12. Supabase Storage: Replicate all local files (phone photos, seller photos, etc.)
+    try {
+      const storageMod = await import("./storageService.js");
+      const r = await storageMod.pushAllFilesToSupabaseStorage();
+      results.storage_files = r.uploaded || 0;
+    } catch (e) {
+      logger.warn("[SupabaseSync] storage files sync warning:", e.message);
+    }
 
     logger.info("[SupabaseSync] Full Push to Supabase Cloud Complete:", results);
     return { ok: true, synced: results };
@@ -839,11 +886,24 @@ export async function syncFromSupabaseOnBoot() {
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+              phone_name = excluded.phone_name,
+              model = excluded.model,
+              imei_number = excluded.imei_number,
+              condition = excluded.condition,
+              purchase_price = excluded.purchase_price,
+              selling_price = excluded.selling_price,
               is_sold = excluded.is_sold,
               sold_date = excluded.sold_date,
-              selling_price = excluded.selling_price,
+              seller_id = excluded.seller_id,
               customer_id = excluded.customer_id,
-              product_photos = excluded.product_photos
+              dealer_id = excluded.dealer_id,
+              is_dealer = excluded.is_dealer,
+              batch_purchase_id = excluded.batch_purchase_id,
+              product_photos = excluded.product_photos,
+              payment_proof_photos = excluded.payment_proof_photos,
+              colour = excluded.colour,
+              variant = excluded.variant,
+              updated_at = excluded.updated_at
           `).run(
             p.id,
             p.phone_name || p.brand || "",
@@ -991,6 +1051,37 @@ export async function syncFromSupabaseOnBoot() {
         }
       }
     } catch {}
+
+    // 13. Reconstruct & index files from Supabase Storage bucket 'phonezone-uploads'
+    try {
+      const listRes = await fetch(`${url}/storage/v1/object/list/phonezone-uploads`, {
+        method: "POST",
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix: "", limit: 1000 }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (listRes.ok) {
+        const fileList = await listRes.json().catch(() => []);
+        if (Array.isArray(fileList) && fileList.length > 0) {
+          let fileHydrated = 0;
+          for (const item of fileList) {
+            if (!item.name || item.name.startsWith(".")) continue;
+            const fileId = item.name;
+            try {
+              db.prepare(`
+                INSERT OR IGNORE INTO files (id, owner_type, category, relative_path, original_name, mime_type, size_bytes, is_public)
+                VALUES (?, 'bucket', 'recovered', ?, ?, 'image/jpeg', ?, 1)
+              `).run(fileId, `recovered/${fileId}`, fileId, item.metadata?.size || 50000);
+              fileHydrated++;
+            } catch {}
+          }
+          counts.files = fileHydrated;
+          logger.info(`[SupabaseSync] Hydrated ${fileHydrated} storage files into local index from Supabase Storage!`);
+        }
+      }
+    } catch (e) {
+      logger.warn("[SupabaseSync] Storage file index hydration warning: " + e.message);
+    }
 
     logger.info("[SupabaseSync] Auto-sync from Supabase completed successfully! Restored:", counts);
     return { ok: true, synced: true, counts };
@@ -1304,11 +1395,11 @@ export async function pushSettingsToSupabase(settingsRow) {
 
     const endpoint = hasExisting
       ? `${url}/rest/v1/admin_settings?id=eq.${encodeURIComponent(existingId)}`
-      : `${url}/rest/v1/admin_settings`;
+      : `${url}/rest/v1/admin_settings?on_conflict=id`;
     const method = hasExisting ? "PATCH" : "POST";
 
     let currentPayload = { ...payload };
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const res = await fetch(endpoint, {
         method,
         headers: supabaseHeaders(key),
@@ -1318,17 +1409,32 @@ export async function pushSettingsToSupabase(settingsRow) {
 
       if (res.ok) {
         logger.info("[SupabaseSync] Pushed admin_settings to Supabase successfully!");
-        break;
+        return { ok: true };
       }
 
       const errTxt = await res.text().catch(() => "");
-      const match = errTxt.match(/Could not find the '([^']+)' column/i);
+      const match = errTxt.match(/Could not find the '([^']+)' column/i) || errTxt.match(/column "([^"]+)" of relation "[^"]+" does not exist/i) || errTxt.match(/Could not find the ([a-zA-Z0-9_]+) column/i);
       if (match && match[1] && currentPayload[match[1]] !== undefined) {
         logger.warn(`[SupabaseSync] Column '${match[1]}' not in Supabase schema. Stripping and retrying...`);
         delete currentPayload[match[1]];
         continue;
       }
-      logger.warn("[SupabaseSync] Failed to push admin_settings to Supabase", errTxt);
+
+      // If PATCH failed (e.g. 0 rows updated), fallback to POST with on_conflict
+      if (method === "PATCH" && attempt === 0) {
+        const postRes = await fetch(`${url}/rest/v1/admin_settings?on_conflict=id`, {
+          method: "POST",
+          headers: supabaseHeaders(key),
+          body: JSON.stringify(currentPayload),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (postRes.ok) {
+          logger.info("[SupabaseSync] Pushed admin_settings via POST fallback successfully!");
+          return { ok: true };
+        }
+      }
+
+      logger.warn("[SupabaseSync] Failed to push admin_settings to Supabase: " + errTxt.slice(0, 150));
       break;
     }
   } catch (err) {
