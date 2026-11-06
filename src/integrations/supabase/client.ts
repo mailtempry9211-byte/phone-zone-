@@ -20,7 +20,12 @@ const SUPABASE_PUBLISHABLE_KEY =
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-const onlineClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+// Safe fallback key to prevent @supabase/supabase-js constructor from throwing "supabaseKey is required"
+const effectiveKey =
+  SUPABASE_PUBLISHABLE_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder_for_offline_safety";
+
+const onlineClient = createClient<Database>(SUPABASE_URL, effectiveKey, {
   auth: {
     storage: localStorage,
     persistSession: true,
