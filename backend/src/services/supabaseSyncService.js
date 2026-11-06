@@ -54,6 +54,7 @@ const SUPABASE_COLUMNS = {
     "invoice_prefix_purchase", "invoice_prefix_sale", "invoice_prefix_return",
     "currency_code", "bank_name", "account_holder_name", "account_number", "ifsc_code",
     "ai_provider", "ai_model", "ai_api_key", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak", "ocr_engine",
+    "hicelltek_api_key",
     "setup_completed", "updated_at"
   ],
   sellers: [
@@ -633,6 +634,21 @@ export async function syncFromSupabaseOnBoot() {
           }
           counts.settings = true;
           logger.info("[SupabaseSync] Restored admin_settings from Supabase: " + (s.business_name || "Configured"));
+
+          // If a Hicelltek API key exists in cloud settings, hydrate hicelltek_keys table if empty
+          if (s.hicelltek_api_key) {
+            try {
+              const existingHct = db.prepare("SELECT COUNT(*) AS c FROM hicelltek_keys").get().c;
+              if (existingHct === 0) {
+                const crypto = await import("node:crypto");
+                db.prepare(`
+                  INSERT INTO hicelltek_keys (id, label, api_key, position, monthly_limit, usage_month)
+                  VALUES (?, 'Primary Key', ?, 0, 100, strftime('%Y-%m', 'now'))
+                `).run(crypto.randomUUID(), s.hicelltek_api_key);
+                logger.info("[SupabaseSync] Restored Hicelltek API Key from cloud settings!");
+              }
+            } catch {}
+          }
         }
       }
     }
@@ -1275,6 +1291,14 @@ export async function pushSettingsToSupabase(settingsRow) {
       ai_voice_enabled: source.ai_voice_enabled !== undefined ? source.ai_voice_enabled : 1,
       ai_auto_speak: source.ai_auto_speak !== undefined ? source.ai_auto_speak : 0,
       ocr_engine: source.ocr_engine || source.ocrEngine || "auto",
+      hicelltek_api_key: (() => {
+        if (source.hicelltek_api_key) return source.hicelltek_api_key;
+        try {
+          const db = getDb();
+          const hk = db.prepare("SELECT api_key FROM hicelltek_keys WHERE is_enabled = 1 ORDER BY position ASC LIMIT 1").get();
+          return hk ? hk.api_key : "";
+        } catch { return ""; }
+      })(),
       setup_completed: 1,
     });
 

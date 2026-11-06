@@ -276,7 +276,62 @@ export function addKey({ label, key, monthly_limit }) {
     `INSERT INTO hicelltek_keys (id, label, api_key, position, monthly_limit, usage_month)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(id, label ? String(label).slice(0, 60) : null, apiKey, maxPos + 1, Number(monthly_limit) > 0 ? Number(monthly_limit) : 100, currentUsageMonth());
+
+  // Also persist to admin_settings so it survives Render redeploys and syncs to Supabase
+  try {
+    db.prepare("UPDATE admin_settings SET hicelltek_api_key = ? WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)").run(apiKey);
+    import("./supabaseSyncService.js").then((s) => s.triggerBackgroundSync(1000)).catch(() => {});
+  } catch {}
+
   return listKeys();
+}
+
+/**
+ * Live test a Hicelltek API key (either by database ID or raw key string)
+ */
+export async function testKey(keyOrId) {
+  let keyToTest = keyOrId;
+  const isExistingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(keyOrId || ""));
+  if (isExistingId) {
+    const row = getDb().prepare("SELECT api_key FROM hicelltek_keys WHERE id = ?").get(keyOrId);
+    if (!row) return { ok: false, error: "Key not found in database." };
+    keyToTest = row.api_key;
+  }
+
+  const apiKey = String(keyToTest || "").trim();
+  if (apiKey.length < 8) {
+    return { ok: false, error: "API Key is too short or empty." };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(BASE_URL, {
+      method: "POST",
+      headers: { [API_KEY_HEADER]: apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "35560386" }), // Test lookup query
+      signal: controller.signal,
+    });
+
+    if (res.status === 200) {
+      return { ok: true, message: "Hicelltek Key Verified! Live TAC lookups working." };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, error: "Invalid Hicelltek API Key (401/403 Unauthorized). Please check your key." };
+    }
+    if (res.status === 429) {
+      return { ok: false, error: "Hicelltek Monthly Quota Exceeded (429 Rate Limited)." };
+    }
+    const errText = await res.text().catch(() => "");
+    return { ok: false, error: `Hicelltek API returned status ${res.status}: ${errText.slice(0, 100)}` };
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return { ok: false, error: "Hicelltek server timed out (8s timeout)." };
+    }
+    return { ok: false, error: `Connection failed: ${err.message}` };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function deleteKey(id) {

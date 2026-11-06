@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate, Cloud, Database } from "lucide-react";
+import { Save, Upload, Download, RefreshCw, Settings2, Building2, Phone, Mail, Instagram, Eye, ShieldCheck, ShieldAlert, Star, Landmark, FileText, Smartphone, KeyRound, Plus, Radio, Play, Square, CheckCircle2, Zap, HelpCircle, Check, AlertCircle, SlidersHorizontal, LayoutTemplate, Cloud, Database, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { EvolutionApiGuideModal } from "./EvolutionApiGuideModal";
 import JarvisSettingsCard from "./JarvisSettingsCard";
@@ -384,6 +384,8 @@ const SettingsTab = () => {
   // ---------------- Hicelltek API keys (masked, backend-only) -------------
   const [newKey, setNewKey] = useState({ label: '', key: '' });
   const [keyBusy, setKeyBusy] = useState(false);
+  const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
 
   const { data: tacKeys, refetch: refetchKeys } = useQuery({
     queryKey: ['tac-keys'],
@@ -393,6 +395,35 @@ const SettingsTab = () => {
       return res.json();
     },
   });
+
+  const handleTestKey = async (keyOrId: string, isNew: boolean = false) => {
+    const idKey = isNew ? 'new' : keyOrId;
+    setTestingKeyId(idKey);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/tac/keys/test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(isNew ? { key: keyOrId } : { id: keyOrId }),
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setTestResult({ id: idKey, ok: true, message: data.message || 'Key Verified!' });
+        toast.success(data.message || 'Hicelltek API Key working!');
+      } else {
+        const msg = data.error || 'Hicelltek Key Test Failed';
+        setTestResult({ id: idKey, ok: false, message: msg });
+        toast.error(msg);
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Connection failed';
+      setTestResult({ id: idKey, ok: false, message: msg });
+      toast.error(msg);
+    } finally {
+      setTestingKeyId(null);
+    }
+  };
 
   const keyRequest = async (method: string, url: string, body?: any) => {
     setKeyBusy(true);
@@ -1455,11 +1486,26 @@ const SettingsTab = () => {
                         >
                           {k.status}
                         </span>
+                        {testResult?.id === k.id && (
+                          <span className={`block text-[11px] font-medium mt-0.5 ${testResult.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {testResult.ok ? '✓ Live Verified' : `✗ ${testResult.message}`}
+                          </span>
+                        )}
                       </td>
                       <td className="p-2">
                         {k.callsThisMonth} / {k.monthlyLimit}
                       </td>
                       <td className="p-2 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="px-2 text-emerald-600 hover:underline disabled:opacity-30 inline-flex items-center gap-1 font-medium text-xs mr-1"
+                          disabled={keyBusy || testingKeyId === k.id}
+                          onClick={() => handleTestKey(k.id, false)}
+                          title="Test live lookup with this key"
+                        >
+                          {testingKeyId === k.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          Test
+                        </button>
                         <button
                           type="button"
                           className="px-1 text-gray-500 hover:text-black disabled:opacity-30"
@@ -1522,11 +1568,31 @@ const SettingsTab = () => {
                 onChange={(e) => setNewKey({ ...newKey, key: e.target.value })}
               />
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleTestKey(newKey.key, true)}
+              disabled={keyBusy || !newKey.key.trim() || testingKeyId === 'new'}
+              className="border border-border"
+            >
+              {testingKeyId === 'new' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4 mr-2" />
+              )}
+              Test Key
+            </Button>
             <Button variant="outline" onClick={handleAddKey} disabled={keyBusy || !newKey.key.trim()}>
               <Plus className="h-4 w-4 mr-2" />
               Add key
             </Button>
           </div>
+          {testResult?.id === 'new' && (
+            <div className={`text-xs px-3 py-2 rounded border flex items-center gap-2 ${testResult.ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'}`}>
+              {testResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
+              <span>{testResult.message}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

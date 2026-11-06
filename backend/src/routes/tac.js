@@ -97,6 +97,12 @@ export function buildTacRouter(staff) {
     res.json(hct.listKeys());
   }));
 
+  r.post("/keys/test", staff, wrap(async (req, res) => {
+    const { key, id } = req.body || {};
+    const result = await hct.testKey(key || id);
+    res.json(result);
+  }));
+
   r.post("/keys", staff, wrap(async (req, res) => {
     res.status(201).json(hct.addKey(req.body || {}));
   }));

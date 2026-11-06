@@ -51,6 +51,9 @@ export function initDatabase() {
     db.prepare("ALTER TABLE admin_settings ADD COLUMN ocr_engine TEXT DEFAULT 'auto'").run();
   } catch {}
   try {
+    db.prepare("ALTER TABLE admin_settings ADD COLUMN hicelltek_api_key TEXT").run();
+  } catch {}
+  try {
     db.prepare("ALTER TABLE sellers ADD COLUMN bank_account_number TEXT").run();
   } catch {}
   try {
