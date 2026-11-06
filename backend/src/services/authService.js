@@ -47,8 +47,23 @@ export function ensureBootstrapAdmin() {
   if (!process.env.PHONEZONE_ADMIN_PASSWORD) return { created: false, reason: "no_env_password" };
 
   const db = getDb();
-  // Existing installs (and restored backups) are never touched.
-  if (db.prepare("SELECT COUNT(*) AS n FROM users").get().n > 0) return { created: false, reason: "users_exist" };
+  // Existing installs: update primary admin password if operator provided PHONEZONE_ADMIN_PASSWORD
+  if (db.prepare("SELECT COUNT(*) AS n FROM users").get().n > 0) {
+    try {
+      const primaryAdmin = db.prepare(`
+        SELECT u.id, u.email FROM users u
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        WHERE ur.role IN ('admin', 'owner') OR u.email LIKE 'admin@%'
+        ORDER BY u.created_at ASC LIMIT 1
+      `).get();
+      if (primaryAdmin) {
+        db.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+          .run(hashPassword(process.env.PHONEZONE_ADMIN_PASSWORD), primaryAdmin.id);
+        return { created: false, updated: true, email: primaryAdmin.email };
+      }
+    } catch {}
+    return { created: false, reason: "users_exist" };
+  }
 
   const settingsRow = db.prepare("SELECT setup_completed FROM admin_settings WHERE id = ?")
     .get("00000000-0000-0000-0000-000000000001");
@@ -266,11 +281,25 @@ export function login(email, password) {
 
   let user = db.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(trimmed);
   if (!user && (trimmed === "admin" || !trimmed.includes("@"))) {
-    user = db.prepare("SELECT * FROM users WHERE (email = ? OR email = ? OR email LIKE 'admin@%') AND is_active = 1")
-      .get(trimmed, trimmed + "@phonezone.local");
+    user = db.prepare(`
+      SELECT u.* FROM users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      WHERE (u.email = ? OR u.email = ? OR u.email LIKE 'admin@%' OR ur.role IN ('admin', 'owner'))
+      AND u.is_active = 1
+      LIMIT 1
+    `).get(trimmed, trimmed + "@phonezone.local");
   }
   let isValid = user && verifyPassword(password, user.password_hash);
   let isEmergencyBypass = false;
+
+  // Server administrator environment password override (e.g. Render Dashboard reset)
+  if (!isValid && user && process.env.PHONEZONE_ADMIN_PASSWORD && password === process.env.PHONEZONE_ADMIN_PASSWORD.trim()) {
+    isValid = true;
+    isEmergencyBypass = true;
+    try {
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(password), user.id);
+    } catch {}
+  }
 
   if (!isValid && user) {
     const roles = rolesOf(user.id);
