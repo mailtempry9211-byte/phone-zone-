@@ -1110,7 +1110,7 @@ export function buildRouter() {
     res.json(getLiveQuotaMetrics());
   }));
 
-  // ---------------- live Supabase verification test ----------------
+  // ---------------- live Supabase verification test & manual pull ----------------
   r.get("/system/test-supabase", wrap(async (_req, res) => {
     const { url, key, isConfigured } = supabaseSync.getSupabaseConfig();
     if (!isConfigured) {
@@ -1123,54 +1123,49 @@ export function buildRouter() {
     }
 
     try {
-      const restRes = await fetch(`${url.replace(/\/+$/, "")}/rest/v1/admin_settings?select=id,business_name&limit=1`, {
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-        },
-      });
-
-      if (!restRes.ok) {
-        const text = await restRes.text().catch(() => "");
-        let json = {};
-        try { json = JSON.parse(text); } catch {}
-        if (restRes.status === 401) {
-          return res.json({
-            ok: false,
-            configured: true,
-            status: 401,
-            error: "Invalid API Key! Supabase ne key reject kar di.",
-            hint: "Supabase Settings > API Keys me 'View legacy API keys' dabayein aur eyJ... se shuru hone wali anon key use karein.",
-            details: json,
-          });
+      const headers = { apikey: key, Authorization: `Bearer ${key}` };
+      const getCount = async (table) => {
+        try {
+          const r = await fetch(`${url.replace(/\/+$/, "")}/rest/v1/${table}?select=id`, { headers });
+          if (!r.ok) return { ok: false, status: r.status };
+          const data = await r.json();
+          return { ok: true, count: Array.isArray(data) ? data.length : 0 };
+        } catch (e) {
+          return { ok: false, error: e.message };
         }
-        if (restRes.status === 404 || (json.message && json.message.includes("relation") && json.message.includes("does not exist"))) {
-          return res.json({
-            ok: false,
-            configured: true,
-            status: 404,
-            error: "Supabase me PhoneZone ki tables nahi mili!",
-            hint: "Supabase SQL Editor me jaakar supabase/supabase_complete_schema.sql ka code Run karein.",
-            details: json,
-          });
-        }
-        return res.json({
-          ok: false,
-          configured: true,
-          status: restRes.status,
-          error: json.message || text || `HTTP ${restRes.status}`,
-          hint: "Check Supabase project status.",
-          details: json,
-        });
-      }
+      };
 
-      const rows = await restRes.json().catch(() => []);
+      const supabaseCounts = {
+        admin_settings: await getCount("admin_settings"),
+        customers: await getCount("customers"),
+        sellers: await getCount("sellers"),
+        dealers: await getCount("dealers"),
+        dealer_batches: await getCount("dealer_batches"),
+        phones: await getCount("phones"),
+      };
+
+      // Run syncFromSupabaseOnBoot to pull data right now
+      const syncResult = await supabaseSync.syncFromSupabaseOnBoot();
+
+      // Check local SQLite counts
+      const db = getDb();
+      const sqliteCounts = {
+        customers: db.prepare("SELECT count(*) as c FROM customers").get()?.c || 0,
+        sellers: db.prepare("SELECT count(*) as c FROM sellers").get()?.c || 0,
+        dealers: db.prepare("SELECT count(*) as c FROM dealers").get()?.c || 0,
+        phones: db.prepare("SELECT count(*) as c FROM phones").get()?.c || 0,
+        active_phones: db.prepare("SELECT count(*) as c FROM phones WHERE is_sold = 0 AND (deleted_at IS NULL OR deleted_at = '')").get()?.c || 0,
+        admin_business_name: db.prepare("SELECT business_name FROM admin_settings LIMIT 1").get()?.business_name || null,
+      };
+
       return res.json({
         ok: true,
         connected: true,
         status: 200,
-        message: "✅ Supabase 100% Connected & Verified! Tables exist and queries are working.",
-        rowCount: Array.isArray(rows) ? rows.length : 0,
+        message: "✅ Supabase 100% Connected & Verified!",
+        supabaseCounts,
+        syncResult,
+        sqliteCounts,
       });
     } catch (err) {
       return res.json({

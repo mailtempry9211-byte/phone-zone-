@@ -417,6 +417,21 @@ export async function syncFromSupabaseOnBoot() {
   if (!isConfigured) return { ok: false, reason: "not_configured" };
 
   const db = getDb();
+  db.pragma("foreign_keys = OFF");
+  const counts = {
+    settings: false,
+    users: 0,
+    roles: 0,
+    sellers: 0,
+    customers: 0,
+    dealers: 0,
+    dealer_batches: 0,
+    phones: 0,
+    repair_customers: 0,
+    repair_jobs: 0,
+    repair_job_items: 0,
+    returns: 0,
+  };
 
   try {
     // 1. Sync admin_settings
@@ -456,7 +471,7 @@ export async function syncFromSupabaseOnBoot() {
               account_number = COALESCE(?, account_number),
               ifsc_code = COALESCE(?, ifsc_code),
               setup_completed = 1
-            WHERE id = '00000000-0000-0000-0000-000000000001'
+            WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)
           `).run(
             s.business_name || null,
             s.business_tagline || null,
@@ -546,11 +561,17 @@ export async function syncFromSupabaseOnBoot() {
       for (const s of sellers) {
         try {
           db.prepare(`
-            INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number, seller_photo_url, aadhaar_photo_url, bank_account_number, bank_ifsc, bank_name, account_holder_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO NOTHING
-          `).run(s.id, s.name, s.phone, s.address || "", s.id_proof_type || "aadhaar", s.id_number || "", s.seller_photo_url || null, s.aadhaar_photo_url || null, s.bank_account_number || null, s.bank_ifsc || null, s.bank_name || null, s.account_holder_name || null);
-        } catch {}
+            INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number, seller_photo_url, aadhaar_photo_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              phone = excluded.phone,
+              address = excluded.address
+          `).run(s.id, s.name, s.phone, s.address || "", s.id_proof_type || "aadhaar", s.id_number || "", s.seller_photo_url || null, s.aadhaar_photo_url || null);
+          counts.sellers++;
+        } catch (err) {
+          logger.warn("[SupabaseSync] seller sync item error: " + err.message);
+        }
       }
     }
 
@@ -565,9 +586,15 @@ export async function syncFromSupabaseOnBoot() {
           db.prepare(`
             INSERT INTO customers (id, name, phone, address, id_proof_type, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO NOTHING
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              phone = excluded.phone,
+              address = excluded.address
           `).run(c.id, c.name, c.phone, c.address || "", c.id_proof_type || "aadhaar", c.id_number || "");
-        } catch {}
+          counts.customers++;
+        } catch (err) {
+          logger.warn("[SupabaseSync] customer sync item error: " + err.message);
+        }
       }
     }
 
@@ -808,11 +835,15 @@ export async function syncFromSupabaseOnBoot() {
       }
     } catch {}
 
-    logger.info("[SupabaseSync] Auto-sync from Supabase completed successfully! All tables restored.");
-    return { ok: true, synced: true };
+    logger.info("[SupabaseSync] Auto-sync from Supabase completed successfully! Restored:", counts);
+    return { ok: true, synced: true, counts };
   } catch (err) {
     logger.warn("[SupabaseSync] Boot sync error", err);
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, counts };
+  } finally {
+    try {
+      db.pragma("foreign_keys = ON");
+    } catch {}
   }
 }
 
