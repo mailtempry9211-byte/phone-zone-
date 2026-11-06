@@ -114,6 +114,8 @@ export function sanitizeRowForSupabase(table, rawRow) {
   const allowed = SUPABASE_COLUMNS[table];
   const out = {};
 
+  const isUuid = (val) => typeof val === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
   const source = { ...rawRow };
   if (table === "phones") {
     // Map phone_name <-> brand if needed
@@ -121,7 +123,42 @@ export function sanitizeRowForSupabase(table, rawRow) {
     if (source.colour && !source.color) source.color = source.colour;
     if (source.variant && !source.storage) source.storage = source.variant;
 
-    // Foreign Key Guard: Verify that referenced IDs actually exist in local DB to prevent Postgres rejection
+    // Normalize ENUM condition for Postgres
+    const validConditions = ["excellent", "good", "fair", "poor"];
+    const rawCond = (source.condition || "").toLowerCase().trim();
+    if (validConditions.includes(rawCond)) {
+      source.condition = rawCond;
+    } else if (rawCond.includes("excel") || rawCond.includes("new")) {
+      source.condition = "excellent";
+    } else if (rawCond.includes("fair") || rawCond.includes("avg")) {
+      source.condition = "fair";
+    } else if (rawCond.includes("poor") || rawCond.includes("bad")) {
+      source.condition = "poor";
+    } else {
+      source.condition = "good";
+    }
+
+    // Normalize ENUM payment_method for Postgres
+    const validPayments = ["cash", "upi", "bank_transfer", "card"];
+    const rawPay = (source.payment_method || "").toLowerCase().trim();
+    if (validPayments.includes(rawPay)) {
+      source.payment_method = rawPay;
+    } else if (rawPay.includes("upi") || rawPay.includes("gpay") || rawPay.includes("paytm") || rawPay.includes("phonepe")) {
+      source.payment_method = "upi";
+    } else if (rawPay.includes("bank") || rawPay.includes("neft") || rawPay.includes("rtgs") || rawPay.includes("imps")) {
+      source.payment_method = "bank_transfer";
+    } else if (rawPay.includes("card")) {
+      source.payment_method = "card";
+    } else {
+      source.payment_method = "cash";
+    }
+
+    // Foreign Key & UUID Guards: Ensure IDs are valid UUIDs and exist in local DB
+    if (source.dealer_id && !isUuid(source.dealer_id)) source.dealer_id = null;
+    if (source.batch_purchase_id && !isUuid(source.batch_purchase_id)) source.batch_purchase_id = null;
+    if (source.seller_id && !isUuid(source.seller_id)) source.seller_id = null;
+    if (source.customer_id && !isUuid(source.customer_id)) source.customer_id = null;
+
     try {
       const db = getDb();
       if (source.dealer_id) {
@@ -146,8 +183,15 @@ export function sanitizeRowForSupabase(table, rawRow) {
     if (source.gstin && !source.gst_number) source.gst_number = source.gstin;
   }
   if (table === "dealer_batches") {
+    if (source.dealer_id && !isUuid(source.dealer_id)) source.dealer_id = null;
     if (source.batch_number && !source.invoice_number) source.invoice_number = source.batch_number;
     if (source.batch_date && !source.purchase_date) source.purchase_date = source.batch_date;
+  }
+  if (table === "returns") {
+    if (source.phone_id && !isUuid(source.phone_id)) source.phone_id = null;
+  }
+  if (table === "repair_job_items") {
+    if (source.job_id && !isUuid(source.job_id)) source.job_id = null;
   }
   if (table === "repair_jobs") {
     if (!source.customer_name && source.repair_customer_id) {
@@ -297,7 +341,23 @@ export async function pushBatchToSupabase(table, rows) {
         totalUploaded += chunk.length;
       } else {
         const errTxt = await res.text().catch(() => "");
-        logger.warn(`[SupabaseSync] Batch chunk upload warning for ${table}:`, errTxt.slice(0, 150));
+        logger.warn(`[SupabaseSync] Batch chunk upload warning for ${table}: ${errTxt.slice(0, 150)}. Retrying item-by-item...`);
+        // Fallback: push item by item so 1 bad row doesn't kill the whole batch!
+        for (const item of chunk) {
+          try {
+            const singleRes = await fetch(`${url}/rest/v1/${table}`, {
+              method: "POST",
+              headers: supabaseHeaders(key),
+              body: JSON.stringify(item),
+            });
+            if (singleRes.ok) {
+              totalUploaded++;
+            } else {
+              const singleErr = await singleRes.text().catch(() => "");
+              logger.warn(`[SupabaseSync] Single item push rejected (${table} ${item.id}): ${singleErr.slice(0, 120)}`);
+            }
+          } catch {}
+        }
       }
     } catch (e) {
       logger.warn(`[SupabaseSync] Batch network error for ${table}:`, e.message);
@@ -454,78 +514,125 @@ export async function syncFromSupabaseOnBoot() {
 
   try {
     // 1. Sync admin_settings
-    const settingsRes = await fetch(`${url}/rest/v1/admin_settings?select=*&limit=1`, {
+    const settingsRes = await fetch(`${url}/rest/v1/admin_settings?select=*&limit=10`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(5000),
     });
 
     if (settingsRes.ok) {
       const rows = await settingsRes.json().catch(() => []);
       if (Array.isArray(rows) && rows.length > 0) {
-        const s = rows[0];
-        if (s.business_name || s.setup_completed) {
-          db.prepare(`
-            UPDATE admin_settings SET
-              business_name = COALESCE(?, business_name),
-              business_tagline = COALESCE(?, business_tagline),
-              owner_name = COALESCE(?, owner_name),
-              address = COALESCE(?, address),
-              phone_primary = COALESCE(?, phone_primary),
-              phone_secondary = COALESCE(?, phone_secondary),
-              email = COALESCE(?, email),
-              instagram = COALESCE(?, instagram),
-              whatsapp_number = COALESCE(?, whatsapp_number),
-              google_business_url = COALESCE(?, google_business_url),
-              udyam_number = COALESCE(?, udyam_number),
-              logo_url = COALESCE(?, logo_url),
-              signature_url = COALESCE(?, signature_url),
-              terms_and_conditions = COALESCE(?, terms_and_conditions),
-              terms_and_conditions_sale = COALESCE(?, terms_and_conditions_sale),
-              terms_and_conditions_purchase = COALESCE(?, terms_and_conditions_purchase),
-              invoice_prefix_purchase = COALESCE(?, invoice_prefix_purchase),
-              invoice_prefix_sale = COALESCE(?, invoice_prefix_sale),
-              invoice_prefix_return = COALESCE(?, invoice_prefix_return),
-              currency_code = COALESCE(?, currency_code),
-              bank_name = COALESCE(?, bank_name),
-              account_holder_name = COALESCE(?, account_holder_name),
-              account_number = COALESCE(?, account_number),
-              ifsc_code = COALESCE(?, ifsc_code),
-              ai_provider = COALESCE(?, ai_provider),
-              ai_model = COALESCE(?, ai_model),
-              ai_api_key = COALESCE(?, ai_api_key),
-              ocr_engine = COALESCE(?, ocr_engine),
-              setup_completed = 1
-            WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)
-          `).run(
-            s.business_name || null,
-            s.business_tagline || null,
-            s.owner_name || null,
-            s.address || null,
-            s.phone_primary || null,
-            s.phone_secondary || null,
-            s.email || null,
-            s.instagram || null,
-            s.whatsapp_number || null,
-            s.google_business_url || null,
-            s.udyam_number || null,
-            s.logo_url || null,
-            s.signature_url || null,
-            s.terms_and_conditions || null,
-            s.terms_and_conditions_sale || null,
-            s.terms_and_conditions_purchase || null,
-            s.invoice_prefix_purchase || null,
-            s.invoice_prefix_sale || null,
-            s.invoice_prefix_return || null,
-            s.currency_code || null,
-            s.bank_name || null,
-            s.account_holder_name || null,
-            s.account_number || null,
-            s.ifsc_code || null,
-            s.ai_provider || null,
-            s.ai_model || null,
-            s.ai_api_key || null,
-            s.ocr_engine || null
-          );
-          logger.info("[SupabaseSync] Restored admin_settings from Supabase: " + s.business_name);
+        // Pick the row with actual setup or custom business name
+        const s = rows.find(r => r.business_name && r.business_name.trim() !== "" && r.business_name !== "PhoneZone") || rows[0];
+        if (s && (s.business_name || s.setup_completed)) {
+          const existingLocal = db.prepare("SELECT id FROM admin_settings LIMIT 1").get();
+          if (existingLocal) {
+            db.prepare(`
+              UPDATE admin_settings SET
+                business_name = COALESCE(?, business_name),
+                business_tagline = COALESCE(?, business_tagline),
+                owner_name = COALESCE(?, owner_name),
+                address = COALESCE(?, address),
+                phone_primary = COALESCE(?, phone_primary),
+                phone_secondary = COALESCE(?, phone_secondary),
+                email = COALESCE(?, email),
+                instagram = COALESCE(?, instagram),
+                whatsapp_number = COALESCE(?, whatsapp_number),
+                google_business_url = COALESCE(?, google_business_url),
+                udyam_number = COALESCE(?, udyam_number),
+                logo_url = COALESCE(?, logo_url),
+                signature_url = COALESCE(?, signature_url),
+                terms_and_conditions = COALESCE(?, terms_and_conditions),
+                terms_and_conditions_sale = COALESCE(?, terms_and_conditions_sale),
+                terms_and_conditions_purchase = COALESCE(?, terms_and_conditions_purchase),
+                invoice_prefix_purchase = COALESCE(?, invoice_prefix_purchase),
+                invoice_prefix_sale = COALESCE(?, invoice_prefix_sale),
+                invoice_prefix_return = COALESCE(?, invoice_prefix_return),
+                currency_code = COALESCE(?, currency_code),
+                bank_name = COALESCE(?, bank_name),
+                account_holder_name = COALESCE(?, account_holder_name),
+                account_number = COALESCE(?, account_number),
+                ifsc_code = COALESCE(?, ifsc_code),
+                ai_provider = COALESCE(?, ai_provider),
+                ai_model = COALESCE(?, ai_model),
+                ai_api_key = COALESCE(?, ai_api_key),
+                ocr_engine = COALESCE(?, ocr_engine),
+                setup_completed = 1
+              WHERE id = ?
+            `).run(
+              s.business_name || null,
+              s.business_tagline || null,
+              s.owner_name || null,
+              s.address || null,
+              s.phone_primary || null,
+              s.phone_secondary || null,
+              s.email || null,
+              s.instagram || null,
+              s.whatsapp_number || null,
+              s.google_business_url || null,
+              s.udyam_number || null,
+              s.logo_url || null,
+              s.signature_url || null,
+              s.terms_and_conditions || null,
+              s.terms_and_conditions_sale || null,
+              s.terms_and_conditions_purchase || null,
+              s.invoice_prefix_purchase || null,
+              s.invoice_prefix_sale || null,
+              s.invoice_prefix_return || null,
+              s.currency_code || null,
+              s.bank_name || null,
+              s.account_holder_name || null,
+              s.account_number || null,
+              s.ifsc_code || null,
+              s.ai_provider || null,
+              s.ai_model || null,
+              s.ai_api_key || null,
+              s.ocr_engine || null,
+              existingLocal.id
+            );
+          } else {
+            db.prepare(`
+              INSERT INTO admin_settings (
+                id, business_name, business_tagline, owner_name, address, phone_primary, phone_secondary,
+                email, instagram, whatsapp_number, google_business_url, udyam_number, logo_url, signature_url,
+                terms_and_conditions, terms_and_conditions_sale, terms_and_conditions_purchase,
+                invoice_prefix_purchase, invoice_prefix_sale, invoice_prefix_return, currency_code,
+                bank_name, account_holder_name, account_number, ifsc_code, ai_provider, ai_model, ai_api_key, ocr_engine, setup_completed
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `).run(
+              s.id || "00000000-0000-0000-0000-000000000001",
+              s.business_name || "PhoneZone",
+              s.business_tagline || "",
+              s.owner_name || "",
+              s.address || "",
+              s.phone_primary || "",
+              s.phone_secondary || "",
+              s.email || "",
+              s.instagram || "",
+              s.whatsapp_number || "",
+              s.google_business_url || "",
+              s.udyam_number || "",
+              s.logo_url || null,
+              s.signature_url || null,
+              s.terms_and_conditions || "",
+              s.terms_and_conditions_sale || "",
+              s.terms_and_conditions_purchase || "",
+              s.invoice_prefix_purchase || "PUR",
+              s.invoice_prefix_sale || "SAL",
+              s.invoice_prefix_return || "RET",
+              s.currency_code || "INR",
+              s.bank_name || "",
+              s.account_holder_name || "",
+              s.account_number || "",
+              s.ifsc_code || "",
+              s.ai_provider || "gemini",
+              s.ai_model || "gemini-2.5-flash-lite",
+              s.ai_api_key || "",
+              s.ocr_engine || "auto"
+            );
+          }
+          counts.settings = true;
+          logger.info("[SupabaseSync] Restored admin_settings from Supabase: " + (s.business_name || "Configured"));
         }
       }
     }
@@ -663,6 +770,7 @@ export async function syncFromSupabaseOnBoot() {
               d.updated_at || new Date().toISOString(),
               Number(d.balance) || 0
             );
+            counts.dealers++;
           } catch {}
         }
       }
@@ -687,6 +795,7 @@ export async function syncFromSupabaseOnBoot() {
               b.total_phones || 1, b.total_amount || 0, b.payment_method || "UPI",
               b.payment_status || "completed", b.notes || null, b.created_at || new Date().toISOString()
             );
+            counts.dealer_batches++;
           } catch {}
         }
       }
@@ -749,6 +858,7 @@ export async function syncFromSupabaseOnBoot() {
             p.created_at || new Date().toISOString(),
             p.updated_at || new Date().toISOString()
           );
+          counts.phones++;
         } catch {}
       }
     }
@@ -770,6 +880,7 @@ export async function syncFromSupabaseOnBoot() {
               rc.id, rc.name, rc.phone, rc.address || "", rc.id_proof_type || "aadhaar",
               rc.id_number || "", rc.created_at || new Date().toISOString(), rc.updated_at || new Date().toISOString()
             );
+            counts.repair_customers++;
           } catch {}
         }
       }
@@ -811,6 +922,7 @@ export async function syncFromSupabaseOnBoot() {
               j.received_at || new Date().toISOString(), j.delivered_at || null, j.notes || null,
               j.financial_year || null, j.created_at || new Date().toISOString(), j.updated_at || new Date().toISOString()
             );
+            counts.repair_jobs++;
           } catch {}
         }
       }
@@ -834,6 +946,7 @@ export async function syncFromSupabaseOnBoot() {
               Number(item.qty) || 1, Number(item.unit_price) || 0, Number(item.total_price) || 0,
               item.created_at || new Date().toISOString()
             );
+            counts.repair_job_items++;
           } catch {}
         }
       }
@@ -857,6 +970,7 @@ export async function syncFromSupabaseOnBoot() {
               r.reason || "Return", Number(r.refund_amount) || 0, r.processed_by || null,
               r.created_at || new Date().toISOString()
             );
+            counts.returns++;
           } catch {}
         }
       }
@@ -1103,55 +1217,98 @@ export async function pushSettingsToSupabase(settingsRow) {
   if (!isConfigured || !settingsRow) return;
 
   try {
+    // If partial object passed, hydrate with full current settings from local DB
+    let source = { ...settingsRow };
+    try {
+      const db = getDb();
+      const current = db.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+      if (current) source = { ...current, ...source };
+    } catch {}
+
+    // Check if an existing row already exists in Supabase admin_settings
+    let existingId = "00000000-0000-0000-0000-000000000001";
+    let hasExisting = false;
+    try {
+      const checkRes = await fetch(`${url}/rest/v1/admin_settings?select=id&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (checkRes.ok) {
+        const rows = await checkRes.json().catch(() => []);
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].id) {
+          existingId = rows[0].id;
+          hasExisting = true;
+        }
+      }
+    } catch {}
+
     const payload = sanitizeRowForSupabase("admin_settings", {
-      id: "00000000-0000-0000-0000-000000000001",
-      business_name: settingsRow.business_name || settingsRow.businessName || "",
-      business_tagline: settingsRow.business_tagline || settingsRow.businessTagline || "",
-      owner_name: settingsRow.owner_name || settingsRow.ownerName || "",
-      address: settingsRow.address || "",
-      phone_primary: settingsRow.phone_primary || settingsRow.primaryPhone || "",
-      phone_secondary: settingsRow.phone_secondary || settingsRow.secondaryPhone || "",
-      email: settingsRow.email || "",
-      instagram: settingsRow.instagram || "",
-      whatsapp_number: settingsRow.whatsapp_number || settingsRow.whatsappNumber || "",
-      google_business_url: settingsRow.google_business_url || settingsRow.googleBusinessUrl || "",
-      udyam_number: settingsRow.udyam_number || settingsRow.udyamNumber || "",
-      logo_url: settingsRow.logo_url || settingsRow.logoUrl || null,
-      signature_url: settingsRow.signature_url || settingsRow.signatureUrl || null,
-      terms_and_conditions: settingsRow.terms_and_conditions || settingsRow.termsAndConditions || "",
-      terms_and_conditions_sale: settingsRow.terms_and_conditions_sale || settingsRow.termsAndConditionsSale || "",
-      terms_and_conditions_purchase: settingsRow.terms_and_conditions_purchase || settingsRow.termsAndConditionsPurchase || "",
-      invoice_prefix_purchase: settingsRow.invoice_prefix_purchase || "PUR",
-      invoice_prefix_sale: settingsRow.invoice_prefix_sale || "SAL",
-      invoice_prefix_return: settingsRow.invoice_prefix_return || "RET",
-      currency_code: settingsRow.currency_code || "INR",
-      bank_name: settingsRow.bank_name || settingsRow.bankName || "",
-      account_holder_name: settingsRow.account_holder_name || settingsRow.accountHolderName || "",
-      account_number: settingsRow.account_number || settingsRow.accountNumber || "",
-      ifsc_code: settingsRow.ifsc_code || settingsRow.ifscCode || "",
-      ai_provider: settingsRow.ai_provider || settingsRow.aiProvider || "gemini",
-      ai_model: settingsRow.ai_model || settingsRow.aiModel || "gemini-2.5-flash-lite",
-      ai_api_key: settingsRow.ai_api_key || settingsRow.aiApiKey || "",
-      ai_custom_url: settingsRow.ai_custom_url || settingsRow.aiCustomUrl || "",
-      ai_voice_enabled: settingsRow.ai_voice_enabled !== undefined ? settingsRow.ai_voice_enabled : 1,
-      ai_auto_speak: settingsRow.ai_auto_speak !== undefined ? settingsRow.ai_auto_speak : 0,
-      ocr_engine: settingsRow.ocr_engine || settingsRow.ocrEngine || "auto",
+      id: existingId,
+      business_name: source.business_name || source.businessName || "PhoneZone",
+      business_tagline: source.business_tagline || source.businessTagline || "",
+      owner_name: source.owner_name || source.ownerName || "",
+      address: source.address || "",
+      phone_primary: source.phone_primary || source.primaryPhone || "",
+      phone_secondary: source.phone_secondary || source.secondaryPhone || "",
+      email: source.email || "",
+      instagram: source.instagram || "",
+      whatsapp_number: source.whatsapp_number || source.whatsappNumber || source.phone_primary || "",
+      google_business_url: source.google_business_url || source.googleBusinessUrl || "",
+      udyam_number: source.udyam_number || source.udyamNumber || "",
+      logo_url: source.logo_url || source.logoUrl || null,
+      signature_url: source.signature_url || source.signatureUrl || null,
+      terms_and_conditions: source.terms_and_conditions || source.termsAndConditions || "",
+      terms_and_conditions_sale: source.terms_and_conditions_sale || source.termsAndConditionsSale || "",
+      terms_and_conditions_purchase: source.terms_and_conditions_purchase || source.termsAndConditionsPurchase || "",
+      invoice_prefix_purchase: source.invoice_prefix_purchase || "PUR",
+      invoice_prefix_sale: source.invoice_prefix_sale || "SAL",
+      invoice_prefix_return: source.invoice_prefix_return || "RET",
+      currency_code: source.currency_code || "INR",
+      bank_name: source.bank_name || source.bankName || "",
+      account_holder_name: source.account_holder_name || source.accountHolderName || "",
+      account_number: source.account_number || source.accountNumber || "",
+      ifsc_code: source.ifsc_code || source.ifscCode || "",
+      ai_provider: source.ai_provider || source.aiProvider || "gemini",
+      ai_model: source.ai_model || source.aiModel || "gemini-2.5-flash-lite",
+      ai_api_key: source.ai_api_key || source.aiApiKey || "",
+      ai_custom_url: source.ai_custom_url || source.aiCustomUrl || "",
+      ai_voice_enabled: source.ai_voice_enabled !== undefined ? source.ai_voice_enabled : 1,
+      ai_auto_speak: source.ai_auto_speak !== undefined ? source.ai_auto_speak : 0,
+      ocr_engine: source.ocr_engine || source.ocrEngine || "auto",
       setup_completed: 1,
     });
 
-    const res = await fetch(`${url}/rest/v1/admin_settings`, {
-      method: "POST",
-      headers: supabaseHeaders(key),
-      body: JSON.stringify(payload),
-    });
+    const endpoint = hasExisting
+      ? `${url}/rest/v1/admin_settings?id=eq.${encodeURIComponent(existingId)}`
+      : `${url}/rest/v1/admin_settings`;
+    const method = hasExisting ? "PATCH" : "POST";
 
-    if (res.ok) {
-      logger.info("[SupabaseSync] Pushed admin_settings to Supabase successfully");
-    } else {
-      logger.warn("[SupabaseSync] Failed to push admin_settings to Supabase", await res.text().catch(() => ""));
+    let currentPayload = { ...payload };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const res = await fetch(endpoint, {
+        method,
+        headers: supabaseHeaders(key),
+        body: JSON.stringify(currentPayload),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (res.ok) {
+        logger.info("[SupabaseSync] Pushed admin_settings to Supabase successfully!");
+        break;
+      }
+
+      const errTxt = await res.text().catch(() => "");
+      const match = errTxt.match(/Could not find the '([^']+)' column/i);
+      if (match && match[1] && currentPayload[match[1]] !== undefined) {
+        logger.warn(`[SupabaseSync] Column '${match[1]}' not in Supabase schema. Stripping and retrying...`);
+        delete currentPayload[match[1]];
+        continue;
+      }
+      logger.warn("[SupabaseSync] Failed to push admin_settings to Supabase", errTxt);
+      break;
     }
   } catch (err) {
-    logger.warn("[SupabaseSync] pushSettingsToSupabase error", err);
+    logger.warn("[SupabaseSync] pushSettingsToSupabase error", err.message);
   }
 }
 

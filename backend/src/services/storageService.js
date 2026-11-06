@@ -8,6 +8,7 @@ import { getDb } from "../db/index.js";
 import { newId, badRequest, notFound } from "../lib/errors.js";
 import { PATHS, resolveStoragePath } from "../config/paths.js";
 import { SERVER } from "../config/business.js";
+import { getSupabaseConfig } from "./supabaseSyncService.js";
 
 // NOTE: text/html is deliberately NOT accepted. An uploaded HTML file served
 // inline would be stored XSS against the admin session.
@@ -145,6 +146,25 @@ export function saveFile({ ownerType, ownerId, category, buffer, originalName, m
        VALUES (@id, @owner_type, @owner_id, @category, @relative_path, @original_name, @mime_type, @size_bytes, @is_public)`,
     )
     .run(record);
+
+  // Asynchronously replicate file to Supabase Storage Bucket so it survives Render disk resets
+  setImmediate(async () => {
+    try {
+      const { url, key, isConfigured } = getSupabaseConfig();
+      if (!isConfigured) return;
+      await fetch(`${url}/storage/v1/object/phonezone-uploads/${record.id}`, {
+        method: "POST",
+        headers: {
+          "apikey": key,
+          "Authorization": `Bearer ${key}`,
+          "Content-Type": record.mime_type || "application/octet-stream",
+          "x-upsert": "true",
+        },
+        body: buffer,
+      });
+    } catch {}
+  });
+
   return record;
 }
 
@@ -152,6 +172,36 @@ export function getFileRecord(id) {
   const row = getDb().prepare("SELECT * FROM files WHERE id = ?").get(id);
   if (!row) throw notFound("That file could not be found.");
   return row;
+}
+
+export async function readFileSafe(id, relativePath) {
+  try {
+    const abs = resolveStoragePath(relativePath);
+    if (fs.existsSync(abs)) return fs.readFileSync(abs);
+  } catch {}
+
+  // Cloud fallback: fetch from Supabase Storage
+  try {
+    const { url, key, isConfigured } = getSupabaseConfig();
+    if (isConfigured && id) {
+      const res = await fetch(`${url}/storage/v1/object/public/phonezone-uploads/${id}`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const ab = await res.arrayBuffer();
+        const buf = Buffer.from(ab);
+        try {
+          const abs = resolveStoragePath(relativePath);
+          fs.mkdirSync(path.dirname(abs), { recursive: true });
+          fs.writeFileSync(abs, buf);
+        } catch {}
+        return buf;
+      }
+    }
+  } catch {}
+
+  return null;
 }
 
 export function readFile(relativePath) {

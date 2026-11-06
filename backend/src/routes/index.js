@@ -353,6 +353,7 @@ export function buildRouter() {
       if (result.u) {
         supabaseSync.pushUserToSupabase(result.u, "admin").catch(() => {});
       }
+      supabaseSync.triggerBackgroundSync(500);
     } catch (err) {
       if (/UNIQUE constraint failed: users\.email/i.test(String(err?.message))) {
         throw badRequest("An account with this email already exists. Use a different email.");
@@ -632,11 +633,13 @@ export function buildRouter() {
     if (!row) return res.status(404).json({ error: "No repair job found." });
     res.json(row);
   }));
-  r.get("/public/files/:id", wrap((req, res) => {
+  r.get("/public/files/:id", wrap(async (req, res) => {
     const file = storage.getFileRecord(req.params.id);
     if (!file.is_public) return res.status(403).json({ error: "This file is not public." });
     setSafeFileHeaders(res, file.mime_type);
-    res.type(file.mime_type).send(storage.readFile(file.relative_path));
+    const buf = await storage.readFileSafe(file.id, file.relative_path);
+    if (!buf) return res.status(404).json({ error: "That file could not be found." });
+    res.type(file.mime_type).send(buf);
   }));
   r.post("/public/messages", wrap((req, res) => {
     if (!checkMessageRate(req.ip)) throw new AppError("Too many messages sent. Please try again in a minute.", 429, "too_many_messages");
@@ -1118,6 +1121,10 @@ export function buildRouter() {
   }));
   r.post("/supabase/sync-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {
     const result = await supabaseSync.pushAllToSupabase();
+    res.json(result);
+  }));
+  r.post("/supabase/pull-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {
+    const result = await supabaseSync.syncFromSupabaseOnBoot();
     res.json(result);
   }));
   r.post("/supabase/pull-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {

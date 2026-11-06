@@ -63,6 +63,27 @@ export const SupabaseCloudSyncPill: React.FC<{ className?: string; isDark?: bool
     },
   });
 
+  const pullMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/supabase/pull-now", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Pull failed");
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success("Pulled full store from Supabase Cloud!", {
+        description: `Restored: ${data.counts?.phones || 0} phones, ${data.counts?.sellers || 0} sellers, ${data.counts?.customers || 0} customers.`,
+      });
+      queryClient.invalidateQueries();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to pull from Supabase");
+    },
+  });
+
   const isConnected = !!status?.connected;
   const isConfigured = !!status?.isConfigured;
 
@@ -161,25 +182,45 @@ export const SupabaseCloudSyncPill: React.FC<{ className?: string; isDark?: bool
               </div>
             </div>
 
-            {/* Sync Action Button */}
-            <Button
-              type="button"
-              disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate()}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 shadow-sm"
-            >
-              {syncMutation.isPending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Pushing Local Database to Supabase...
-                </>
-              ) : (
-                <>
-                  <Cloud className="h-4 w-4 mr-2" />
-                  ⚡ Sync All Data to Supabase Now
-                </>
-              )}
-            </Button>
+            {/* Sync Action Buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                disabled={syncMutation.isPending || pullMutation.isPending}
+                onClick={() => syncMutation.mutate()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 shadow-sm text-xs"
+              >
+                {syncMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Pushing...
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="h-4 w-4 mr-1" />
+                    Push to Cloud
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                disabled={syncMutation.isPending || pullMutation.isPending}
+                onClick={() => pullMutation.mutate()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 shadow-sm text-xs"
+              >
+                {pullMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Pulling...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Pull from Cloud
+                  </>
+                )}
+              </Button>
+            </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
               Restored backup data or new stock will be immediately pushed to Supabase tables.
