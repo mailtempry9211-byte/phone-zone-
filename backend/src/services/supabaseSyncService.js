@@ -145,10 +145,6 @@ export function sanitizeRowForSupabase(table, rawRow) {
     if (source.problem_description && !source.problem) source.problem = source.problem_description;
     if (source.total_cost && !source.final_price) source.final_price = Number(source.total_cost) || 0;
   }
-    if (!source.phone_name && source.brand) source.phone_name = source.brand;
-    if (source.colour && !source.color) source.color = source.colour;
-    if (source.variant && !source.storage) source.storage = source.variant;
-  }
 
   const parseArray = (val) => {
     if (Array.isArray(val)) return val;
