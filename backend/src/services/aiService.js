@@ -14,8 +14,12 @@ export function getAiConfig() {
   const settings = getRawSettings() || {};
   const provider = (settings.ai_provider || process.env.AI_PROVIDER || "gemini").toLowerCase().trim();
   let apiKey = (settings.ai_api_key || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
-  if (provider === "gemini" && apiKey && !apiKey.startsWith("AIzaSy")) {
-    apiKey = ""; // Filter out accidental login password saved in DB by browser autofill
+  if (provider === "gemini" && apiKey) {
+    const isLegit =
+      apiKey.startsWith("AIzaSy") ||
+      apiKey.startsWith("AQ.") ||
+      (apiKey.length >= 35 && !apiKey.includes("@") && !apiKey.includes(" "));
+    if (!isLegit) apiKey = ""; // Filter out accidental login password saved in DB by browser autofill
   }
   let model = (settings.ai_model || process.env.AI_MODEL || "").trim();
   if (!model || model === "gemini-1.5-flash" || model === "gemini-2.5-flash") {
@@ -432,8 +436,8 @@ Schema:
  * 3. Conversational AI + Function / Tool Calling Engine
  * -------------------------------------------------------------
  */
-export async function callLLMWithTools({ messages, tools = [], systemPrompt }) {
-  const config = getAiConfig();
+export async function callLLMWithTools({ messages, tools = [], systemPrompt, config: customConfig }) {
+  const config = customConfig || getAiConfig();
   if (!config.apiKey && config.provider !== "ollama") {
     return {
       role: "assistant",
@@ -692,10 +696,25 @@ async function callOpenAICompatibleWithTools({ messages, tools, systemPrompt, co
  */
 export async function testAiConnection(overrideConfig = {}) {
   const settings = getRawSettings() || {};
+  let apiKey = overrideConfig.apiKey !== undefined ? overrideConfig.apiKey : settings.ai_api_key || "";
+  const provider = (overrideConfig.provider || settings.ai_provider || "gemini").toLowerCase().trim();
+  let model = overrideConfig.model || settings.ai_model || "gemini-2.5-flash-lite";
+
+  apiKey = (apiKey || "").trim();
+  if (provider === "gemini" && apiKey) {
+    const isLegit =
+      apiKey.startsWith("AIzaSy") ||
+      apiKey.startsWith("AQ.") ||
+      (apiKey.length >= 35 && !apiKey.includes("@") && !apiKey.includes(" "));
+    if (!isLegit) {
+      return { ok: false, error: "Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.'. Browser password detected." };
+    }
+  }
+
   const config = {
-    provider: overrideConfig.provider || settings.ai_provider || "gemini",
-    apiKey: overrideConfig.apiKey !== undefined ? overrideConfig.apiKey : settings.ai_api_key || "",
-    model: overrideConfig.model || settings.ai_model || "gemini-1.5-flash",
+    provider,
+    apiKey,
+    model,
     customUrl: overrideConfig.customUrl || settings.ai_custom_url || "",
   };
 
@@ -708,6 +727,7 @@ export async function testAiConnection(overrideConfig = {}) {
       messages: [{ role: "user", content: "Reply strictly with: 'PhoneZone JARVIS Online!'" }],
       tools: [],
       systemPrompt: "You are a health check agent.",
+      config,
     });
 
     return {

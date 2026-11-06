@@ -53,6 +53,7 @@ const SUPABASE_COLUMNS = {
     "terms_and_conditions", "terms_and_conditions_sale", "terms_and_conditions_purchase",
     "invoice_prefix_purchase", "invoice_prefix_sale", "invoice_prefix_return",
     "currency_code", "bank_name", "account_holder_name", "account_number", "ifsc_code",
+    "ai_provider", "ai_model", "ai_api_key", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak", "ocr_engine",
     "setup_completed", "updated_at"
   ],
   sellers: [
@@ -488,6 +489,10 @@ export async function syncFromSupabaseOnBoot() {
               account_holder_name = COALESCE(?, account_holder_name),
               account_number = COALESCE(?, account_number),
               ifsc_code = COALESCE(?, ifsc_code),
+              ai_provider = COALESCE(?, ai_provider),
+              ai_model = COALESCE(?, ai_model),
+              ai_api_key = COALESCE(?, ai_api_key),
+              ocr_engine = COALESCE(?, ocr_engine),
               setup_completed = 1
             WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)
           `).run(
@@ -514,7 +519,11 @@ export async function syncFromSupabaseOnBoot() {
             s.bank_name || null,
             s.account_holder_name || null,
             s.account_number || null,
-            s.ifsc_code || null
+            s.ifsc_code || null,
+            s.ai_provider || null,
+            s.ai_model || null,
+            s.ai_api_key || null,
+            s.ocr_engine || null
           );
           logger.info("[SupabaseSync] Restored admin_settings from Supabase: " + s.business_name);
         }
@@ -1120,6 +1129,13 @@ export async function pushSettingsToSupabase(settingsRow) {
       account_holder_name: settingsRow.account_holder_name || settingsRow.accountHolderName || "",
       account_number: settingsRow.account_number || settingsRow.accountNumber || "",
       ifsc_code: settingsRow.ifsc_code || settingsRow.ifscCode || "",
+      ai_provider: settingsRow.ai_provider || settingsRow.aiProvider || "gemini",
+      ai_model: settingsRow.ai_model || settingsRow.aiModel || "gemini-2.5-flash-lite",
+      ai_api_key: settingsRow.ai_api_key || settingsRow.aiApiKey || "",
+      ai_custom_url: settingsRow.ai_custom_url || settingsRow.aiCustomUrl || "",
+      ai_voice_enabled: settingsRow.ai_voice_enabled !== undefined ? settingsRow.ai_voice_enabled : 1,
+      ai_auto_speak: settingsRow.ai_auto_speak !== undefined ? settingsRow.ai_auto_speak : 0,
+      ocr_engine: settingsRow.ocr_engine || settingsRow.ocrEngine || "auto",
       setup_completed: 1,
     });
 

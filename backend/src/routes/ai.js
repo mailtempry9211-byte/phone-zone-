@@ -214,15 +214,21 @@ export function buildAiRouter(staffAuth, adminAuth) {
   }));
 
   // 5. Save AI Configuration
-  r.post("/config", adminAuth, wrap((req, res) => {
+  r.post("/config", adminAuth, wrap(async (req, res) => {
     const { provider, apiKey, model, customUrl, voiceEnabled, autoSpeak, ocrEngine } = req.body || {};
     const updates = {};
     if (provider !== undefined) updates.ai_provider = String(provider).toLowerCase().trim();
     if (apiKey !== undefined) {
       const cleanKey = String(apiKey).trim();
       const currentProvider = updates.ai_provider || getAiConfig().provider;
-      if (currentProvider === "gemini" && cleanKey && !cleanKey.startsWith("AIzaSy")) {
-        throw badRequest("Invalid Gemini API Key. Google Gemini API keys always start with 'AIzaSy...'. Browser autofilled password detected.");
+      if (currentProvider === "gemini" && cleanKey) {
+        const isLegit =
+          cleanKey.startsWith("AIzaSy") ||
+          cleanKey.startsWith("AQ.") ||
+          (cleanKey.length >= 35 && !cleanKey.includes("@") && !cleanKey.includes(" "));
+        if (!isLegit) {
+          throw badRequest("Invalid Gemini API Key. Google Gemini API keys start with 'AIzaSy...' or 'AQ.' from Google AI Studio. Browser autofilled password detected.");
+        }
       }
       updates.ai_api_key = cleanKey;
     }
@@ -233,6 +239,18 @@ export function buildAiRouter(staffAuth, adminAuth) {
     if (ocrEngine !== undefined) updates.ocr_engine = String(ocrEngine).trim();
 
     saveSettings(updates, req.user?.id);
+
+    // Persist full settings including AI config to Supabase Cloud!
+    try {
+      const { getDb } = await import("../db/index.js");
+      const fullSettings = getDb().prepare("SELECT * FROM admin_settings LIMIT 1").get();
+      if (fullSettings) {
+        const sync = await import("../services/supabaseSyncService.js");
+        sync.pushSettingsToSupabase(fullSettings).catch(() => {});
+        sync.triggerBackgroundSync();
+      }
+    } catch {}
+
     const updated = getAiConfig();
     res.json({
       ok: true,

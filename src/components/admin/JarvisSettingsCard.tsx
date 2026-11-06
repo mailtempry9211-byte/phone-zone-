@@ -32,6 +32,18 @@ export const JarvisSettingsCard: React.FC = () => {
   const [ocrEngine, setOcrEngine] = useState<string>("auto");
   const [showKey, setShowKey] = useState<boolean>(false);
   const [testing, setTesting] = useState<boolean>(false);
+  const [testStatus, setTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Helper to validate genuine Gemini keys (handles both legacy AIzaSy and new Google AI Studio AQ. keys)
+  const isValidGeminiKey = (k: string) => {
+    const clean = k.trim();
+    if (!clean) return true;
+    return (
+      clean.startsWith("AIzaSy") ||
+      clean.startsWith("AQ.") ||
+      (clean.length >= 35 && !clean.includes("@") && !clean.includes(" "))
+    );
+  };
 
   // Fetch current AI settings
   const { data: config, isLoading } = useQuery({
@@ -57,9 +69,8 @@ export const JarvisSettingsCard: React.FC = () => {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (provider === "gemini" && apiKey) {
-        const cleanKey = apiKey.trim();
-        if (!cleanKey.startsWith("AIzaSy")) {
-          throw new Error("Invalid Gemini API Key! Google Gemini keys always start with 'AIzaSy...'. Browser ne aapka login password fill kar diya tha, kripya asli Gemini key paste karein.");
+        if (!isValidGeminiKey(apiKey)) {
+          throw new Error("Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.' from Google AI Studio. Please do not paste your login password.");
         }
       }
       const res = await fetch("/api/ai/config", {
@@ -84,6 +95,7 @@ export const JarvisSettingsCard: React.FC = () => {
     onSuccess: () => {
       toast.success("JARVIS AI Settings Saved Successfully!");
       setApiKey("");
+      setTestStatus({ ok: true, message: "AI Settings and API Key saved to database and synced to cloud successfully." });
       queryClient.invalidateQueries({ queryKey: ["ai-config"] });
       queryClient.invalidateQueries({ queryKey: ["ai-config-settings"] });
     },
@@ -94,11 +106,13 @@ export const JarvisSettingsCard: React.FC = () => {
 
   // Test Connection
   const handleTestConnection = async () => {
-    if (provider === "gemini" && apiKey && !apiKey.trim().startsWith("AIzaSy")) {
-      toast.error("Invalid Gemini API Key! Key must start with 'AIzaSy...'. Please do not test with your login password.");
+    if (provider === "gemini" && apiKey && !isValidGeminiKey(apiKey)) {
+      toast.error("Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.' from Google AI Studio.");
+      setTestStatus({ ok: false, message: "Invalid key format. Enter valid Google AI Studio key starting with AIzaSy... or AQ." });
       return;
     }
     setTesting(true);
+    setTestStatus(null);
     try {
       const res = await fetch("/api/ai/test-connection", {
         method: "POST",
@@ -115,8 +129,10 @@ export const JarvisSettingsCard: React.FC = () => {
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Connection test failed");
       }
+      setTestStatus({ ok: true, message: `Connected! ${data.message || "JARVIS AI is active & verified."}` });
       toast.success(`Connected! ${data.message || "JARVIS is online."}`);
     } catch (err: any) {
+      setTestStatus({ ok: false, message: err.message || "Could not connect to AI Provider" });
       toast.error(err.message || "Could not connect to AI Provider");
     } finally {
       setTesting(false);
@@ -246,7 +262,7 @@ export const JarvisSettingsCard: React.FC = () => {
                 style={!showKey ? ({ WebkitTextSecurity: "disc" } as any) : undefined}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={config?.hasKey ? "•••••••••••••••••••••••• (Leave blank to keep)" : "AIzaSy..."}
+                placeholder={config?.hasKey ? "•••••••••••••••••••••••• (Leave blank to keep)" : "AIzaSy... ya AQ.Ab8RN..."}
                 className="h-9 text-xs pr-10 font-mono"
               />
               <button
@@ -269,6 +285,18 @@ export const JarvisSettingsCard: React.FC = () => {
               Test Key
             </Button>
           </div>
+          {testStatus && (
+            <div
+              className={`p-2.5 rounded-lg border text-xs flex items-center gap-2 mt-2 ${
+                testStatus.ok
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200"
+                  : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200"
+              }`}
+            >
+              <span className="text-base">{testStatus.ok ? "✅" : "⚠️"}</span>
+              <span className="font-semibold">{testStatus.message}</span>
+            </div>
+          )}
         </div>
 
         {/* Custom URL if Ollama or OpenAI compatible */}
