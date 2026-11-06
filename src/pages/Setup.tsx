@@ -350,8 +350,8 @@ const Setup = () => {
         ]);
         toast.success('Data restored successfully! Welcome back.');
         setTimeout(() => {
-          window.location.replace('/');
-        }, 1000);
+          window.location.href = '/?admin=1';
+        }, 800);
       } else {
         let errMessage = 'Restore failed';
         try {

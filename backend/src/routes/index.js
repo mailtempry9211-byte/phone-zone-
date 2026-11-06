@@ -267,6 +267,21 @@ export function buildRouter() {
   // ---------------- first-run setup (public, pre-login) ----------------
   r.get("/setup/status", wrap(async (_req, res) => {
     let s = settings.getSettings();
+
+    // Auto-heal: If local DB already contains business data (phones/sellers/repairs/users), mark setup_completed = 1
+    if (!s.setupCompleted) {
+      try {
+        const db = getDb();
+        const phonesCount = db.prepare("SELECT count(*) as c FROM phones").get()?.c || 0;
+        const sellersCount = db.prepare("SELECT count(*) as c FROM sellers").get()?.c || 0;
+        const usersCount = db.prepare("SELECT count(*) as c FROM users WHERE is_active = 1").get()?.c || 0;
+        if (phonesCount > 0 || sellersCount > 0 || usersCount > 0) {
+          db.prepare("UPDATE admin_settings SET setup_completed = 1 WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)").run();
+          s = settings.getSettings();
+        }
+      } catch {}
+    }
+
     const cloudStatus = await supabaseSync.checkSupabaseSetupStatus();
 
     // If local DB says not completed, attempt to pull persistent setup from Supabase Cloud
@@ -541,8 +556,37 @@ export function buildRouter() {
     const result = await restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     logger.info("Restore succeeded", { result });
 
+    // Mark setup_completed = 1 explicitly so the application knows setup is done!
+    const db = getDb();
+    try {
+      db.prepare("UPDATE admin_settings SET setup_completed = 1 WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)").run();
+    } catch {}
+
+    // Ensure bootstrap admin account & issue session cookie immediately
+    try {
+      const { ensureBootstrapAdmin, hashToken } = await import("../services/authService.js");
+      ensureBootstrapAdmin();
+
+      const adminUser = db.prepare("SELECT * FROM users WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1").get();
+      if (adminUser) {
+        const crypto = await import("node:crypto");
+        const token = crypto.randomBytes(32).toString("hex");
+        const expires = new Date(Date.now() + SERVER.sessionTtlHours * 3600_000).toISOString();
+        db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?,?,?)").run(hashToken(token), adminUser.id, expires);
+
+        res.cookie("pz_session", token, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: isSecureRequest(req),
+          maxAge: SERVER.sessionTtlHours * 3600_000,
+        });
+      }
+    } catch (e) {
+      logger.warn("[Restore] Post-restore session issuance warning:", e.message);
+    }
+
     // Respond immediately to client so Render HTTP proxy never hits timeout
-    res.json({ restored: true, backupName: req.file.filename, ...result });
+    res.json({ restored: true, backupName: req.file.filename, setupCompleted: true, ...result });
 
     // Sync all restored tables to Supabase in the background
     setImmediate(async () => {

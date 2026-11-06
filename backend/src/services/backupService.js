@@ -794,6 +794,12 @@ export async function restoreBackup(backupName, {
       restoreFromJsonData(data, temp, { strategy, entities: normalizedEntities, isAll });
     }
 
+    // Guarantee setup_completed = 1 is always set on restored store
+    try {
+      const db = getDb();
+      db.prepare("UPDATE admin_settings SET setup_completed = 1 WHERE id = '00000000-0000-0000-0000-000000000001' OR id = (SELECT id FROM admin_settings LIMIT 1)").run();
+    } catch {}
+
     fs.rmSync(temp, { recursive: true, force: true });
     logger.info("Restore completed successfully", { backupName, strategy, isAll, entities: normalizedEntities, safetyBackup: safety.name, parked });
     return {
