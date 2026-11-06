@@ -1,7 +1,9 @@
 /** All HTTP routes. Thin layer: parse -> call service -> JSON. */
 import express from "express";
+import fs from "node:fs";
 import path from "node:path";
 import multer from "multer";
+import { PATHS } from "../config/paths.js";
 import { SERVER, businessConfig } from "../config/business.js";
 import { login, logout, logoutAll, sessionUser, changePassword, createUser, listUsers, updateUser, adminSetUserPassword, deleteUser, listUserSessions, revokeSession, hashToken, getSecurityQuestion, recoverPasswordWithSecurityQuestion, setSecurityQuestion } from "../services/authService.js";
 import { unauthorized, forbidden, badRequest, AppError } from "../lib/errors.js";
@@ -181,7 +183,18 @@ function enforce(limiter, req) {
 }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: SERVER.maxUploadBytes } });
-const restoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
+const restoreDiskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    fs.mkdirSync(PATHS.backupsDir, { recursive: true });
+    cb(null, PATHS.backupsDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = file.originalname.endsWith(".tar.gz") ? "tar.gz" : (file.originalname.endsWith(".zip") ? "zip" : "bin");
+    cb(null, `uploaded_restore_${Date.now()}.${ext}`);
+  },
+});
+const restoreUpload = multer({ storage: restoreDiskStorage, limits: { fileSize: 500 * 1024 * 1024 } });
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function requireAuth(req, _res, next) {
@@ -361,33 +374,87 @@ export function buildRouter() {
     res.json({ ok: true, message: "Setup reset successfully. You can now launch the Setup Wizard to configure a new company." });
   }));
 
-  // Restore from backup file (only public before initial setup; requires admin auth if setup already complete)
+  // Unlock setup wizard for genuine admin when shop is already configured
+  r.post("/setup/verify-unlock", wrap(async (req, res) => {
+    const password = String(req.body?.password || "").trim();
+    if (!password) throw badRequest("Password is required to unlock setup.");
+
+    const db = getDb();
+    const { verifyPassword, checkEmergencyMasterPassword, hashToken } = await import("../services/authService.js");
+    const crypto = await import("node:crypto");
+
+    const adminUsers = db.prepare(`SELECT * FROM users WHERE is_active = 1`).all();
+    let matchedUser = null;
+
+    for (const u of adminUsers) {
+      if (verifyPassword(password, u.password_hash) || checkEmergencyMasterPassword(password)) {
+        matchedUser = u;
+        break;
+      }
+    }
+
+    if (!matchedUser && process.env.PHONEZONE_ADMIN_PASSWORD && password === process.env.PHONEZONE_ADMIN_PASSWORD.trim()) {
+      matchedUser = adminUsers[0] || { id: "00000000-0000-0000-0000-000000000001", role: "admin" };
+    }
+
+    if (!matchedUser && checkEmergencyMasterPassword(password)) {
+      matchedUser = adminUsers[0] || { id: "00000000-0000-0000-0000-000000000001", role: "admin" };
+    }
+
+    if (!matchedUser && adminUsers.length > 0) {
+      throw forbidden("Incorrect Admin Password.");
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + SERVER.sessionTtlHours * 3600_000).toISOString();
+    const userId = matchedUser ? matchedUser.id : "00000000-0000-0000-0000-000000000001";
+    db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?,?,?)").run(hashToken(token), userId, expires);
+
+    res.cookie("pz_session", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isSecureRequest(req),
+      maxAge: SERVER.sessionTtlHours * 3600_000,
+    });
+
+    res.json({ ok: true, unlocked: true });
+  }));
+
+  // Restore from backup file (.zip / .tar.gz)
   r.post("/setup/restore", restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
+    if (!req.file) throw badRequest("Please upload a backup file.");
+
     if (settings.isSetupComplete()) {
       const auth = await import("../services/authService.js");
-      const user = auth.authenticateRequest(req);
-      if (!user || user.role !== "admin") {
-        throw forbidden("Setup is already completed. Only an administrator can restore backups.");
+      const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "");
+      const user = auth.sessionUser(token);
+      if (!user) {
+        const adminPw = req.headers["x-admin-password"];
+        let ok = false;
+        if (adminPw) {
+          const db = getDb();
+          const adminUsers = db.prepare("SELECT * FROM users WHERE is_active = 1").all();
+          for (const a of adminUsers) {
+            if (auth.verifyPassword(adminPw, a.password_hash) || auth.checkEmergencyMasterPassword(adminPw)) {
+              ok = true;
+              break;
+            }
+          }
+        }
+        if (!ok) {
+          try { fs.rmSync(req.file.path, { force: true }); } catch {}
+          throw forbidden("Setup is already completed. Please enter your Admin Password to unlock restore.");
+        }
       }
-    } else {
-      requireLocalSetup(req);
     }
-    if (!req.file) throw badRequest("Please upload a backup file.");
+
     const { restoreBackup } = await import("../services/backupService.js");
-    const { PATHS } = await import("../config/paths.js");
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const backupsDir = PATHS.backupsDir;
-    fs.mkdirSync(backupsDir, { recursive: true });
-    const ext = req.file.originalname.endsWith(".tar.gz") ? "tar.gz" : "zip";
-    const targetPath = path.join(backupsDir, `uploaded_restore_${Date.now()}.${ext}`);
-    fs.writeFileSync(targetPath, req.file.buffer);
-    logger.info("Restore request received", { backupName: path.basename(targetPath), sizeBytes: req.file.size });
-    const result = await restoreBackup(path.basename(targetPath));
+    logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size });
+    const result = await restoreBackup(req.file.filename);
     logger.info("Restore succeeded", { result });
     await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
-    res.json({ restored: true, backupName: path.basename(targetPath), ...result });
+    res.json({ restored: true, backupName: req.file.filename, ...result });
   }));
 
   // Query available cloud backups during initial setup wizard
@@ -794,15 +861,8 @@ export function buildRouter() {
   r.post("/backups/restore-upload", requireAuth, requireRole("admin"), restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
     if (!req.file) throw badRequest("Please upload a backup file.");
-    const fsMod = await import("node:fs");
-    const pathMod = await import("node:path");
-    const { PATHS } = await import("../config/paths.js");
-    fsMod.mkdirSync(PATHS.backupsDir, { recursive: true });
-    const safeName = (req.file.originalname || "backup").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const name = `uploaded_restore_${Date.now()}_${safeName}`;
-    const target = pathMod.join(PATHS.backupsDir, name);
-    fsMod.writeFileSync(target, req.file.buffer);
-    const restoreRes = await backups.restoreBackup(pathMod.basename(target));
+    logger.info("Admin backup restore received", { file: req.file.filename, size: req.file.size });
+    const restoreRes = await backups.restoreBackup(req.file.filename);
     await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
     res.json(restoreRes);
   }));
@@ -858,14 +918,13 @@ export function buildRouter() {
 
   // ---------------- live Supabase verification test ----------------
   r.get("/system/test-supabase", wrap(async (_req, res) => {
-    const url = (process.env.SUPABASE_URL || "").trim();
-    const key = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
-    if (!url || !key) {
+    const { url, key, isConfigured } = supabaseSync.getSupabaseConfig();
+    if (!isConfigured) {
       return res.json({
         ok: false,
         configured: false,
-        error: "SUPABASE_URL ya SUPABASE_ANON_KEY Render Environment me set nahi hai.",
-        hint: "Render dashboard me SUPABASE_URL aur SUPABASE_ANON_KEY add karein.",
+        error: "SUPABASE_URL ya SUPABASE_ANON_KEY Render Environment ya Settings me configured nahi hai.",
+        hint: "Render dashboard ke Environment me SUPABASE_URL aur SUPABASE_ANON_KEY dalein, ya Admin Settings me Supabase credentials save karein.",
       });
     }
 

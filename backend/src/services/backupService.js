@@ -414,7 +414,14 @@ export async function restoreBackup(backupName) {
 
   await assertSafeArchive(src);
 
-  const safety = createBackup();
+  let safety = { name: "skipped" };
+  try {
+    fs.mkdirSync(path.join(PATHS.dataDir, "database"), { recursive: true });
+    fs.mkdirSync(path.join(PATHS.dataDir, "storage"), { recursive: true });
+    safety = createBackup();
+  } catch (safetyErr) {
+    logger.warn("Pre-restore safety backup skipped:", safetyErr.message);
+  }
   const temp = path.join(PATHS.dataDir, `.restore-${stamp()}`);
   fs.mkdirSync(temp, { recursive: true });
 

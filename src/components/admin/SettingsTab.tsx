@@ -39,6 +39,7 @@ const SettingsTab = () => {
     }
   };
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [isSavingSupabaseCreds, setIsSavingSupabaseCreds] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: supabaseStatus, refetch: refetchSupabaseStatus } = useQuery({
@@ -130,6 +131,8 @@ const SettingsTab = () => {
     evolution_api_key: "",
     evolution_instance_name: "phonezone",
     tac_fetch_mode: "ask",
+    supabase_url: "https://rkhzhozrslrfsqlpgjav.supabase.co",
+    supabase_anon_key: "",
   });
 
   // Update form data when settings load
@@ -164,6 +167,8 @@ const SettingsTab = () => {
         evolution_api_key: (settings as any).evolution_api_key || "",
         evolution_instance_name: (settings as any).evolution_instance_name || "phonezone",
         tac_fetch_mode: settings.tac_fetch_mode || "ask",
+        supabase_url: (settings as any).supabase_url || (settings as any).supabaseUrl || "https://rkhzhozrslrfsqlpgjav.supabase.co",
+        supabase_anon_key: (settings as any).supabase_anon_key || (settings as any).supabaseAnonKey || "",
       });
     }
   }, [settings]);
@@ -1629,6 +1634,63 @@ const SettingsTab = () => {
             <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
               <span className="text-slate-400 block">Customers</span>
               <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.customers ?? "-"}</span>
+            </div>
+          </div>
+
+          {/* Supabase URL & Anon Key Direct Configuration */}
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-slate-300 font-medium">Supabase Project URL</Label>
+                <Input
+                  placeholder="https://xyz.supabase.co"
+                  value={formData.supabase_url}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, supabase_url: e.target.value }))}
+                  className="bg-slate-900 border-slate-700 text-white text-xs h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-slate-300 font-medium">Supabase Anon Key (eyJ...)</Label>
+                <Input
+                  type="password"
+                  placeholder="eyJhbGciOi..."
+                  value={formData.supabase_anon_key}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, supabase_anon_key: e.target.value }))}
+                  className="bg-slate-900 border-slate-700 text-white text-xs h-8"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-slate-700 text-slate-200 hover:bg-slate-800"
+                disabled={isSavingSupabaseCreds}
+                onClick={async () => {
+                  setIsSavingSupabaseCreds(true);
+                  try {
+                    const res = await fetch("/api/settings", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        supabase_url: formData.supabase_url,
+                        supabase_anon_key: formData.supabase_anon_key,
+                      }),
+                    });
+                    if (!res.ok) throw new Error("Failed to save credentials");
+                    toast.success("✅ Supabase credentials saved!");
+                    refetchSupabaseStatus();
+                    queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to save Supabase credentials");
+                  } finally {
+                    setIsSavingSupabaseCreds(false);
+                  }
+                }}
+              >
+                {isSavingSupabaseCreds ? "Saving..." : "Save Supabase Credentials"}
+              </Button>
             </div>
           </div>
 

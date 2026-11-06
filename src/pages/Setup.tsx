@@ -33,6 +33,9 @@ const Setup = () => {
   const [mode, setMode] = useState<SetupMode>('choose');
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -126,25 +129,54 @@ const Setup = () => {
       if (res.ok) {
         const status = await res.json();
         if (status.setupCompleted) {
-          const searchParams = new URLSearchParams(window.location.search);
-          const wantsForce = searchParams.get('force') === '1' || searchParams.get('reconfigure') === '1';
-          if (!wantsForce) {
-            navigate('/', { replace: true });
-            return;
-          }
-          // If force=1 is requested, check if user is logged in as admin
-          const authRes = await fetch('/api/auth/me', { credentials: 'include' });
-          if (!authRes.ok) {
-            toast.error('Access Denied: Setup is already completed. Sign in as Admin to reconfigure.');
-            navigate('/?admin=1', { replace: true });
-            return;
-          }
+          // If already authenticated as admin, allow access
+          try {
+            const authRes = await fetch('/api/auth/me', { credentials: 'include' });
+            if (authRes.ok) {
+              const me = await authRes.json();
+              if (me?.user?.role === 'admin' || me?.roles?.includes('admin')) {
+                setIsLocked(false);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch {}
+
+          // Not authenticated as admin -> Lock setup until owner unlocks with password
+          setIsLocked(true);
+          setLoading(false);
+          return;
         }
       }
     } catch (e) {
       // proceed
     }
     setLoading(false);
+  };
+
+  const handleUnlockSetup = async () => {
+    if (!unlockPassword.trim()) {
+      toast.error('Please enter your Admin Password');
+      return;
+    }
+    setUnlocking(true);
+    try {
+      const res = await fetch('/api/setup/verify-unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password: unlockPassword.trim() }),
+      });
+      if (!res.ok) {
+        throw new Error(await readError(res, 'Incorrect Admin Password'));
+      }
+      toast.success('Admin identity verified! Setup unlocked.');
+      setIsLocked(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Incorrect Admin Password');
+    } finally {
+      setUnlocking(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -187,16 +219,22 @@ const Setup = () => {
     try {
       const fd = new FormData();
       fd.append('backup', restoreFile);
+      const headers: Record<string, string> = {};
+      if (unlockPassword) headers['x-admin-password'] = unlockPassword;
+
       const res = await fetch('/api/setup/restore', {
         method: 'POST',
         credentials: 'include',
+        headers,
         body: fd,
       });
       if (!res.ok) {
         throw new Error(await readError(res, 'Restore failed'));
       }
       toast.success('Data restored successfully! Welcome back.');
-      window.location.replace('/'); // full reload so App re-reads setup status
+      setTimeout(() => {
+        window.location.replace('/'); // full reload so App re-reads setup status
+      }, 600);
     } catch (err: any) {
       toast.error(err.message || 'Restore failed');
     } finally {
@@ -280,6 +318,55 @@ const Setup = () => {
           <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4'></div>
           <p className='text-gray-600'>Checking setup status...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <div className='min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 flex items-center justify-center p-4'>
+        <Card className='max-w-md w-full bg-slate-900/90 border-slate-800 text-slate-100 shadow-2xl backdrop-blur-md'>
+          <CardHeader className='text-center space-y-2'>
+            <div className='mx-auto w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center'>
+              <ShieldCheck className='w-6 h-6 text-blue-400' />
+            </div>
+            <CardTitle className='text-xl font-bold tracking-tight text-white'>PhoneZone Setup is Locked</CardTitle>
+            <CardDescription className='text-slate-400 text-xs leading-relaxed'>
+              This business is already configured. To restore a backup (.zip) or reconfigure this store, enter your Admin Password:
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='space-y-1.5'>
+              <Label className='text-xs text-slate-300 font-medium'>Admin Password / Master Password</Label>
+              <Input
+                type='password'
+                placeholder='Enter password...'
+                value={unlockPassword}
+                onChange={(e) => setUnlockPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlockSetup()}
+                className='bg-slate-950/60 border-slate-800 text-slate-100 focus:border-blue-500'
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleUnlockSetup}
+              disabled={unlocking}
+              className='w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold'
+            >
+              {unlocking ? 'Verifying...' : 'Unlock Setup & Restore'}
+            </Button>
+            <div className='text-center pt-2'>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => navigate('/')}
+                className='text-xs text-slate-400 hover:text-slate-200'
+              >
+                ← Return to Storefront
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

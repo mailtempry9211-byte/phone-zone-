@@ -28,6 +28,10 @@ export function getSupabaseConfig() {
     } catch {}
   }
 
+  if (!url) {
+    url = "https://rkhzhozrslrfsqlpgjav.supabase.co";
+  }
+
   return { url, key, isConfigured: !!(url && key) };
 }
 
@@ -63,11 +67,12 @@ const SUPABASE_COLUMNS = {
   ],
   dealers: [
     "id", "business_name", "contact_person", "phone", "email", "address",
-    "gstin", "created_at", "updated_at"
+    "city", "state", "pincode", "gst_number", "pan_number", "photo_url",
+    "signature_url", "notes", "is_active", "created_at", "updated_at"
   ],
   dealer_batches: [
-    "id", "dealer_id", "batch_number", "batch_date", "total_phones",
-    "total_amount", "payment_status", "created_at", "updated_at"
+    "id", "dealer_id", "invoice_number", "purchase_date", "total_phones",
+    "total_amount", "payment_method", "payment_status", "notes", "created_at"
   ],
   phones: [
     "id", "phone_name", "model", "imei_number", "condition", "purchase_price",
@@ -82,12 +87,15 @@ const SUPABASE_COLUMNS = {
     "created_at", "updated_at"
   ],
   repair_jobs: [
-    "id", "job_no", "customer_id", "phone_model", "imei", "issue_description",
-    "condition", "status", "estimated_cost", "final_cost", "received_at",
-    "delivered_at", "created_at", "updated_at"
+    "id", "job_no", "customer_name", "customer_phone", "customer_address",
+    "device_brand", "device_model", "imei", "problem", "estimate",
+    "advance_paid", "parts_cost", "labour_cost", "final_price",
+    "status", "payment_status", "warranty_days", "received_at",
+    "delivered_at", "notes", "technician_notes", "financial_year",
+    "created_at", "updated_at"
   ],
   repair_job_items: [
-    "id", "repair_id", "description", "cost", "created_at"
+    "id", "job_id", "kind", "description", "qty", "unit_price", "total_price", "created_at"
   ],
   returns: [
     "id", "phone_id", "return_date", "reason", "refund_amount", "processed_by", "created_at"
@@ -108,6 +116,35 @@ export function sanitizeRowForSupabase(table, rawRow) {
   const source = { ...rawRow };
   if (table === "phones") {
     // Map phone_name <-> brand if needed
+    if (!source.phone_name && source.brand) source.phone_name = source.brand;
+    if (source.colour && !source.color) source.color = source.colour;
+    if (source.variant && !source.storage) source.storage = source.variant;
+  }
+  if (table === "dealers") {
+    if (source.gstin && !source.gst_number) source.gst_number = source.gstin;
+  }
+  if (table === "dealer_batches") {
+    if (source.batch_number && !source.invoice_number) source.invoice_number = source.batch_number;
+    if (source.batch_date && !source.purchase_date) source.purchase_date = source.batch_date;
+  }
+  if (table === "repair_jobs") {
+    if (!source.customer_name && source.repair_customer_id) {
+      try {
+        const db = getDb();
+        const cust = db.prepare("SELECT name, phone, address FROM repair_customers WHERE id = ?").get(source.repair_customer_id);
+        if (cust) {
+          source.customer_name = cust.name;
+          source.customer_phone = cust.phone;
+          source.customer_address = cust.address;
+        }
+      } catch {}
+    }
+    if (!source.customer_name) source.customer_name = "Customer";
+    if (!source.customer_phone) source.customer_phone = "0000000000";
+    if (!source.problem) source.problem = source.issue_description || "Repair";
+    if (source.problem_description && !source.problem) source.problem = source.problem_description;
+    if (source.total_cost && !source.final_price) source.final_price = Number(source.total_cost) || 0;
+  }
     if (!source.phone_name && source.brand) source.phone_name = source.brand;
     if (source.colour && !source.color) source.color = source.colour;
     if (source.variant && !source.storage) source.storage = source.variant;

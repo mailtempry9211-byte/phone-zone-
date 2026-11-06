@@ -42,6 +42,12 @@ export function initDatabase() {
     db.prepare("ALTER TABLE admin_settings ADD COLUMN evolution_instance_name TEXT").run();
   } catch {}
   try {
+    db.prepare("ALTER TABLE admin_settings ADD COLUMN supabase_url TEXT").run();
+  } catch {}
+  try {
+    db.prepare("ALTER TABLE admin_settings ADD COLUMN supabase_anon_key TEXT").run();
+  } catch {}
+  try {
     db.prepare("ALTER TABLE users ADD COLUMN active_shop_id TEXT").run();
   } catch {}
   try {

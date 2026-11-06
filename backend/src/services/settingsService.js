@@ -30,6 +30,7 @@ const WRITABLE_COLUMNS = [
   "evolution_api_url", "evolution_api_key", "evolution_instance_name",
   "homepage_theme", "homepage_config", "repair_services_catalog",
   "ai_provider", "ai_api_key", "ai_model", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak",
+  "supabase_url", "supabase_anon_key",
 ];
 
 const TAC_FETCH_MODES = new Set(["ask", "auto", "off"]);
@@ -115,6 +116,8 @@ export function getSettings() {
     aiCustomUrl: empty(row?.ai_custom_url),
     aiVoiceEnabled: row?.ai_voice_enabled !== 0,
     aiAutoSpeak: !!row?.ai_auto_speak,
+    supabaseUrl: empty(row?.supabase_url) || (process.env.SUPABASE_URL || "").trim(),
+    supabaseAnonKey: empty(row?.supabase_anon_key) || (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim(),
     messageTemplates: shipped.messageTemplates || {},
   };
 }
