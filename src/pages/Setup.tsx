@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Store, Upload, History, ShieldCheck, Star, Cloud, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Store, Upload, History, ShieldCheck, Star, Cloud, CheckCircle2, RotateCcw, Building2, Smartphone, Users, UserCheck, Wrench, Settings, Layers, Sparkles, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
@@ -44,6 +44,16 @@ const Setup = () => {
   } | null>(null);
   const [isWipingCloud, setIsWipingCloud] = useState(false);
   const [wipeBeforeRestore, setWipeBeforeRestore] = useState(true);
+  const [restoreStrategy, setRestoreStrategy] = useState<'replace' | 'merge'>('replace');
+  const [selectedEntities, setSelectedEntities] = useState<Record<string, boolean>>({
+    settings: true,
+    phones: true,
+    sellers: true,
+    customers: true,
+    dealers: true,
+    repairs: true,
+    returns: true,
+  });
   const [submitting, setSubmitting] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -268,11 +278,26 @@ const Setup = () => {
       toast.error('Please select a backup file');
       return;
     }
+
+    const chosen = Object.entries(selectedEntities)
+      .filter(([_, checked]) => checked)
+      .map(([k]) => k);
+
+    if (chosen.length === 0) {
+      toast.error('Please select at least one data category to restore');
+      return;
+    }
+
+    const isAll = chosen.length === Object.keys(selectedEntities).length;
+    const entitiesPayload = isAll ? ['all'] : chosen;
+
     setRestoring(true);
     try {
       const fd = new FormData();
       fd.append('backup', restoreFile);
-      if (wipeBeforeRestore) {
+      fd.append('strategy', restoreStrategy);
+      fd.append('entities', JSON.stringify(entitiesPayload));
+      if (restoreStrategy === 'replace' && wipeBeforeRestore) {
         fd.append('wipe_existing', 'true');
       }
       const headers: Record<string, string> = {};
@@ -878,23 +903,144 @@ const Setup = () => {
                 <p className='text-xs text-gray-500 mt-1'>Select the backup file downloaded from drive.google.com or exported from Admin Panel</p>
               </div>
 
-              <div className="flex items-center space-x-2 pt-1 bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
-                <input
-                  type="checkbox"
-                  id="wipeBeforeRestore"
-                  checked={wipeBeforeRestore}
-                  onChange={(e) => setWipeBeforeRestore(e.target.checked)}
-                  className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                />
-                <Label htmlFor="wipeBeforeRestore" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium">
-                  Wipe old cloud records &amp; photos first (Recommended: avoids mixing old and new store data)
+              {/* Strategy Choice */}
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">
+                  1. Restore Strategy
                 </Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setRestoreStrategy('replace')}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      restoreStrategy === 'replace'
+                        ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/30'
+                        : 'border-gray-200 dark:border-slate-800 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-bold text-xs text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                        <Trash2 className="h-3.5 w-3.5 text-blue-600" />
+                        Clean Replace (Fresh Start)
+                      </div>
+                      {restoreStrategy === 'replace' && (
+                        <Badge className="text-[9px] px-1.5 py-0 h-4 bg-blue-600">Recommended</Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Deletes old data permanently &amp; restores fresh from backup. Ensures zero duplicate records.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setRestoreStrategy('merge')}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      restoreStrategy === 'merge'
+                        ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/30'
+                        : 'border-gray-200 dark:border-slate-800 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-bold text-xs text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                        Smart Merge (Keep Current)
+                      </div>
+                      {restoreStrategy === 'merge' && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-600 text-emerald-600">Selected</Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                      Keeps existing records and merges backup entries. Existing data will not be deleted.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className='flex justify-between pt-2'>
+              {/* Wipe Cloud Toggle if replace */}
+              {restoreStrategy === 'replace' && (
+                <div className="flex items-center space-x-2 bg-blue-50/50 dark:bg-blue-950/30 p-2.5 rounded-lg border border-blue-200 dark:border-blue-900/50">
+                  <input
+                    type="checkbox"
+                    id="wipeBeforeRestore"
+                    checked={wipeBeforeRestore}
+                    onChange={(e) => setWipeBeforeRestore(e.target.checked)}
+                    className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  />
+                  <Label htmlFor="wipeBeforeRestore" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-medium">
+                    Wipe old cloud records &amp; photos first in Supabase (Recommended: frees storage quota)
+                  </Label>
+                </div>
+              )}
+
+              {/* Granular Entity Selection */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    2. Customize What to Restore
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allSelected = Object.values(selectedEntities).every(Boolean);
+                      const updated: Record<string, boolean> = {};
+                      Object.keys(selectedEntities).forEach((k) => {
+                        updated[k] = !allSelected;
+                      });
+                      setSelectedEntities(updated);
+                    }}
+                    className="text-[11px] text-blue-600 hover:underline font-medium"
+                  >
+                    {Object.values(selectedEntities).every(Boolean) ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'settings', label: 'Store Settings & Branding', desc: 'Shop details, signature, API keys', icon: Settings, color: 'text-amber-500' },
+                    { id: 'phones', label: 'Phones Inventory', desc: 'Stock, sold devices, IMEIs, photos', icon: Smartphone, color: 'text-blue-500' },
+                    { id: 'sellers', label: 'Sellers Database', desc: 'Seller profiles, Aadhaar photos', icon: Users, color: 'text-violet-500' },
+                    { id: 'customers', label: 'Customers Database', desc: 'Customer directory & contacts', icon: UserCheck, color: 'text-emerald-500' },
+                    { id: 'dealers', label: 'B2B Dealers & Batches', desc: 'Dealer batches, wholesale purchases', icon: Building2, color: 'text-cyan-500' },
+                    { id: 'repairs', label: 'Workshop Repairs', desc: 'Repair job sheets & repair clients', icon: Wrench, color: 'text-orange-500' },
+                    { id: 'returns', label: 'Sales Returns', desc: 'Device returns & refund records', icon: RotateCcw, color: 'text-rose-500' },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    const isChecked = !!selectedEntities[item.id];
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedEntities(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                        className={`flex items-start gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+                          isChecked
+                            ? 'border-blue-500/40 bg-blue-50/30 dark:bg-blue-950/20'
+                            : 'border-gray-200 dark:border-slate-800 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => setSelectedEntities(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                          className="mt-0.5 rounded text-blue-600 h-3.5 w-3.5"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${item.color}`} />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-800 dark:text-gray-200 text-[11px]">{item.label}</div>
+                          <div className="text-[10px] text-gray-500 truncate">{item.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className='flex justify-between pt-3 border-t'>
                 <Button variant='outline' onClick={() => setMode('choose')}>Back</Button>
-                <Button onClick={handleRestore} disabled={restoring || !restoreFile}>
-                  {restoring && !restoringCloudName ? 'Restoring...' : 'Restore Selected File'}
+                <Button
+                  onClick={handleRestore}
+                  disabled={restoring || !restoreFile || Object.values(selectedEntities).every((v) => !v)}
+                  className={restoreStrategy === 'replace' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+                >
+                  {restoring && !restoringCloudName ? 'Restoring...' : `Confirm & Restore (${Object.values(selectedEntities).filter(Boolean).length} Selected)`}
                 </Button>
               </div>
             </CardContent>

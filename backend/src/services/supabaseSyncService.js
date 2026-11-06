@@ -830,15 +830,51 @@ export async function checkSupabaseSetupStatus() {
 /**
  * Permanently wipe Supabase Cloud database tables and Storage buckets,
  * plus reset local SQLite, to cleanly free up all quota for a fresh store.
+ * Supports selective entities: ['settings', 'phones', 'sellers', 'customers', 'dealers', 'repairs', 'returns'] or ['all'].
  */
-export async function wipeSupabaseCloudData() {
+export async function wipeSupabaseCloudData(entities = ["all"]) {
   const { url, key, isConfigured } = getSupabaseConfig();
   const db = getDb();
 
-  logger.info("[SupabaseSync] Starting complete Cloud and Local Storage Wipe...");
+  let normalizedEntities = Array.isArray(entities) ? entities : [entities];
+  if (typeof entities === "string") {
+    try {
+      const parsed = JSON.parse(entities);
+      if (Array.isArray(parsed)) normalizedEntities = parsed;
+      else normalizedEntities = [parsed];
+    } catch {
+      normalizedEntities = entities.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  const isAll = !normalizedEntities || normalizedEntities.includes("all") || normalizedEntities.length === 0 || normalizedEntities.includes("*");
 
-  if (isConfigured) {
-    const tablesToWipe = [
+  logger.info("[SupabaseSync] Starting Cloud and Local Storage Wipe...", { isAll, entities: normalizedEntities });
+
+  const entityTableMap = {
+    settings: ["admin_settings"],
+    phones: ["phones"],
+    sellers: ["sellers"],
+    customers: ["customers"],
+    dealers: ["dealer_batches", "dealers"],
+    repairs: ["repair_job_items", "repair_jobs", "repair_customers"],
+    returns: ["returns"],
+  };
+
+  const entityBucketMap = {
+    settings: ["branding", "signatures"],
+    phones: ["phones", "product-photos"],
+    sellers: ["sellers"],
+    customers: ["customers"],
+    dealers: ["dealers"],
+    repairs: ["repairs"],
+    returns: [],
+  };
+
+  let tablesToWipe = [];
+  let bucketsToWipe = [];
+
+  if (isAll) {
+    tablesToWipe = [
       "repair_job_items",
       "repair_jobs",
       "repair_customers",
@@ -853,7 +889,15 @@ export async function wipeSupabaseCloudData() {
       "user_roles",
       "admin_settings"
     ];
+    bucketsToWipe = ["phones", "sellers", "customers", "invoices", "repairs", "documents", "signatures", "product-photos"];
+  } else {
+    for (const ent of normalizedEntities) {
+      if (entityTableMap[ent]) tablesToWipe.push(...entityTableMap[ent]);
+      if (entityBucketMap[ent]) bucketsToWipe.push(...entityBucketMap[ent]);
+    }
+  }
 
+  if (isConfigured) {
     for (const tbl of tablesToWipe) {
       try {
         await fetch(`${url}/rest/v1/${tbl}?id=not.is.null`, {
@@ -866,8 +910,7 @@ export async function wipeSupabaseCloudData() {
     }
 
     // Wipe storage buckets
-    const buckets = ["phones", "sellers", "customers", "invoices", "repairs", "documents", "signatures", "product-photos"];
-    for (const b of buckets) {
+    for (const b of bucketsToWipe) {
       try {
         const listRes = await fetch(`${url}/storage/v1/object/list/${b}`, {
           method: "POST",
@@ -892,52 +935,72 @@ export async function wipeSupabaseCloudData() {
   }
 
   // Wipe local SQLite data
-  const localTables = [
-    "repair_job_items", "repair_jobs", "repair_customers", "returns",
-    "phones", "dealer_batches", "dealers", "customers", "sellers",
-    "messages", "audit_logs", "sessions"
-  ];
+  const localTableMap = {
+    settings: [],
+    phones: ["phones"],
+    sellers: ["sellers"],
+    customers: ["customers"],
+    dealers: ["dealer_batches", "dealers"],
+    repairs: ["repair_job_items", "repair_jobs", "repair_customers"],
+    returns: ["returns"],
+  };
+
+  let localTables = [];
+  if (isAll) {
+    localTables = [
+      "repair_job_items", "repair_jobs", "repair_customers", "returns",
+      "phones", "dealer_batches", "dealers", "customers", "sellers",
+      "messages", "audit_logs", "sessions"
+    ];
+  } else {
+    for (const ent of normalizedEntities) {
+      if (localTableMap[ent]) localTables.push(...localTableMap[ent]);
+    }
+  }
+
   for (const t of localTables) {
     try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
   }
 
-  // Reset admin_settings
-  try {
-    db.prepare(`
-      UPDATE admin_settings SET
-        business_name = 'PhoneZone',
-        business_tagline = 'Second Hand Mobile & Repair Hub',
-        owner_name = '',
-        address = '',
-        phone_primary = '',
-        phone_secondary = '',
-        email = '',
-        instagram = '',
-        whatsapp_number = '',
-        google_business_url = '',
-        udyam_number = '',
-        logo_url = '',
-        signature_url = '',
-        setup_completed = 0
-      WHERE id = '00000000-0000-0000-0000-000000000001'
-    `).run();
-  } catch {}
+  if (isAll) {
+    // Reset admin_settings
+    try {
+      db.prepare(`
+        UPDATE admin_settings SET
+          business_name = 'PhoneZone',
+          business_tagline = 'Second Hand Mobile & Repair Hub',
+          owner_name = '',
+          address = '',
+          phone_primary = '',
+          phone_secondary = '',
+          email = '',
+          instagram = '',
+          whatsapp_number = '',
+          google_business_url = '',
+          udyam_number = '',
+          logo_url = '',
+          signature_url = '',
+          setup_completed = 0
+        WHERE id = '00000000-0000-0000-0000-000000000001'
+      `).run();
+    } catch {}
 
-  // Clean local storage files
-  try {
-    const fs = await import("node:fs");
-    const pathMod = await import("node:path");
-    const { PATHS } = await import("../config/paths.js");
-    if (fs.existsSync(PATHS.storageDir)) {
-      const entries = fs.readdirSync(PATHS.storageDir);
-      for (const e of entries) {
-        try { fs.rmSync(pathMod.join(PATHS.storageDir, e), { recursive: true, force: true }); } catch {}
+    // Clean local storage files
+    try {
+      const fs = await import("node:fs");
+      const pathMod = await import("node:path");
+      const { PATHS } = await import("../config/paths.js");
+      if (fs.existsSync(PATHS.storageDir)) {
+        const entries = fs.readdirSync(PATHS.storageDir);
+        for (const e of entries) {
+          try { fs.rmSync(pathMod.join(PATHS.storageDir, e), { recursive: true, force: true }); } catch {}
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  logger.info("[SupabaseSync] Complete Cloud & Local Wipe finished successfully!");
-  return { ok: true, wiped: true };
+  logger.info("[SupabaseSync] Cloud & Local Wipe finished successfully!", { isAll, entities: normalizedEntities });
+  return { ok: true, wiped: true, entities: isAll ? ["all"] : normalizedEntities };
 }
 
 /**

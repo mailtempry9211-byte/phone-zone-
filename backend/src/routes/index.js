@@ -517,15 +517,28 @@ export function buildRouter() {
       }
     }
 
+    const strategy = req.body?.strategy || "replace";
+    let entities = req.body?.entities || ["all"];
+    if (typeof entities === "string") {
+      try {
+        const parsed = JSON.parse(entities);
+        if (Array.isArray(parsed)) entities = parsed;
+        else entities = [parsed];
+      } catch {
+        entities = entities.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    const wipeCloud = req.body?.wipe_existing === "true" || req.body?.wipeExisting === "true" || req.body?.wipe_cloud === "true";
+
     // If wipe_existing is requested (or clean restore), wipe old Supabase records first so they don't mix
-    if (req.body?.wipe_existing === "true" || req.body?.wipeExisting === "true") {
-      logger.info("[Restore] Wiping old Supabase records before restoring new backup file...");
-      await supabaseSync.wipeSupabaseCloudData().catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
+    if (wipeCloud && strategy === "replace") {
+      logger.info("[Restore] Wiping old Supabase records before restoring new backup file...", { entities });
+      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
     }
 
     const { restoreBackup } = await import("../services/backupService.js");
-    logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size });
-    const result = await restoreBackup(req.file.filename);
+    logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size, strategy, entities, wipeCloud });
+    const result = await restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     logger.info("Restore succeeded", { result });
     await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
     res.json({ restored: true, backupName: req.file.filename, ...result });
@@ -922,7 +935,24 @@ export function buildRouter() {
   }));
   r.post("/backups/restore", requireAuth, requireRole("admin"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
-    res.json(await backups.restoreBackup(req.body?.name));
+    const strategy = req.body?.strategy || "replace";
+    let entities = req.body?.entities || ["all"];
+    if (typeof entities === "string") {
+      try {
+        const parsed = JSON.parse(entities);
+        if (Array.isArray(parsed)) entities = parsed;
+        else entities = [parsed];
+      } catch {
+        entities = entities.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    const wipeCloud = req.body?.wipe_existing === true || req.body?.wipe_existing === "true";
+    if (wipeCloud && strategy === "replace") {
+      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
+    }
+    const result = await backups.restoreBackup(req.body?.name, { strategy, entities, wipeCloud });
+    await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
+    res.json(result);
   }));
 
   // Download a created full backup (.zip) so the admin can save it.
@@ -935,8 +965,26 @@ export function buildRouter() {
   r.post("/backups/restore-upload", requireAuth, requireRole("admin"), restoreUpload.single("backup"), wrap(async (req, res) => {
     enforce(restoreLimiter, req);
     if (!req.file) throw badRequest("Please upload a backup file.");
-    logger.info("Admin backup restore received", { file: req.file.filename, size: req.file.size });
-    const restoreRes = await backups.restoreBackup(req.file.filename);
+    const strategy = req.body?.strategy || "replace";
+    let entities = req.body?.entities || ["all"];
+    if (typeof entities === "string") {
+      try {
+        const parsed = JSON.parse(entities);
+        if (Array.isArray(parsed)) entities = parsed;
+        else entities = [parsed];
+      } catch {
+        entities = entities.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    const wipeCloud = req.body?.wipe_existing === true || req.body?.wipe_existing === "true";
+
+    if (wipeCloud && strategy === "replace") {
+      logger.info("[Restore] Wiping Supabase records before admin restore-upload...", { entities });
+      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
+    }
+
+    logger.info("Admin backup restore received", { file: req.file.filename, size: req.file.size, strategy, entities, wipeCloud });
+    const restoreRes = await backups.restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
     res.json(restoreRes);
   }));

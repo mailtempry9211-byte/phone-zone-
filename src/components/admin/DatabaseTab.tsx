@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Download, Trash2, Database, HardDrive, FileText, FileSpreadsheet, Code, Upload, Cloud, RefreshCw, CheckCircle2, AlertCircle, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Download, Trash2, Database, HardDrive, FileText, FileSpreadsheet, Code, Upload, Cloud, RefreshCw, CheckCircle2, AlertCircle, Zap, Building2, Smartphone, Users, UserCheck, Wrench, RotateCcw, Settings, Layers, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import JSZip from 'jszip';
@@ -76,6 +77,21 @@ const DatabaseTab = () => {
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Advanced Selective & Strategy Restore Wizard
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+  const [restoreStrategy, setRestoreStrategy] = useState<'replace' | 'merge'>('replace');
+  const [wipeCloudBeforeRestore, setWipeCloudBeforeRestore] = useState(true);
+  const [selectedEntities, setSelectedEntities] = useState<Record<string, boolean>>({
+    settings: true,
+    phones: true,
+    sellers: true,
+    customers: true,
+    dealers: true,
+    repairs: true,
+    returns: true,
+  });
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
@@ -355,145 +371,66 @@ const DatabaseTab = () => {
     }
   };
 
-  const restoreFromBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onSelectRestoreFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (event.target) event.target.value = '';
     if (!file) return;
 
-    const lower = file.name.toLowerCase();
-    const isArchive = lower.endsWith('.zip') || lower.endsWith('.tar.gz') || lower.endsWith('.tar');
+    setPendingRestoreFile(file);
+    setRestoreModalOpen(true);
+  };
 
-    // Re-upload a bundled image and rewrite a row's URL to the new object URL.
-    //
-    // The old URL is the OLD computer's file id / bucket path, which does not
-    // exist on a fresh install - leaving it in place is what produced broken
-    // photos after a JSON restore. Every referenced image is therefore re-saved
-    // here and the row is pointed at the new location.
-    const relink = async (zip: any, url: string): Promise<string> => {
-      const rel = parseStorageRel(url);
-      if (!rel) return url;
-      const entry = zip?.file('images/' + rel);
-      if (!entry) return url;
-      try {
-        const blob = await entry.async('blob');
-        const parts = rel.split('/');
-        const name = (parts.pop() || 'img').replace(/[^\w.-]/g, '_').replace(/\.bin$/, '');
-        // A file that was PUBLIC before the move (product photo on the homepage)
-        // must land in a public folder again, otherwise it becomes private and
-        // the shop's own website shows a broken image.
-        const wasPublic = /\/public\/files\//.test(url) || /\/object\/public\//.test(url);
-        const base = wasPublic ? 'product-photos' : (parts.join('/') || 'product-photos');
-        const newRel = `${base}/restored-${Date.now()}-${name}`;
-        const { error } = await supabase.storage.from('phonezone-uploads').upload(newRel, blob);
-        if (error) return url;
-        const { data } = supabase.storage.from('phonezone-uploads').getPublicUrl(newRel);
-        return data.publicUrl;
-      } catch {
-        return url;
-      }
-    };
+  const handleExecuteRestore = async () => {
+    if (!pendingRestoreFile) return;
 
-    const restoreImageFields = async (zip: any, row: any, fields: string[]) => {
-      for (const field of fields) {
-        const val = row[field];
-        if (Array.isArray(val)) {
-          const out: string[] = [];
-          for (const u of val) out.push(await relink(zip, u));
-          row[field] = out;
-        } else if (typeof val === 'string' && val) {
-          row[field] = await relink(zip, val);
-        }
-      }
-    };
+    const chosen = Object.entries(selectedEntities)
+      .filter(([_, checked]) => checked)
+      .map(([k]) => k);
 
-    const insertRows = async (backupData: any) => {
-      await Promise.all([
-        supabase.from('phones').delete().neq('id', ''),
-        supabase.from('sellers').delete().neq('id', ''),
-        supabase.from('customers').delete().neq('id', ''),
-        supabase.from('messages').delete().neq('id', ''),
-        supabase.from('returns').delete().neq('id', '')
-      ]);
-
-      const restorePromises = [];
-      if (backupData.phones?.length > 0) restorePromises.push(supabase.from('phones').insert(backupData.phones));
-      if (backupData.sellers?.length > 0) restorePromises.push(supabase.from('sellers').insert(backupData.sellers));
-      if (backupData.customers?.length > 0) restorePromises.push(supabase.from('customers').insert(backupData.customers));
-      if (backupData.messages?.length > 0) restorePromises.push(supabase.from('messages').insert(backupData.messages));
-      if (backupData.returns?.length > 0) restorePromises.push(supabase.from('returns').insert(backupData.returns));
-
-      await Promise.all(restorePromises);
-      await fetchData();
-      await calculateStorageUsage();
-    };
-
-    // --- Archive files: JSON-export ZIP or full backup ---
-    if (isArchive) {
-      // Try to read it as a ZIP so we can detect a JSON+images export.
-      let zip: any = null;
-      try {
-        zip = await JSZip.loadAsync(file);
-      } catch {
-        zip = null; // not a zip (e.g. .tar.gz) -> full backup handled by backend
-      }
-
-      if (zip && zip.file('data.json')) {
-        try {
-          setRestoreBusy(true);
-          const raw = await zip.file('data.json').async('string');
-          const backupData = JSON.parse(raw);
-          if (!backupData.phones || !backupData.sellers) throw new Error('Invalid backup file format');
-
-          for (const p of backupData.phones || []) await restoreImageFields(zip, p, ['product_photos', 'payment_proof_photos', 'purchase_documents']);
-          for (const s of backupData.sellers || []) await restoreImageFields(zip, s, ['seller_photo_url', 'aadhaar_photo_url']);
-          for (const c of backupData.customers || []) await restoreImageFields(zip, c, ['customer_photo_url', 'aadhaar_photo_url']);
-
-          await insertRows(backupData);
-          toast.success('Backup restored successfully (JSON + images)');
-          return;
-        } catch (error: any) {
-          console.error('JSON-restore error:', error);
-          toast.error(error.message || 'Failed to restore JSON backup');
-          return;
-        } finally {
-          setRestoreBusy(false);
-        }
-      }
-
-      // Full backup (.zip / .tar.gz) -> backend restore.
-      try {
-        setRestoreBusy(true);
-        const fd = new FormData();
-        fd.append('backup', file);
-        const res = await fetch('/api/backups/restore-upload', {
-          method: 'POST',
-          credentials: 'include',
-          body: fd,
-        });
-        if (!res.ok) {
-          const b = await res.json().catch(() => ({}));
-          throw new Error(b.error || 'Restore failed');
-        }
-        await res.json();
-        toast.success('Backup restored successfully');
-        await fetchData();
-        await calculateStorageUsage();
-        return;
-      } catch (error: any) {
-        console.error('Restore error:', error);
-        toast.error(error.message || 'This file is not a valid PhoneZone backup.');
-        return;
-      } finally {
-        setRestoreBusy(false);
-      }
+    if (chosen.length === 0) {
+      toast.error('Please select at least one data category to restore.');
+      return;
     }
 
-    // --- Legacy plain-JSON dump: no longer imported -------------------------
-    // Re-importing a bare JSON file deleted every table before inserting (now a
-    // soft delete, so the old rows stayed and the insert hit primary-key
-    // conflicts), and image URLs were never remapped. Restoring a real backup
-    // is the supported path.
-    toast.error('To restore data, use Backup & Restore.');
+    const isAll = chosen.length === Object.keys(selectedEntities).length;
+    const entitiesPayload = isAll ? ['all'] : chosen;
+
+    setRestoreBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('backup', pendingRestoreFile);
+      fd.append('strategy', restoreStrategy);
+      fd.append('entities', JSON.stringify(entitiesPayload));
+      if (restoreStrategy === 'replace' && wipeCloudBeforeRestore) {
+        fd.append('wipe_existing', 'true');
+      }
+
+      const res = await fetch('/api/backups/restore-upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error || 'Restore failed');
+      }
+
+      await res.json();
+      toast.success(
+        `✅ ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'} restore completed successfully!`
+      );
+      setRestoreModalOpen(false);
+      setPendingRestoreFile(null);
+      await fetchData();
+      await calculateStorageUsage();
+      await fetchSupabaseStatus();
+    } catch (error: any) {
+      console.error('Restore error:', error);
+      toast.error(error.message || 'Failed to restore backup.');
+    } finally {
+      setRestoreBusy(false);
+    }
   };
 
   const exportSelectedData = async () => {
@@ -1241,7 +1178,7 @@ const DatabaseTab = () => {
               ref={restoreFileInputRef}
               type="file"
               accept=".zip,.tar.gz,.tar,.json"
-              onChange={restoreFromBackup}
+              onChange={onSelectRestoreFile}
               className="hidden"
               disabled={restoreBusy}
             />
@@ -1253,6 +1190,236 @@ const DatabaseTab = () => {
           </p>
         </CardContent>
       </Card>
+
+      {/* Custom Selective & Strategy Restore Wizard Modal */}
+      <Dialog open={restoreModalOpen} onOpenChange={(open) => !restoreBusy && setRestoreModalOpen(open)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <RefreshCw className="h-5 w-5 text-indigo-500 animate-spin-reverse" />
+              Restore Options &amp; Entity Selection
+            </DialogTitle>
+            <DialogDescription>
+              Choose how you want to restore <span className="font-semibold text-foreground underline">{pendingRestoreFile?.name}</span> ({((pendingRestoreFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB).
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Strategy Section */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5" />
+              1. Choose Restore Strategy
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option A: Clean Replace */}
+              <div
+                onClick={() => setRestoreStrategy('replace')}
+                className={`cursor-pointer rounded-xl border p-4 transition-all relative ${
+                  restoreStrategy === 'replace'
+                    ? 'border-red-500/60 bg-red-500/5 ring-2 ring-red-500/20'
+                    : 'border-border/60 hover:border-border hover:bg-muted/40'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <span className="font-semibold text-sm">Clean Replace</span>
+                  </div>
+                  {restoreStrategy === 'replace' && (
+                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4">Selected</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Deletes current records for selected categories and restores fresh from backup. Ensures zero duplicates and frees maximum storage quota.
+                </p>
+                {restoreStrategy === 'replace' && (
+                  <label className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 text-xs text-foreground cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={wipeCloudBeforeRestore}
+                      onCheckedChange={(c) => setWipeCloudBeforeRestore(!!c)}
+                    />
+                    <span>Also wipe cloud storage in Supabase</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Option B: Smart Merge */}
+              <div
+                onClick={() => setRestoreStrategy('merge')}
+                className={`cursor-pointer rounded-xl border p-4 transition-all relative ${
+                  restoreStrategy === 'merge'
+                    ? 'border-emerald-500/60 bg-emerald-500/5 ring-2 ring-emerald-500/20'
+                    : 'border-border/60 hover:border-border hover:bg-muted/40'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-500" />
+                    <span className="font-semibold text-sm">Smart Merge</span>
+                  </div>
+                  {restoreStrategy === 'merge' && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-emerald-500 text-emerald-500">Selected</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Appends &amp; updates records without deleting existing items. Existing phones, customers, and repairs remain safe.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator className="my-1" />
+
+          {/* Granular Entity Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                2. Select Data Categories to Restore
+              </h4>
+              <button
+                type="button"
+                onClick={() => {
+                  const allSelected = Object.values(selectedEntities).every(Boolean);
+                  const updated: Record<string, boolean> = {};
+                  Object.keys(selectedEntities).forEach((k) => {
+                    updated[k] = !allSelected;
+                  });
+                  setSelectedEntities(updated);
+                }}
+                className="text-xs text-primary hover:underline font-medium"
+              >
+                {Object.values(selectedEntities).every(Boolean) ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                {
+                  id: 'settings',
+                  label: 'Store Settings, Branding & API Keys',
+                  desc: 'Shop name, owner signature, logo, bank details, terms, API keys',
+                  icon: Settings,
+                  color: 'text-amber-500',
+                },
+                {
+                  id: 'phones',
+                  label: 'Phone Inventory & Stock',
+                  desc: 'Active inventory, sold phones, IMEIs, specifications, product photos',
+                  icon: Smartphone,
+                  color: 'text-blue-500',
+                },
+                {
+                  id: 'sellers',
+                  label: 'Sellers Database & ID Proofs',
+                  desc: 'Registered seller profiles, Aadhaar photos, digital signatures',
+                  icon: Users,
+                  color: 'text-violet-500',
+                },
+                {
+                  id: 'customers',
+                  label: 'Customers Database',
+                  desc: 'Customer directory, contact numbers, purchase histories',
+                  icon: UserCheck,
+                  color: 'text-emerald-500',
+                },
+                {
+                  id: 'dealers',
+                  label: 'B2B Dealers & Wholesale Batches',
+                  desc: 'Wholesale batch purchases, GST/PAN numbers, dealer ledger',
+                  icon: Building2,
+                  color: 'text-cyan-500',
+                },
+                {
+                  id: 'repairs',
+                  label: 'Workshop Repairs & Job Sheets',
+                  desc: 'Repair job sheets, technician logs, repair customers, spare parts',
+                  icon: Wrench,
+                  color: 'text-orange-500',
+                },
+                {
+                  id: 'returns',
+                  label: 'Sales Returns & Refunds',
+                  desc: 'Returned devices, reasons, refund records',
+                  icon: RotateCcw,
+                  color: 'text-rose-500',
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                const isChecked = !!selectedEntities[item.id];
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() =>
+                      setSelectedEntities((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                    }
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      isChecked
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border/50 opacity-60 hover:opacity-100 hover:bg-muted/30'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={(c) =>
+                        setSelectedEntities((prev) => ({ ...prev, [item.id]: !!c }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${item.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-foreground flex items-center justify-between">
+                        <span>{item.label}</span>
+                        {isChecked && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-3.5 border-primary/30 text-primary">
+                            Included
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={restoreBusy}
+              onClick={() => {
+                setRestoreModalOpen(false);
+                setPendingRestoreFile(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                restoreBusy || Object.values(selectedEntities).every((v) => !v)
+              }
+              onClick={handleExecuteRestore}
+              className={restoreStrategy === 'replace' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+            >
+              {restoreBusy ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Restoring Data...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Confirm &amp; Restore ({Object.values(selectedEntities).filter(Boolean).length} Selected)
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Google Drive Cloud Backup */}
       <GoogleDriveBackupCard />
