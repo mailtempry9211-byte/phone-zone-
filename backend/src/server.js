@@ -104,7 +104,12 @@ export function createServer() {
   const distIndex = path.join(dist, "index.html");
   if (fs.existsSync(distIndex)) {
     app.use(express.static(dist));
-    app.get("*", (_req, res) => res.sendFile(distIndex));
+    app.get("*", (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.sendFile(distIndex);
+    });
   } else {
     app.use(async (req, res, next) => {
       if (req.path.startsWith("/api")) return next();

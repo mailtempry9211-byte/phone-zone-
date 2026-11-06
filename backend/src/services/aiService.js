@@ -13,7 +13,10 @@ import { logger } from "../lib/logger.js";
 export function getAiConfig() {
   const settings = getRawSettings() || {};
   const provider = (settings.ai_provider || process.env.AI_PROVIDER || "gemini").toLowerCase().trim();
-  const apiKey = (settings.ai_api_key || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
+  let apiKey = (settings.ai_api_key || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
+  if (provider === "gemini" && apiKey && !apiKey.startsWith("AIzaSy")) {
+    apiKey = ""; // Filter out accidental login password saved in DB by browser autofill
+  }
   let model = (settings.ai_model || process.env.AI_MODEL || "").trim();
   if (!model || model === "gemini-1.5-flash" || model === "gemini-2.5-flash") {
     model = provider === "gemini" ? "gemini-3.5-flash" : provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free";

@@ -56,6 +56,12 @@ export const JarvisSettingsCard: React.FC = () => {
   // Save AI Settings Mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (provider === "gemini" && apiKey) {
+        const cleanKey = apiKey.trim();
+        if (!cleanKey.startsWith("AIzaSy")) {
+          throw new Error("Invalid Gemini API Key! Google Gemini keys always start with 'AIzaSy...'. Browser ne aapka login password fill kar diya tha, kripya asli Gemini key paste karein.");
+        }
+      }
       const res = await fetch("/api/ai/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,6 +94,10 @@ export const JarvisSettingsCard: React.FC = () => {
 
   // Test Connection
   const handleTestConnection = async () => {
+    if (provider === "gemini" && apiKey && !apiKey.trim().startsWith("AIzaSy")) {
+      toast.error("Invalid Gemini API Key! Key must start with 'AIzaSy...'. Please do not test with your login password.");
+      return;
+    }
     setTesting(true);
     try {
       const res = await fetch("/api/ai/test-connection", {
@@ -224,7 +234,16 @@ export const JarvisSettingsCard: React.FC = () => {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Input
-                type={showKey ? "text" : "password"}
+                type="text"
+                name="gemini_api_key_custom_token"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                style={!showKey ? ({ WebkitTextSecurity: "disc" } as any) : undefined}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={config?.hasKey ? "•••••••••••••••••••••••• (Leave blank to keep)" : "AIzaSy..."}

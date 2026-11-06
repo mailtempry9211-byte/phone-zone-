@@ -218,7 +218,14 @@ export function buildAiRouter(staffAuth, adminAuth) {
     const { provider, apiKey, model, customUrl, voiceEnabled, autoSpeak, ocrEngine } = req.body || {};
     const updates = {};
     if (provider !== undefined) updates.ai_provider = String(provider).toLowerCase().trim();
-    if (apiKey !== undefined) updates.ai_api_key = String(apiKey).trim();
+    if (apiKey !== undefined) {
+      const cleanKey = String(apiKey).trim();
+      const currentProvider = updates.ai_provider || getAiConfig().provider;
+      if (currentProvider === "gemini" && cleanKey && !cleanKey.startsWith("AIzaSy")) {
+        throw badRequest("Invalid Gemini API Key. Google Gemini API keys always start with 'AIzaSy...'. Browser autofilled password detected.");
+      }
+      updates.ai_api_key = cleanKey;
+    }
     if (model !== undefined) updates.ai_model = String(model).trim();
     if (customUrl !== undefined) updates.ai_custom_url = String(customUrl).trim();
     if (voiceEnabled !== undefined) updates.ai_voice_enabled = voiceEnabled ? 1 : 0;
