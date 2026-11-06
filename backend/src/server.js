@@ -173,6 +173,13 @@ if (isMain) {
       .then((m) => m.syncFromSupabaseOnBoot().catch((err) => logger.warn("Supabase boot sync error", err)))
       .catch(() => {});
 
+    // Automated background cloud persistence worker (syncs SQLite to Supabase every 5 min)
+    setInterval(() => {
+      import("./services/supabaseSyncService.js")
+        .then((m) => m.pushAllToSupabase().catch(() => {}))
+        .catch(() => {});
+    }, 5 * 60 * 1000);
+
     // Auto-start background services (Native Baileys WhatsApp & Ngrok)
     import("./services/baileysService.js")
       .then((m) => m.initBaileys().catch((err) => logger.warn("Baileys init error", err)))

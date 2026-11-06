@@ -208,6 +208,24 @@ export function sanitizeRowForSupabase(table, rawRow) {
   return out;
 }
 
+let _syncDebounceTimer = null;
+
+/**
+ * Debounced background sync trigger: schedules a complete consistency pass
+ * to reconcile SQLite and Supabase 3 seconds after any write action.
+ */
+export function triggerBackgroundSync(debounceMs = 3000) {
+  const { isConfigured } = getSupabaseConfig();
+  if (!isConfigured) return;
+
+  if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+  _syncDebounceTimer = setTimeout(() => {
+    pushAllToSupabase().catch((err) => {
+      logger.warn("[SupabaseSync] Auto background push error: " + err.message);
+    });
+  }, debounceMs);
+}
+
 /**
  * Push a single row to Supabase REST API in real time
  */

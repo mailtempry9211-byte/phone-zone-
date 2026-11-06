@@ -721,16 +721,29 @@ export function buildRouter() {
   // ---------------- sellers / customers ----------------
   for (const kind of ["seller", "customer"]) {
     const base = `/${kind}s`;
+    const table = `${kind}s`;
     r.get(base, staff, wrap((req, res) => res.json(people.listPeople(kind, { search: req.query.search }))));
     r.get(`${base}/:id`, staff, wrap((req, res) => res.json(people.getPerson(kind, req.params.id))));
-    r.post(base, staff, wrap((req, res) => res.status(201).json(people.createPerson(kind, req.body, req.user.id))));
-    r.put(`${base}/:id`, staff, wrap((req, res) => res.json(people.updatePerson(kind, req.params.id, req.body, req.user.id))));
+    r.post(base, staff, wrap((req, res) => {
+      const person = people.createPerson(kind, req.body, req.user.id);
+      if (person && person.id) supabaseSync.pushSingleRowToSupabase(table, person).catch(() => {});
+      supabaseSync.triggerBackgroundSync();
+      res.status(201).json(person);
+    }));
+    r.put(`${base}/:id`, staff, wrap((req, res) => {
+      const person = people.updatePerson(kind, req.params.id, req.body, req.user.id);
+      if (person && person.id) supabaseSync.pushSingleRowToSupabase(table, person).catch(() => {});
+      supabaseSync.triggerBackgroundSync();
+      res.json(person);
+    }));
     r.delete(`${base}/:id`, staff, wrap((req, res) => {
       people.archivePerson(kind, req.params.id, req.user.id);
+      supabaseSync.deleteRowFromSupabase(table, req.params.id).catch(() => {});
+      supabaseSync.triggerBackgroundSync();
       res.json({ ok: true, archived: true });
     }));
   }
-    r.get("/customers/:id/history", staff, wrap((req, res) => res.json(people.customerHistory(req.params.id))));
+  r.get("/customers/:id/history", staff, wrap((req, res) => res.json(people.customerHistory(req.params.id))));
   r.get("/customers/:id/aadhaar", staff, wrap((req, res) => {
     const cust = people.getPerson("customer", req.params.id);
     if (!cust) return res.status(404).json({ error: "Customer not found." });
@@ -746,21 +759,42 @@ export function buildRouter() {
   r.get("/dealers/:id", staff, wrap((req, res) => res.json(dealers.getDealer(req.params.id))));
   r.get("/dealers/:id/ledger", staff, wrap((req, res) => res.json(dealers.getDealerLedger(req.params.id))));
   r.post("/dealers/:id/ledger", staff, wrap((req, res) => res.status(201).json(dealers.addDealerLedgerEntry(req.params.id, req.body, req.user.id))));
-  r.post("/dealers", staff, wrap((req, res) => res.status(201).json(dealers.createDealer(req.body, req.user.id))));
-  r.put("/dealers/:id", staff, wrap((req, res) => res.json(dealers.updateDealer(req.params.id, req.body, req.user.id))));
-  r.delete("/dealers/:id", staff, wrap((req, res) => res.json(dealers.deleteDealer(req.params.id, req.user.id))));
-  r.post("/dealers/batch-purchase", staff, wrap((req, res) => res.status(201).json(dealers.createBatchPurchase(req.body, req.user.id))));
+  r.post("/dealers", staff, wrap((req, res) => {
+    const d = dealers.createDealer(req.body, req.user.id);
+    if (d && d.id) supabaseSync.pushSingleRowToSupabase("dealers", d).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.status(201).json(d);
+  }));
+  r.put("/dealers/:id", staff, wrap((req, res) => {
+    const d = dealers.updateDealer(req.params.id, req.body, req.user.id);
+    if (d && d.id) supabaseSync.pushSingleRowToSupabase("dealers", d).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.json(d);
+  }));
+  r.delete("/dealers/:id", staff, wrap((req, res) => {
+    const d = dealers.deleteDealer(req.params.id, req.user.id);
+    supabaseSync.deleteRowFromSupabase("dealers", req.params.id).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.json(d);
+  }));
+  r.post("/dealers/batch-purchase", staff, wrap((req, res) => {
+    const b = dealers.createBatchPurchase(req.body, req.user.id);
+    supabaseSync.triggerBackgroundSync(500);
+    res.status(201).json(b);
+  }));
 
   // ---------------- settings (Admin > Settings, editable anytime) ----------------
   r.get("/settings", staff, wrap((_req, res) => res.json(settings.getSettings())));
   r.put("/settings", staff, upload.none(), wrap((req, res) => {
     const s = settings.saveSettings(req.body || {}, req.user.id);
     supabaseSync.pushSettingsToSupabase(s).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
     res.json(s);
   }));
   r.post("/settings", staff, upload.none(), wrap((req, res) => {
     const s = settings.saveSettings(req.body || {}, req.user.id);
     supabaseSync.pushSettingsToSupabase(s).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
     res.json(s);
   }));
   r.post("/settings/upload", staff, upload.single("file"), wrap((req, res) => {
@@ -832,16 +866,37 @@ export function buildRouter() {
   // ---------------- phones / inventory / purchases / sales ----------------
   r.get("/phones", staff, wrap((req, res) => res.json(inventory.listPhones(req.query))));
   r.get("/phones/:id", staff, wrap((req, res) => res.json(inventory.getPhone(req.params.id))));
-  r.post("/purchases", staff, wrap((req, res) => res.status(201).json(inventory.createPurchase(req.body, req.user.id))));
-  r.put("/phones/:id", staff, wrap((req, res) => res.json(inventory.updatePhone(req.params.id, req.body, req.user.id))));
+  r.post("/purchases", staff, wrap((req, res) => {
+    const p = inventory.createPurchase(req.body, req.user.id);
+    if (p && p.id) supabaseSync.pushSingleRowToSupabase("phones", p).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.status(201).json(p);
+  }));
+  r.put("/phones/:id", staff, wrap((req, res) => {
+    const p = inventory.updatePhone(req.params.id, req.body, req.user.id);
+    if (p && p.id) supabaseSync.pushSingleRowToSupabase("phones", p).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.json(p);
+  }));
   r.delete("/phones/:id", staff, wrap((req, res) => {
     inventory.archivePhone(req.params.id, req.user.id);
+    supabaseSync.deleteRowFromSupabase("phones", req.params.id).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
     res.json({ ok: true, archived: true });
   }));
-  r.post("/sales", staff, wrap((req, res) =>
-    res.status(201).json(inventory.sellPhone(req.body?.phone_id, req.body, req.user.id))));
+  r.post("/sales", staff, wrap((req, res) => {
+    const s = inventory.sellPhone(req.body?.phone_id, req.body, req.user.id);
+    if (s && s.id) supabaseSync.pushSingleRowToSupabase("phones", s).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.status(201).json(s);
+  }));
   r.get("/returns", staff, wrap((_req, res) => res.json(inventory.listReturns())));
-  r.post("/returns", staff, wrap((req, res) => res.status(201).json(inventory.processReturn(req.body, req.user.id))));
+  r.post("/returns", staff, wrap((req, res) => {
+    const ret = inventory.processReturn(req.body, req.user.id);
+    if (ret && ret.id) supabaseSync.pushSingleRowToSupabase("returns", ret).catch(() => {});
+    supabaseSync.triggerBackgroundSync();
+    res.status(201).json(ret);
+  }));
 
   // ---------------- financial years (Busy/Tally style books) ----------------
   r.get("/financial-years", staff, wrap((_req, res) => {

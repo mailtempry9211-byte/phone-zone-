@@ -29,6 +29,7 @@ import {
   getRepairJobsByImei,
 } from "../services/repairJobService.js";
 import { isPreviousYearActive, recordPreviousYearChange } from "../services/financialYearService.js";
+import { triggerBackgroundSync } from "../services/supabaseSyncService.js";
 
 function withPrevYearMetadata(data) {
   const prev = isPreviousYearActive();
@@ -47,7 +48,9 @@ export function buildRepairsRouter() {
   }));
 
   r.post("/customers", wrap((req, res) => {
-    res.status(201).json(createRepairCustomer(req.body || {}));
+    const cust = createRepairCustomer(req.body || {});
+    triggerBackgroundSync();
+    res.status(201).json(cust);
   }));
 
   r.get("/contacts/search", wrap((req, res) => {
@@ -65,7 +68,15 @@ export function buildRepairsRouter() {
   }));
 
   r.put("/customers/:id", wrap((req, res) => {
-    res.json(updateRepairCustomer(req.params.id, req.body || {}));
+    const cust = updateRepairCustomer(req.params.id, req.body || {});
+    triggerBackgroundSync();
+    res.json(cust);
+  }));
+
+  r.delete("/customers/:id", wrap((req, res) => {
+    deleteRepairCustomer(req.params.id);
+    triggerBackgroundSync();
+    res.json({ ok: true });
   }));
 
   r.delete("/customers/:id", wrap((req, res) => {
@@ -114,6 +125,7 @@ export function buildRepairsRouter() {
       user_id: req.user?.id,
     });
     recordPreviousYearChange("repair_job", job.id, "create", { jobNo: job.job_no });
+    triggerBackgroundSync();
     res.status(201).json(withPrevYearMetadata(job));
   }));
 
@@ -136,6 +148,7 @@ export function buildRepairsRouter() {
     }
     const updated = updateRepairJob(req.params.id, req.body || {});
     recordPreviousYearChange("repair_job", req.params.id, "update", req.body || {});
+    triggerBackgroundSync();
     res.json(withPrevYearMetadata(updated));
   });
 
@@ -158,6 +171,7 @@ export function buildRepairsRouter() {
       userId: req.user?.id,
     });
     recordPreviousYearChange("repair_job", req.params.id, "status_change", { status: req.body.status });
+    triggerBackgroundSync();
     res.json(withPrevYearMetadata(updated));
   }));
 
