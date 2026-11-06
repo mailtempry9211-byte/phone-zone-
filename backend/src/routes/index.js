@@ -1065,6 +1065,10 @@ export function buildRouter() {
     const result = await supabaseSync.pushAllToSupabase();
     res.json(result);
   }));
+  r.post("/supabase/pull-now", requireAuth, requireRole("admin"), wrap(async (_req, res) => {
+    const result = await supabaseSync.syncFromSupabaseOnBoot();
+    res.json(result);
+  }));
 
   // ---------------- google drive / cloud backup ----------------
   r.get("/google-drive/status", requireAuth, wrap((_req, res) => {

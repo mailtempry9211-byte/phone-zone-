@@ -336,50 +336,13 @@ function copyEntityStorage(tempStorageDir, targetStorageDir, entities, isAll, ov
   if (!fs.existsSync(tempStorageDir)) return;
   fs.mkdirSync(targetStorageDir, { recursive: true });
 
-  const ENTITY_DIRS = {
-    settings: ["branding", "signatures", "logo"],
-    phones: ["phones", "product-photos", "payments"],
-    sellers: ["sellers", "aadhaar"],
-    customers: ["customers"],
-    dealers: ["dealers"],
-    repairs: ["repairs"],
-    returns: ["returns"],
-  };
-
-  const dirsToCopy = new Set();
-  for (const [ent, dirs] of Object.entries(ENTITY_DIRS)) {
-    if (isAll || entities.includes(ent)) {
-      dirs.forEach((d) => dirsToCopy.add(d));
-    }
-  }
-
-  for (const d of dirsToCopy) {
-    const srcDir = path.join(tempStorageDir, d);
-    const dstDir = path.join(targetStorageDir, d);
-    if (fs.existsSync(srcDir)) {
-      if (overwrite && fs.existsSync(dstDir)) {
-        try { fs.rmSync(dstDir, { recursive: true, force: true }); } catch {}
-      }
-      try {
-        fs.cpSync(srcDir, dstDir, { recursive: true });
-      } catch (e) {
-        logger.warn(`[Restore] Error copying storage dir ${d}:`, e.message);
-      }
-    }
-  }
-
-  // Also check top-level files in tempStorageDir
+  // Universal Storage Sync: Copy complete storage tree (buckets/phonezone-uploads, admin, invoices, etc.)
   try {
-    const items = fs.readdirSync(tempStorageDir, { withFileTypes: true });
-    for (const item of items) {
-      if (item.isFile()) {
-        const dest = path.join(targetStorageDir, item.name);
-        if (overwrite || !fs.existsSync(dest)) {
-          fs.copyFileSync(path.join(tempStorageDir, item.name), dest);
-        }
-      }
-    }
-  } catch {}
+    fs.cpSync(tempStorageDir, targetStorageDir, { recursive: true, force: true });
+    logger.info("[Restore] Complete storage directory synchronized.");
+  } catch (e) {
+    logger.warn("[Restore] Error copying storage tree:", e.message);
+  }
 }
 
 function restoreFromJsonData(data, tempDir, { strategy = "replace", entities = ["all"], isAll = true } = {}) {
@@ -778,6 +741,13 @@ export async function restoreBackup(backupName, {
               restoreHandler();
             }
           }
+
+          // Universal System Tables: Always restore files, shops, invoices, financial_years
+          // so image references, shop codes, and invoices never break!
+          copyTableRows(sourceDb, targetDb, "files", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "shops", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "invoices", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "financial_years", "IGNORE");
         })();
 
         sourceDb.close();

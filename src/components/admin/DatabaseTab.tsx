@@ -99,6 +99,7 @@ const DatabaseTab = () => {
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [isPullingSupabase, setIsPullingSupabase] = useState(false);
 
   const fetchSupabaseStatus = async () => {
     try {
@@ -126,6 +127,27 @@ const DatabaseTab = () => {
       toast.error(`Sync failed: ${err.message}`, { id: 'sb-sync' });
     } finally {
       setIsSyncingSupabase(false);
+    }
+  };
+
+  const handlePullFromSupabase = async () => {
+    setIsPullingSupabase(true);
+    toast.loading('Fetching shop settings, phones, customers & dealers from Supabase Cloud...', { id: 'sb-pull' });
+    try {
+      const res = await fetch('/api/supabase/pull-now', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Supabase pull failed');
+      toast.success('✅ All cloud data successfully pulled into local database!', { id: 'sb-pull' });
+      await fetchSupabaseStatus();
+      await fetchData();
+      queryClient.invalidateQueries();
+    } catch (err: any) {
+      toast.error(`Pull failed: ${err.message}`, { id: 'sb-pull' });
+    } finally {
+      setIsPullingSupabase(false);
     }
   };
 
@@ -1081,7 +1103,7 @@ const DatabaseTab = () => {
                 </Badge>
               )}
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 type="button"
                 variant="outline"
@@ -1095,12 +1117,23 @@ const DatabaseTab = () => {
               <Button
                 type="button"
                 size="sm"
+                variant="outline"
+                onClick={handlePullFromSupabase}
+                disabled={isPullingSupabase}
+                className="h-8 text-xs border-indigo-700 text-indigo-300 hover:bg-indigo-950/50 font-bold shadow-xs"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5 text-indigo-400" />
+                {isPullingSupabase ? 'Pulling from Cloud...' : '📥 Pull All Data from Supabase'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 onClick={handleSyncToSupabase}
                 disabled={isSyncingSupabase}
                 className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs"
               >
                 <Zap className="h-3.5 w-3.5 mr-1.5 text-amber-300" />
-                {isSyncingSupabase ? 'Pushing to Cloud...' : '⚡ Push All Local Data to Supabase Now'}
+                {isSyncingSupabase ? 'Pushing to Cloud...' : '⚡ Push Local Data to Supabase'}
               </Button>
             </div>
           </div>

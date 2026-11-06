@@ -48,6 +48,9 @@ export function initDatabase() {
     db.prepare("ALTER TABLE admin_settings ADD COLUMN supabase_anon_key TEXT").run();
   } catch {}
   try {
+    db.prepare("ALTER TABLE admin_settings ADD COLUMN ocr_engine TEXT DEFAULT 'auto'").run();
+  } catch {}
+  try {
     db.prepare("ALTER TABLE users ADD COLUMN active_shop_id TEXT").run();
   } catch {}
   try {

@@ -75,8 +75,20 @@ export function createServer() {
 
   // Injected runtime config for desktop/remote offline mode
   app.get("/runtime-config.js", (_req, res) => {
-    const supabaseUrl = (process.env.SUPABASE_URL || "").trim();
-    const supabaseKey = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+    const { getSupabaseConfig } = require ? {} : {}; // ESM imported below or via helper
+    let supabaseUrl = (process.env.SUPABASE_URL || "").trim();
+    let supabaseKey = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+    if (!supabaseUrl || !supabaseKey) {
+      try {
+        const s = getDb().prepare("SELECT supabase_url, supabase_anon_key FROM admin_settings LIMIT 1").get();
+        if (s) {
+          if (!supabaseUrl && s.supabase_url) supabaseUrl = s.supabase_url.trim();
+          if (!supabaseKey && s.supabase_anon_key) supabaseKey = s.supabase_anon_key.trim();
+        }
+      } catch {}
+    }
+    if (!supabaseUrl) supabaseUrl = "https://rkhzhozrslrfsqlpgjav.supabase.co";
+
     const isOffline = process.env.PHONEZONE_OFFLINE === "true" && !supabaseUrl;
     res.type("application/javascript").send(
       `window.__PHONEZONE_OFFLINE__ = ${isOffline ? "true" : "false"};\n` +

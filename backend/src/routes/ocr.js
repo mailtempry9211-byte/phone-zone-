@@ -4,6 +4,7 @@
 import express from "express";
 import multer from "multer";
 import { ocrAadhaarBuffer, ocrImeiBuffer } from "../services/ocrService.js";
+import { getAiConfig } from "../services/aiService.js";
 import { badRequest } from "../lib/errors.js";
 
 const upload = multer({
@@ -32,6 +33,13 @@ export function buildOcrRouter(staffMiddleware) {
    */
   r.post("/aadhaar", upload.single("image"), async (req, res, next) => {
     try {
+      const cfg = getAiConfig();
+      if (cfg.ocrEngine === "ai_only") {
+        return res.json({
+          success: false,
+          error: "Offline OCR is disabled in Settings (AI Only mode is active).",
+        });
+      }
       const buffer = extractBuffer(req);
       if (!buffer) {
         throw badRequest("No image uploaded. Provide an image file or base64 string.");

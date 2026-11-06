@@ -178,6 +178,10 @@ export function buildAiRouter(staffAuth, adminAuth) {
   r.post("/ocr-aadhaar", wrap(async (req, res) => {
     const { imageBase64, side = "front" } = req.body || {};
     if (!imageBase64) throw badRequest("imageBase64 is required.");
+    const cfg = getAiConfig();
+    if (cfg.ocrEngine === "offline_only") {
+      throw badRequest("AI OCR is disabled in Settings (Offline Only mode is active).");
+    }
     const result = await parseAadhaarWithVision(imageBase64, side);
     res.json({ ok: true, data: result });
   }));
@@ -186,6 +190,10 @@ export function buildAiRouter(staffAuth, adminAuth) {
   r.post("/ocr-imei", wrap(async (req, res) => {
     const { imageBase64 } = req.body || {};
     if (!imageBase64) throw badRequest("imageBase64 is required.");
+    const cfg = getAiConfig();
+    if (cfg.ocrEngine === "offline_only") {
+      throw badRequest("AI OCR is disabled in Settings (Offline Only mode is active).");
+    }
     const result = await parseImeiWithVision(imageBase64);
     res.json({ ok: true, data: result });
   }));
@@ -199,6 +207,7 @@ export function buildAiRouter(staffAuth, adminAuth) {
       customUrl: c.customUrl,
       voiceEnabled: c.voiceEnabled,
       autoSpeak: c.autoSpeak,
+      ocrEngine: c.ocrEngine || "auto",
       isConfigured: c.isConfigured,
       hasKey: Boolean(c.apiKey),
     });
@@ -206,7 +215,7 @@ export function buildAiRouter(staffAuth, adminAuth) {
 
   // 5. Save AI Configuration
   r.post("/config", adminAuth, wrap((req, res) => {
-    const { provider, apiKey, model, customUrl, voiceEnabled, autoSpeak } = req.body || {};
+    const { provider, apiKey, model, customUrl, voiceEnabled, autoSpeak, ocrEngine } = req.body || {};
     const updates = {};
     if (provider !== undefined) updates.ai_provider = String(provider).toLowerCase().trim();
     if (apiKey !== undefined) updates.ai_api_key = String(apiKey).trim();
@@ -214,6 +223,7 @@ export function buildAiRouter(staffAuth, adminAuth) {
     if (customUrl !== undefined) updates.ai_custom_url = String(customUrl).trim();
     if (voiceEnabled !== undefined) updates.ai_voice_enabled = voiceEnabled ? 1 : 0;
     if (autoSpeak !== undefined) updates.ai_auto_speak = autoSpeak ? 1 : 0;
+    if (ocrEngine !== undefined) updates.ocr_engine = String(ocrEngine).trim();
 
     saveSettings(updates, req.user?.id);
     const updated = getAiConfig();
@@ -221,6 +231,7 @@ export function buildAiRouter(staffAuth, adminAuth) {
       ok: true,
       provider: updated.provider,
       model: updated.model,
+      ocrEngine: updated.ocrEngine,
       isConfigured: updated.isConfigured,
     });
   }));

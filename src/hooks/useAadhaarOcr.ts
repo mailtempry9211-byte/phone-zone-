@@ -468,64 +468,100 @@ export const useAadhaarOcr = () => {
     if (busyRef.current) return;
     busyRef.current = true;
     setState({ ...IDLE, status: "loading" });
-    // Kick the tesseract worker load (worker.min.js + wasm + 5MB traineddata)
-    // off NOW, in parallel with the QR hunt - first-scan latency is then bound
-    // by the sum of the two phases running together, not back to back.
-    const { createWorker } = await import("tesseract.js");
-    void createWorker;
-    const workerP: Promise<any> = ensureWorker().catch(() => null);
-    workerPromise = workerP;
+
+    // Read OCR Engine Preference (auto | ai_only | offline_only)
+    let ocrEngine = "auto";
+    try {
+      const cached = sessionStorage.getItem("pz_ocr_engine");
+      if (cached) {
+        ocrEngine = cached;
+      } else {
+        const cfgRes = await fetch("/api/ai/config", { credentials: "include" });
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json();
+          if (cfg?.ocrEngine) {
+            ocrEngine = cfg.ocrEngine;
+            sessionStorage.setItem("pz_ocr_engine", ocrEngine);
+          }
+        }
+      }
+    } catch {}
+
     try {
       // Shrink a huge phone photo ONCE; every pass below works on this copy.
       const workFile = await downscaleForScan(file);
 
-      // Ultra-Fast Path 1: AI Vision OCR (Google Gemini / AI Studio / Multi-Provider)
-      try {
-        setState((s) => ({ ...s, status: "reading", progress: 0.15, error: "AI Vision analysis in progress..." }));
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(workFile);
-        });
+      // Path 1: AI Vision OCR (Google Gemini / AI Studio / Multi-Provider)
+      // Executed if engine is "auto" or "ai_only"
+      let aiSucceeded = false;
+      if (ocrEngine !== "offline_only") {
+        try {
+          setState((s) => ({ ...s, status: "reading", progress: 0.15, error: "AI Vision analysis in progress..." }));
+          const b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(workFile);
+          });
 
-        const aiResp = await fetch("/api/ai/ocr-aadhaar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: b64, side: side || "front" }),
-          credentials: "include",
-        });
+          const aiResp = await fetch("/api/ai/ocr-aadhaar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: b64, side: side || "front" }),
+            credentials: "include",
+          });
 
-        if (aiResp.ok) {
-          const aiJson = await aiResp.json();
-          const d = aiJson?.data;
-          if (d && (d.id_number || d.name || d.address)) {
-            const rawId = (d.id_number || "").replace(/\D/g, "");
-            const ok = rawId ? verhoeffValidate(rawId) : false;
-            const data: AadhaarData = {
-              idNumber: rawId,
-              name: side === "back" ? undefined : d.name,
-              dob: side === "back" ? undefined : d.dob,
-              yob: side === "back" ? undefined : (d.dob ? d.dob.slice(-4) : undefined),
-              gender: side === "back" ? undefined : d.gender,
-              address: side === "front" ? undefined : d.address,
-              checksumOk: ok,
-            };
+          if (aiResp.ok) {
+            const aiJson = await aiResp.json();
+            const d = aiJson?.data;
+            if (d && (d.id_number || d.name || d.address)) {
+              const rawId = (d.id_number || "").replace(/\D/g, "");
+              const ok = rawId ? verhoeffValidate(rawId) : false;
+              const data: AadhaarData = {
+                idNumber: rawId,
+                name: side === "back" ? undefined : d.name,
+                dob: side === "back" ? undefined : d.dob,
+                yob: side === "back" ? undefined : (d.dob ? d.dob.slice(-4) : undefined),
+                gender: side === "back" ? undefined : d.gender,
+                address: side === "front" ? undefined : d.address,
+                checksumOk: ok,
+              };
 
-            setState({
-              status: "done",
-              progress: 1,
-              data,
-              raw: JSON.stringify(d),
-              error: "",
-              viaQr: false,
-            });
-            return;
+              setState({
+                status: "done",
+                progress: 1,
+                data,
+                raw: JSON.stringify(d),
+                error: "",
+                viaQr: false,
+              });
+              aiSucceeded = true;
+              return;
+            }
           }
+        } catch (_aiErr) {
+          // Gracefully falls through if auto mode
         }
-      } catch (_aiErr) {
-        // Gracefully falls through to regular OCR if offline or AI key not configured
+
+        // If AI Vision failed and user chose "ai_only", do NOT fall back to local OCR!
+        if (!aiSucceeded && ocrEngine === "ai_only") {
+          setState({
+            status: "error",
+            progress: 0,
+            data: null,
+            raw: "",
+            error: "AI Vision analysis failed or AI API key not configured. (Offline OCR is turned OFF in Settings).",
+            viaQr: false,
+          });
+          return;
+        }
       }
+
+      // Initialize Tesseract worker only if needed (saves ~5MB bundle load on AI success)
+      const { createWorker } = await import("tesseract.js");
+      void createWorker;
+      const workerP: Promise<any> = ensureWorker().catch(() => null);
+      workerPromise = workerP;
 
       // Fast-path 2: try Backend Native OCR (<1.5s, no heavy WASM/memory exhaustion on mobile)
       try {

@@ -30,6 +30,7 @@ const WRITABLE_COLUMNS = [
   "evolution_api_url", "evolution_api_key", "evolution_instance_name",
   "homepage_theme", "homepage_config", "repair_services_catalog",
   "ai_provider", "ai_api_key", "ai_model", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak",
+  "ocr_engine",
   "supabase_url", "supabase_anon_key",
 ];
 
@@ -91,6 +92,7 @@ export function getSettings() {
     // IMEI / TAC engine: what to do when a TAC is not in the local database.
     tacFetchMode: TAC_FETCH_MODES.has(row?.tac_fetch_mode) ? row.tac_fetch_mode : "ask",
     whatsappChannel: WHATSAPP_CHANNELS.has(row?.whatsapp_channel) ? row.whatsapp_channel : "click_to_chat",
+    ocrEngine: row?.ocr_engine || "auto",
     evolutionApiUrl: empty(row?.evolution_api_url),
     evolutionApiKey: empty(row?.evolution_api_key),
     evolutionInstanceName: empty(row?.evolution_instance_name) || "phonezone",

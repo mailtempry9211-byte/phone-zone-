@@ -29,6 +29,7 @@ export const JarvisSettingsCard: React.FC = () => {
   const [customUrl, setCustomUrl] = useState<string>("");
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
+  const [ocrEngine, setOcrEngine] = useState<string>("auto");
   const [showKey, setShowKey] = useState<boolean>(false);
   const [testing, setTesting] = useState<boolean>(false);
 
@@ -44,6 +45,8 @@ export const JarvisSettingsCard: React.FC = () => {
         setCustomUrl(d.customUrl || "");
         setVoiceEnabled(d.voiceEnabled !== false);
         setAutoSpeak(Boolean(d.autoSpeak));
+        setOcrEngine(d.ocrEngine || "auto");
+        sessionStorage.setItem("pz_ocr_engine", d.ocrEngine || "auto");
         return d;
       }
       return null;
@@ -64,10 +67,12 @@ export const JarvisSettingsCard: React.FC = () => {
           customUrl: customUrl || undefined,
           voiceEnabled,
           autoSpeak,
+          ocrEngine,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save settings");
+      sessionStorage.setItem("pz_ocr_engine", ocrEngine);
       return data;
     },
     onSuccess: () => {
@@ -261,6 +266,68 @@ export const JarvisSettingsCard: React.FC = () => {
             />
           </div>
         )}
+
+        {/* OCR & Scanning Engine Selection */}
+        <div className="space-y-2 pt-2 border-t">
+          <div>
+            <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Aadhaar & IMEI Scanning Engine (OCR Mode)
+            </Label>
+            <p className="text-[11px] text-gray-500">
+              Chunein ki Aadhaar card aur IMEI scan kis engine se process hona chahiye:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div
+              onClick={() => setOcrEngine("auto")}
+              className={`cursor-pointer p-3 rounded-lg border text-left transition-all ${
+                ocrEngine === "auto"
+                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-1 ring-indigo-600 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+              }`}
+            >
+              <div className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                ⚡ Auto Hybrid (Best)
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                Pehle Cloud AI Vision se scan karega. Agar AI key na ho ya fail ho, toh automatic offline QR/OCR se data nikal lega.
+              </p>
+            </div>
+
+            <div
+              onClick={() => setOcrEngine("ai_only")}
+              className={`cursor-pointer p-3 rounded-lg border text-left transition-all ${
+                ocrEngine === "ai_only"
+                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-1 ring-indigo-600 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+              }`}
+            >
+              <div className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                🤖 AI Vision Only
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                Sirf Gemini/Cloud AI se padhega. Device aur Render server pe 0% CPU/RAM load. Local offline OCR band rahega.
+              </p>
+            </div>
+
+            <div
+              onClick={() => setOcrEngine("offline_only")}
+              className={`cursor-pointer p-3 rounded-lg border text-left transition-all ${
+                ocrEngine === "offline_only"
+                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-1 ring-indigo-600 shadow-sm"
+                  : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+              }`}
+            >
+              <div className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                🔒 Offline Only
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                100% Local (Secure QR + Tesseract). Cloud AI ko koi photo ya request nahi jayegi, internet ke bina chalega.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Voice & Auto-Speak Toggles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">

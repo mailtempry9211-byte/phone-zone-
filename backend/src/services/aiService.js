@@ -21,6 +21,7 @@ export function getAiConfig() {
   const customUrl = (settings.ai_custom_url || process.env.AI_CUSTOM_URL || "").trim();
   const voiceEnabled = settings.ai_voice_enabled !== 0;
   const autoSpeak = Boolean(settings.ai_auto_speak);
+  const ocrEngine = settings.ocr_engine || "auto";
 
   return {
     provider,
@@ -29,6 +30,7 @@ export function getAiConfig() {
     customUrl,
     voiceEnabled,
     autoSpeak,
+    ocrEngine,
     isConfigured: Boolean(apiKey || provider === "ollama"),
   };
 }

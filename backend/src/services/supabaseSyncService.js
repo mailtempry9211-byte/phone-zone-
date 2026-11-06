@@ -119,6 +119,27 @@ export function sanitizeRowForSupabase(table, rawRow) {
     if (!source.phone_name && source.brand) source.phone_name = source.brand;
     if (source.colour && !source.color) source.color = source.colour;
     if (source.variant && !source.storage) source.storage = source.variant;
+
+    // Foreign Key Guard: Verify that referenced IDs actually exist in local DB to prevent Postgres rejection
+    try {
+      const db = getDb();
+      if (source.dealer_id) {
+        const dealerExists = db.prepare("SELECT 1 FROM dealers WHERE id = ?").get(source.dealer_id);
+        if (!dealerExists) source.dealer_id = null;
+      }
+      if (source.batch_purchase_id) {
+        const batchExists = db.prepare("SELECT 1 FROM dealer_batches WHERE id = ?").get(source.batch_purchase_id);
+        if (!batchExists) source.batch_purchase_id = null;
+      }
+      if (source.seller_id) {
+        const sellerExists = db.prepare("SELECT 1 FROM sellers WHERE id = ?").get(source.seller_id);
+        if (!sellerExists) source.seller_id = null;
+      }
+      if (source.customer_id) {
+        const custExists = db.prepare("SELECT 1 FROM customers WHERE id = ?").get(source.customer_id);
+        if (!custExists) source.customer_id = null;
+      }
+    } catch {}
   }
   if (table === "dealers") {
     if (source.gstin && !source.gst_number) source.gst_number = source.gstin;
@@ -560,17 +581,33 @@ export async function syncFromSupabaseOnBoot() {
         for (const d of dealers) {
           try {
             db.prepare(`
-              INSERT INTO dealers (id, business_name, contact_person, phone, email, address, city, state, pincode, gstin, pan_number, photo_url, signature_url, notes, is_active, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              INSERT INTO dealers (id, shop_name, proprietor_name, phone, alternate_phone, email, address, city, state, pincode, gst_number, pan_number, photo_url, signature_url, notes, is_active, created_at, updated_at, balance)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
-                business_name = excluded.business_name,
+                shop_name = excluded.shop_name,
+                proprietor_name = excluded.proprietor_name,
                 phone = excluded.phone,
                 email = excluded.email
             `).run(
-              d.id, d.business_name || "", d.contact_person || null, d.phone || "", d.email || null,
-              d.address || "", d.city || "Sitapur", d.state || "Uttar Pradesh", d.pincode || "261001",
-              d.gst_number || d.gstin || null, d.pan_number || null, d.photo_url || null, d.signature_url || null,
-              d.notes || null, d.is_active === 0 ? 0 : 1, d.created_at || new Date().toISOString(), d.updated_at || new Date().toISOString()
+              d.id,
+              d.shop_name || d.business_name || "Dealer",
+              d.proprietor_name || d.contact_person || null,
+              d.phone || "",
+              d.alternate_phone || null,
+              d.email || null,
+              d.address || "",
+              d.city || "Sitapur",
+              d.state || "Uttar Pradesh",
+              d.pincode || "261001",
+              d.gst_number || d.gstin || null,
+              d.pan_number || null,
+              d.photo_url || null,
+              d.signature_url || null,
+              d.notes || null,
+              d.is_active === 0 ? 0 : 1,
+              d.created_at || new Date().toISOString(),
+              d.updated_at || new Date().toISOString(),
+              Number(d.balance) || 0
             );
           } catch {}
         }
@@ -587,7 +624,7 @@ export async function syncFromSupabaseOnBoot() {
         for (const b of batches) {
           try {
             db.prepare(`
-              INSERT INTO dealer_batches (id, dealer_id, batch_number, batch_date, total_phones, total_amount, payment_method, payment_status, notes, created_at)
+              INSERT INTO dealer_batches (id, dealer_id, invoice_number, purchase_date, total_phones, total_amount, payment_method, payment_status, notes, created_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id) DO NOTHING
             `).run(
@@ -618,10 +655,10 @@ export async function syncFromSupabaseOnBoot() {
               id, phone_name, model, imei_number, condition, purchase_price, selling_price,
               purchase_date, rating, bill_available, box_available, charger_available,
               features, product_photos, payment_proof_photos, payment_method, seller_id, customer_id,
-              dealer_id, is_dealer, batch_purchase_id, is_sold, sold_date, financial_year, color, storage, notes,
+              dealer_id, is_dealer, batch_purchase_id, is_sold, sold_date, financial_year, colour, variant,
               created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               is_sold = excluded.is_sold,
               sold_date = excluded.sold_date,
@@ -653,9 +690,8 @@ export async function syncFromSupabaseOnBoot() {
             p.is_sold ? 1 : 0,
             p.sold_date || null,
             p.financial_year || null,
-            p.color || p.colour || null,
-            p.storage || p.variant || null,
-            p.notes || null,
+            p.colour || p.color || null,
+            p.variant || p.storage || null,
             p.created_at || new Date().toISOString(),
             p.updated_at || new Date().toISOString()
           );
