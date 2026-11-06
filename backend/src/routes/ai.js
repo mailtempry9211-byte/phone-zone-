@@ -219,18 +219,7 @@ export function buildAiRouter(staffAuth, adminAuth) {
     const updates = {};
     if (provider !== undefined) updates.ai_provider = String(provider).toLowerCase().trim();
     if (apiKey !== undefined) {
-      const cleanKey = String(apiKey).trim();
-      const currentProvider = updates.ai_provider || getAiConfig().provider;
-      if (currentProvider === "gemini" && cleanKey) {
-        const isLegit =
-          cleanKey.startsWith("AIzaSy") ||
-          cleanKey.startsWith("AQ.") ||
-          (cleanKey.length >= 35 && !cleanKey.includes("@") && !cleanKey.includes(" "));
-        if (!isLegit) {
-          throw badRequest("Invalid Gemini API Key. Google Gemini API keys start with 'AIzaSy...' or 'AQ.' from Google AI Studio. Browser autofilled password detected.");
-        }
-      }
-      updates.ai_api_key = cleanKey;
+      updates.ai_api_key = String(apiKey).trim();
     }
     if (model !== undefined) updates.ai_model = String(model).trim();
     if (customUrl !== undefined) updates.ai_custom_url = String(customUrl).trim();

@@ -14,13 +14,6 @@ export function getAiConfig() {
   const settings = getRawSettings() || {};
   const provider = (settings.ai_provider || process.env.AI_PROVIDER || "gemini").toLowerCase().trim();
   let apiKey = (settings.ai_api_key || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
-  if (provider === "gemini" && apiKey) {
-    const isLegit =
-      apiKey.startsWith("AIzaSy") ||
-      apiKey.startsWith("AQ.") ||
-      (apiKey.length >= 35 && !apiKey.includes("@") && !apiKey.includes(" "));
-    if (!isLegit) apiKey = ""; // Filter out accidental login password saved in DB by browser autofill
-  }
   let model = (settings.ai_model || process.env.AI_MODEL || "").trim();
   if (!model || model === "gemini-1.5-flash" || model === "gemini-2.5-flash") {
     model = provider === "gemini" ? "gemini-3.5-flash" : provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free";
@@ -701,15 +694,6 @@ export async function testAiConnection(overrideConfig = {}) {
   let model = overrideConfig.model || settings.ai_model || "gemini-2.5-flash-lite";
 
   apiKey = (apiKey || "").trim();
-  if (provider === "gemini" && apiKey) {
-    const isLegit =
-      apiKey.startsWith("AIzaSy") ||
-      apiKey.startsWith("AQ.") ||
-      (apiKey.length >= 35 && !apiKey.includes("@") && !apiKey.includes(" "));
-    if (!isLegit) {
-      return { ok: false, error: "Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.'. Browser password detected." };
-    }
-  }
 
   const config = {
     provider,

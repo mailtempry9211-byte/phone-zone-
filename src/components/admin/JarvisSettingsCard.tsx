@@ -34,17 +34,6 @@ export const JarvisSettingsCard: React.FC = () => {
   const [testing, setTesting] = useState<boolean>(false);
   const [testStatus, setTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
-  // Helper to validate genuine Gemini keys (handles both legacy AIzaSy and new Google AI Studio AQ. keys)
-  const isValidGeminiKey = (k: string) => {
-    const clean = k.trim();
-    if (!clean) return true;
-    return (
-      clean.startsWith("AIzaSy") ||
-      clean.startsWith("AQ.") ||
-      (clean.length >= 35 && !clean.includes("@") && !clean.includes(" "))
-    );
-  };
-
   // Fetch current AI settings
   const { data: config, isLoading } = useQuery({
     queryKey: ["ai-config-settings"],
@@ -68,11 +57,6 @@ export const JarvisSettingsCard: React.FC = () => {
   // Save AI Settings Mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (provider === "gemini" && apiKey) {
-        if (!isValidGeminiKey(apiKey)) {
-          throw new Error("Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.' from Google AI Studio. Please do not paste your login password.");
-        }
-      }
       const res = await fetch("/api/ai/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,11 +90,6 @@ export const JarvisSettingsCard: React.FC = () => {
 
   // Test Connection
   const handleTestConnection = async () => {
-    if (provider === "gemini" && apiKey && !isValidGeminiKey(apiKey)) {
-      toast.error("Invalid Gemini API Key! Key must start with 'AIzaSy...' or 'AQ.' from Google AI Studio.");
-      setTestStatus({ ok: false, message: "Invalid key format. Enter valid Google AI Studio key starting with AIzaSy... or AQ." });
-      return;
-    }
     setTesting(true);
     setTestStatus(null);
     try {
