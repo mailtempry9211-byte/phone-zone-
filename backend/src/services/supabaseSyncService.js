@@ -894,24 +894,24 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
   }
 
   if (isConfigured) {
-    for (const tbl of tablesToWipe) {
-      try {
-        await fetch(`${url}/rest/v1/${tbl}?id=not.is.null`, {
-          method: "DELETE",
-          headers: supabaseHeaders(key)
-        });
-      } catch (e) {
-        logger.warn(`[SupabaseSync] Wipe table ${tbl} warning:`, e.message);
-      }
-    }
+    // Delete tables concurrently with 4s timeout so it never stalls
+    const tablePromises = tablesToWipe.map((tbl) =>
+      fetch(`${url}/rest/v1/${tbl}?id=not.is.null`, {
+        method: "DELETE",
+        headers: supabaseHeaders(key),
+        signal: AbortSignal.timeout(4000),
+      }).catch((e) => logger.warn(`[SupabaseSync] Wipe table ${tbl} warning:`, e.message))
+    );
+    await Promise.allSettled(tablePromises);
 
-    // Wipe storage buckets
-    for (const b of bucketsToWipe) {
+    // Wipe storage buckets concurrently with 4s timeout
+    const bucketPromises = bucketsToWipe.map(async (b) => {
       try {
         const listRes = await fetch(`${url}/storage/v1/object/list/${b}`, {
           method: "POST",
           headers: supabaseHeaders(key),
-          body: JSON.stringify({ prefix: "", limit: 1000 })
+          body: JSON.stringify({ prefix: "", limit: 1000 }),
+          signal: AbortSignal.timeout(4000),
         });
         if (listRes.ok) {
           const files = await listRes.json().catch(() => []);
@@ -920,14 +920,16 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
             await fetch(`${url}/storage/v1/object/${b}`, {
               method: "DELETE",
               headers: supabaseHeaders(key),
-              body: JSON.stringify({ prefixes })
+              body: JSON.stringify({ prefixes }),
+              signal: AbortSignal.timeout(4000),
             });
           }
         }
       } catch (e) {
         logger.warn(`[SupabaseSync] Wipe bucket ${b} warning:`, e.message);
       }
-    }
+    });
+    await Promise.allSettled(bucketPromises);
   }
 
   // Wipe local SQLite data

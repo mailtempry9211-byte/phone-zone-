@@ -540,8 +540,20 @@ export function buildRouter() {
     logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size, strategy, entities, wipeCloud });
     const result = await restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     logger.info("Restore succeeded", { result });
-    await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-setup Supabase sync warning:", e));
+
+    // Respond immediately to client so Render HTTP proxy never hits timeout
     res.json({ restored: true, backupName: req.file.filename, ...result });
+
+    // Sync all restored tables to Supabase in the background
+    setImmediate(async () => {
+      try {
+        logger.info("[Restore] Post-restore background Supabase push started...");
+        await supabaseSync.pushAllToSupabase();
+        logger.info("[Restore] Post-restore background Supabase push complete!");
+      } catch (e) {
+        logger.warn("[Restore] Post-setup background Supabase sync warning:", e.message);
+      }
+    });
   }));
 
   // Query available cloud backups during initial setup wizard
@@ -985,8 +997,20 @@ export function buildRouter() {
 
     logger.info("Admin backup restore received", { file: req.file.filename, size: req.file.size, strategy, entities, wipeCloud });
     const restoreRes = await backups.restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
-    await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
+    
+    // Respond immediately to avoid Render timeout
     res.json(restoreRes);
+
+    // Sync to Supabase in the background
+    setImmediate(async () => {
+      try {
+        logger.info("[Restore] Post-restore background Supabase push started...");
+        await supabaseSync.pushAllToSupabase();
+        logger.info("[Restore] Post-restore background Supabase push complete!");
+      } catch (e) {
+        logger.warn("[Restore] Post-restore background Supabase sync warning:", e.message);
+      }
+    });
   }));
 
   // ---------------- supabase cloud database sync ----------------

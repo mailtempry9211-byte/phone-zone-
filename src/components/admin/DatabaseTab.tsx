@@ -92,6 +92,9 @@ const DatabaseTab = () => {
     repairs: true,
     returns: true,
   });
+  const [restoreUploadProgress, setRestoreUploadProgress] = useState<number>(0);
+  const [restoreStatusText, setRestoreStatusText] = useState<string>('');
+  const [restoreLogs, setRestoreLogs] = useState<string[]>([]);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
@@ -380,7 +383,7 @@ const DatabaseTab = () => {
     setRestoreModalOpen(true);
   };
 
-  const handleExecuteRestore = async () => {
+  const handleExecuteRestore = () => {
     if (!pendingRestoreFile) return;
 
     const chosen = Object.entries(selectedEntities)
@@ -396,41 +399,94 @@ const DatabaseTab = () => {
     const entitiesPayload = isAll ? ['all'] : chosen;
 
     setRestoreBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('backup', pendingRestoreFile);
-      fd.append('strategy', restoreStrategy);
-      fd.append('entities', JSON.stringify(entitiesPayload));
-      if (restoreStrategy === 'replace' && wipeCloudBeforeRestore) {
-        fd.append('wipe_existing', 'true');
-      }
+    setRestoreUploadProgress(0);
+    setRestoreStatusText('Starting upload to PhoneZone server...');
+    setRestoreLogs([
+      `[${new Date().toLocaleTimeString()}] Backup file selected: ${pendingRestoreFile.name} (${(pendingRestoreFile.size / (1024 * 1024)).toFixed(2)} MB)`,
+      `[${new Date().toLocaleTimeString()}] Strategy: ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'}`,
+      `[${new Date().toLocaleTimeString()}] Restoring categories: ${isAll ? 'All Categories' : entitiesPayload.join(', ')}`,
+      `[${new Date().toLocaleTimeString()}] Initiating secure HTTP upload...`,
+    ]);
 
-      const res = await fetch('/api/backups/restore-upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: fd,
-      });
-
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}));
-        throw new Error(b.error || 'Restore failed');
-      }
-
-      await res.json();
-      toast.success(
-        `✅ ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'} restore completed successfully!`
-      );
-      setRestoreModalOpen(false);
-      setPendingRestoreFile(null);
-      await fetchData();
-      await calculateStorageUsage();
-      await fetchSupabaseStatus();
-    } catch (error: any) {
-      console.error('Restore error:', error);
-      toast.error(error.message || 'Failed to restore backup.');
-    } finally {
-      setRestoreBusy(false);
+    const fd = new FormData();
+    fd.append('backup', pendingRestoreFile);
+    fd.append('strategy', restoreStrategy);
+    fd.append('entities', JSON.stringify(entitiesPayload));
+    if (restoreStrategy === 'replace' && wipeCloudBeforeRestore) {
+      fd.append('wipe_existing', 'true');
     }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/backups/restore-upload');
+    xhr.withCredentials = true;
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        const loadedMB = (event.loaded / (1024 * 1024)).toFixed(2);
+        const totalMB = (event.total / (1024 * 1024)).toFixed(2);
+        setRestoreUploadProgress(percent);
+        setRestoreStatusText(`Uploading file: ${percent}% (${loadedMB} MB / ${totalMB} MB)...`);
+      }
+    };
+
+    xhr.upload.onload = () => {
+      setRestoreUploadProgress(100);
+      setRestoreStatusText('Upload complete! Server is extracting archive & restoring tables...');
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] Upload 100% complete!`,
+        `[${new Date().toLocaleTimeString()}] Server is now extracting archive and restoring SQLite tables...`,
+      ]);
+    };
+
+    xhr.onload = async () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setRestoreStatusText('✅ Restore completed successfully!');
+        setRestoreLogs((prev) => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] ✅ Database tables & storage restored successfully!`,
+          `[${new Date().toLocaleTimeString()}] Background cloud sync queued.`,
+        ]);
+        toast.success(
+          `✅ ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'} restore completed successfully!`
+        );
+        setTimeout(async () => {
+          setRestoreModalOpen(false);
+          setPendingRestoreFile(null);
+          setRestoreBusy(false);
+          await fetchData();
+          await calculateStorageUsage();
+          await fetchSupabaseStatus();
+        }, 1200);
+      } else {
+        let errMessage = 'Restore failed';
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body?.error) errMessage = body.error;
+        } catch {}
+        setRestoreStatusText(`❌ Error: ${errMessage}`);
+        setRestoreLogs((prev) => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] ❌ Failed: ${errMessage}`,
+        ]);
+        toast.error(errMessage);
+        setRestoreBusy(false);
+      }
+    };
+
+    xhr.onerror = () => {
+      const err = 'Network connection lost during upload. Please check your internet connection.';
+      setRestoreStatusText(`❌ ${err}`);
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ❌ ${err}`,
+      ]);
+      toast.error(err);
+      setRestoreBusy(false);
+    };
+
+    xhr.send(fd);
   };
 
   const exportSelectedData = async () => {
@@ -1384,6 +1440,45 @@ const DatabaseTab = () => {
               })}
             </div>
           </div>
+
+          {/* Real-time Upload Progress & Live Terminal Logs */}
+          {restoreBusy && (
+            <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/40 space-y-3 animate-in fade-in">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                  {restoreUploadProgress < 100 ? (
+                    <Upload className="h-4 w-4 animate-bounce text-indigo-600" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
+                  )}
+                  {restoreStatusText}
+                </span>
+                <span className="font-mono font-bold text-xs text-indigo-900 dark:text-indigo-200">{restoreUploadProgress}%</span>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    restoreUploadProgress < 100 ? 'bg-indigo-600' : 'bg-emerald-500 animate-pulse'
+                  }`}
+                  style={{ width: `${Math.max(restoreUploadProgress, 4)}%` }}
+                />
+              </div>
+
+              {/* Real-Time Terminal Logs Output */}
+              <div className="bg-slate-900 text-slate-200 p-3 rounded-lg font-mono text-[11px] max-h-40 overflow-y-auto space-y-1 border border-slate-800 shadow-inner">
+                {restoreLogs.map((log, idx) => (
+                  <div key={idx} className="flex items-start gap-1.5 leading-relaxed">
+                    <span className="text-slate-500 select-none">&gt;</span>
+                    <span className={log.includes('✅') ? 'text-emerald-400 font-bold' : log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('100%') ? 'text-amber-300 font-semibold' : 'text-slate-300'}>
+                      {log}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
             <Button

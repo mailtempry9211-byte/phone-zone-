@@ -280,6 +280,7 @@ async function assertSafeArchive(src) {
         }
         const normalized = raw.replace(/\/+$/, "");
         if (!normalized || normalized === ".") return;
+        if (normalized.startsWith("._") || normalized === ".DS_Store" || normalized.includes("pax_global_header") || normalized.includes("PaxHeader")) return;
         if (!ALLOWED_ENTRY.test(normalized)) {
           throw new AppError("This backup contains unexpected files and was rejected. No data was changed.", 400);
         }
@@ -636,9 +637,13 @@ export async function restoreBackup(backupName, {
 
   let safety = { name: "skipped" };
   try {
-    fs.mkdirSync(path.join(PATHS.dataDir, "database"), { recursive: true });
-    fs.mkdirSync(path.join(PATHS.dataDir, "storage"), { recursive: true });
-    safety = createBackup();
+    const db = getDb();
+    const hasExistingData = (db.prepare("SELECT count(*) as c FROM phones").get()?.c || 0) > 0;
+    if (hasExistingData) {
+      fs.mkdirSync(path.join(PATHS.dataDir, "database"), { recursive: true });
+      fs.mkdirSync(path.join(PATHS.dataDir, "storage"), { recursive: true });
+      safety = createBackup();
+    }
   } catch (safetyErr) {
     logger.warn("Pre-restore safety backup skipped:", safetyErr.message);
   }

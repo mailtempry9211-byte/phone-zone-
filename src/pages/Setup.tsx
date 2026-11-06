@@ -57,6 +57,9 @@ const Setup = () => {
   const [submitting, setSubmitting] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [restoreStatusText, setRestoreStatusText] = useState<string>('');
+  const [restoreLogs, setRestoreLogs] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cloud / Google Drive Backups
@@ -273,7 +276,7 @@ const Setup = () => {
     }
   };
 
-  const handleRestore = async () => {
+  const handleRestore = () => {
     if (!restoreFile) {
       toast.error('Please select a backup file');
       return;
@@ -292,35 +295,91 @@ const Setup = () => {
     const entitiesPayload = isAll ? ['all'] : chosen;
 
     setRestoring(true);
-    try {
-      const fd = new FormData();
-      fd.append('backup', restoreFile);
-      fd.append('strategy', restoreStrategy);
-      fd.append('entities', JSON.stringify(entitiesPayload));
-      if (restoreStrategy === 'replace' && wipeBeforeRestore) {
-        fd.append('wipe_existing', 'true');
-      }
-      const headers: Record<string, string> = {};
-      if (unlockPassword) headers['x-admin-password'] = unlockPassword;
+    setUploadProgress(0);
+    setRestoreStatusText('Starting upload to PhoneZone server...');
+    setRestoreLogs([
+      `[${new Date().toLocaleTimeString()}] Backup file selected: ${restoreFile.name} (${(restoreFile.size / (1024 * 1024)).toFixed(2)} MB)`,
+      `[${new Date().toLocaleTimeString()}] Strategy: ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'}`,
+      `[${new Date().toLocaleTimeString()}] Restoring categories: ${isAll ? 'All Categories' : entitiesPayload.join(', ')}`,
+      `[${new Date().toLocaleTimeString()}] Initiating secure HTTP upload...`,
+    ]);
 
-      const res = await fetch('/api/setup/restore', {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-        body: fd,
-      });
-      if (!res.ok) {
-        throw new Error(await readError(res, 'Restore failed'));
-      }
-      toast.success('Data restored successfully! Welcome back.');
-      setTimeout(() => {
-        window.location.replace('/'); // full reload so App re-reads setup status
-      }, 600);
-    } catch (err: any) {
-      toast.error(err.message || 'Restore failed');
-    } finally {
-      setRestoring(false);
+    const fd = new FormData();
+    fd.append('backup', restoreFile);
+    fd.append('strategy', restoreStrategy);
+    fd.append('entities', JSON.stringify(entitiesPayload));
+    if (restoreStrategy === 'replace' && wipeBeforeRestore) {
+      fd.append('wipe_existing', 'true');
     }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/setup/restore');
+    xhr.withCredentials = true;
+    if (unlockPassword) {
+      xhr.setRequestHeader('x-admin-password', unlockPassword);
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        const loadedMB = (event.loaded / (1024 * 1024)).toFixed(2);
+        const totalMB = (event.total / (1024 * 1024)).toFixed(2);
+        setUploadProgress(percent);
+        setRestoreStatusText(`Uploading file: ${percent}% (${loadedMB} MB / ${totalMB} MB)...`);
+      }
+    };
+
+    xhr.upload.onload = () => {
+      setUploadProgress(100);
+      setRestoreStatusText('Upload complete! Server is extracting archive & restoring tables...');
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] Upload 100% complete!`,
+        `[${new Date().toLocaleTimeString()}] Server extracting archive and restoring SQLite tables...`,
+      ]);
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setRestoreStatusText('✅ Restore completed successfully! Redirecting...');
+        setRestoreLogs((prev) => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] ✅ Database tables & storage restored successfully!`,
+          `[${new Date().toLocaleTimeString()}] Background cloud sync queued.`,
+          `[${new Date().toLocaleTimeString()}] Welcome to PhoneZone! Redirecting now...`,
+        ]);
+        toast.success('Data restored successfully! Welcome back.');
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 1000);
+      } else {
+        let errMessage = 'Restore failed';
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body?.error) errMessage = body.error;
+        } catch {}
+        setRestoreStatusText(`❌ Error: ${errMessage}`);
+        setRestoreLogs((prev) => [
+          ...prev,
+          `[${new Date().toLocaleTimeString()}] ❌ Failed: ${errMessage}`,
+        ]);
+        toast.error(errMessage);
+        setRestoring(false);
+      }
+    };
+
+    xhr.onerror = () => {
+      const err = 'Network connection lost during upload. Please check your internet connection.';
+      setRestoreStatusText(`❌ ${err}`);
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ❌ ${err}`,
+      ]);
+      toast.error(err);
+      setRestoring(false);
+    };
+
+    xhr.send(fd);
   };
 
   const handleSubmit = async () => {
@@ -1032,6 +1091,45 @@ const Setup = () => {
                   })}
                 </div>
               </div>
+
+              {/* Real-time Upload Progress & Live Terminal Logs */}
+              {restoring && (
+                <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/40 space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                      {uploadProgress < 100 ? (
+                        <Upload className="h-4 w-4 animate-bounce text-blue-600" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
+                      )}
+                      {restoreStatusText}
+                    </span>
+                    <span className="font-mono font-bold text-xs text-blue-900 dark:text-blue-200">{uploadProgress}%</span>
+                  </div>
+
+                  {/* Visual Progress Bar */}
+                  <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-300 ${
+                        uploadProgress < 100 ? 'bg-blue-600' : 'bg-emerald-500 animate-pulse'
+                      }`}
+                      style={{ width: `${Math.max(uploadProgress, 4)}%` }}
+                    />
+                  </div>
+
+                  {/* Real-Time Terminal Logs Output */}
+                  <div className="bg-slate-900 text-slate-200 p-3 rounded-lg font-mono text-[11px] max-h-40 overflow-y-auto space-y-1 border border-slate-800 shadow-inner">
+                    {restoreLogs.map((log, idx) => (
+                      <div key={idx} className="flex items-start gap-1.5 leading-relaxed">
+                        <span className="text-slate-500 select-none">&gt;</span>
+                        <span className={log.includes('✅') ? 'text-emerald-400 font-bold' : log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('100%') ? 'text-amber-300 font-semibold' : 'text-slate-300'}>
+                          {log}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className='flex justify-between pt-3 border-t'>
                 <Button variant='outline' onClick={() => setMode('choose')}>Back</Button>
