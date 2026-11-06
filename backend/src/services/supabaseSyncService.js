@@ -49,12 +49,9 @@ const SUPABASE_COLUMNS = {
   admin_settings: [
     "id", "business_name", "business_tagline", "owner_name", "address",
     "phone_primary", "phone_secondary", "email", "instagram", "whatsapp_number",
-    "google_business_url", "udyam_number", "logo_url", "signature_url",
+    "currency_code", "logo_url", "signature_url",
     "terms_and_conditions", "terms_and_conditions_sale", "terms_and_conditions_purchase",
-    "invoice_prefix_purchase", "invoice_prefix_sale", "invoice_prefix_return",
-    "currency_code", "bank_name", "account_holder_name", "account_number", "ifsc_code",
-    "ai_provider", "ai_model", "ai_api_key", "ai_custom_url", "ai_voice_enabled", "ai_auto_speak", "ocr_engine",
-    "hicelltek_api_key",
+    "bank_name", "account_holder_name", "account_number", "ifsc_code",
     "setup_completed", "updated_at"
   ],
   sellers: [
@@ -68,7 +65,7 @@ const SUPABASE_COLUMNS = {
     "customer_photo_url", "created_at", "updated_at"
   ],
   dealers: [
-    "id", "shop_name", "business_name", "proprietor_name", "contact_person", "phone", "alternate_phone", "email", "address",
+    "id", "shop_name", "proprietor_name", "phone", "alternate_phone", "email", "address",
     "city", "state", "pincode", "gst_number", "pan_number", "photo_url",
     "signature_url", "notes", "is_active", "created_at", "updated_at"
   ],
@@ -181,11 +178,12 @@ export function sanitizeRowForSupabase(table, rawRow) {
     } catch {}
   }
   if (table === "dealers") {
-    if (source.shop_name && !source.business_name) source.business_name = source.shop_name;
     if (source.business_name && !source.shop_name) source.shop_name = source.business_name;
-    if (source.proprietor_name && !source.contact_person) source.contact_person = source.proprietor_name;
     if (source.contact_person && !source.proprietor_name) source.proprietor_name = source.contact_person;
     if (source.gstin && !source.gst_number) source.gst_number = source.gstin;
+    delete source.business_name;
+    delete source.contact_person;
+    delete source.balance;
   }
   if (table === "dealer_batches") {
     if (source.dealer_id && !isUuid(source.dealer_id)) source.dealer_id = null;
@@ -351,49 +349,38 @@ export async function pushBatchToSupabase(table, rows) {
         for (const item of chunk) {
           try {
             let singlePayload = { ...item };
-            let singleRes = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
-              method: "POST",
-              headers: supabaseHeaders(key),
-              body: JSON.stringify(singlePayload),
-            });
+            for (let itemAttempt = 0; itemAttempt < 20; itemAttempt++) {
+              let singleRes = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
+                method: "POST",
+                headers: supabaseHeaders(key),
+                body: JSON.stringify(singlePayload),
+              });
 
-            if (singleRes.ok) {
-              totalUploaded++;
-            } else {
+              if (singleRes.ok) {
+                totalUploaded++;
+                break;
+              }
+
               let singleErr = await singleRes.text().catch(() => "");
 
               // Self-healing: Strip unmigrated column if missing in Supabase schema
-              const match = singleErr.match(/Could not find the '([^']+)' column/i) || singleErr.match(/column "([^"]+)" of relation "[^"]+" does not exist/i);
+              const match = singleErr.match(/Could not find the '([^']+)' column/i) ||
+                            singleErr.match(/column "([^"]+)" of relation "[^"]+" does not exist/i) ||
+                            singleErr.match(/Could not find the ([a-zA-Z0-9_]+) column/i);
               if (match && match[1] && singlePayload[match[1]] !== undefined) {
                 delete singlePayload[match[1]];
-                singleRes = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
-                  method: "POST",
-                  headers: supabaseHeaders(key),
-                  body: JSON.stringify(singlePayload),
-                });
-                if (singleRes.ok) {
-                  totalUploaded++;
-                  continue;
-                }
-                singleErr = await singleRes.text().catch(() => "");
+                continue;
               }
 
               // Self-healing: Foreign key violation on phones (e.g. dealer_id or batch_purchase_id)
               if (table === "phones" && (singleErr.includes("dealer_id") || singleErr.includes("dealers") || singleErr.includes("batch_purchase_id") || singleErr.includes("foreign key"))) {
                 singlePayload.dealer_id = null;
                 singlePayload.batch_purchase_id = null;
-                const fkRetry = await fetch(`${url}/rest/v1/${table}?on_conflict=id`, {
-                  method: "POST",
-                  headers: supabaseHeaders(key),
-                  body: JSON.stringify(singlePayload),
-                });
-                if (fkRetry.ok) {
-                  totalUploaded++;
-                  continue;
-                }
+                continue;
               }
 
               logger.warn(`[SupabaseSync] Single item push rejected (${table} ${item.id}): ${singleErr.slice(0, 120)}`);
+              break;
             }
           } catch {}
         }
@@ -1360,36 +1347,16 @@ export async function pushSettingsToSupabase(settingsRow) {
       email: source.email || "",
       instagram: source.instagram || "",
       whatsapp_number: source.whatsapp_number || source.whatsappNumber || source.phone_primary || "",
-      google_business_url: source.google_business_url || source.googleBusinessUrl || "",
-      udyam_number: source.udyam_number || source.udyamNumber || "",
       logo_url: source.logo_url || source.logoUrl || null,
       signature_url: source.signature_url || source.signatureUrl || null,
       terms_and_conditions: source.terms_and_conditions || source.termsAndConditions || "",
       terms_and_conditions_sale: source.terms_and_conditions_sale || source.termsAndConditionsSale || "",
       terms_and_conditions_purchase: source.terms_and_conditions_purchase || source.termsAndConditionsPurchase || "",
-      invoice_prefix_purchase: source.invoice_prefix_purchase || "PUR",
-      invoice_prefix_sale: source.invoice_prefix_sale || "SAL",
-      invoice_prefix_return: source.invoice_prefix_return || "RET",
       currency_code: source.currency_code || "INR",
       bank_name: source.bank_name || source.bankName || "",
       account_holder_name: source.account_holder_name || source.accountHolderName || "",
       account_number: source.account_number || source.accountNumber || "",
       ifsc_code: source.ifsc_code || source.ifscCode || "",
-      ai_provider: source.ai_provider || source.aiProvider || "gemini",
-      ai_model: source.ai_model || source.aiModel || "gemini-2.5-flash-lite",
-      ai_api_key: source.ai_api_key || source.aiApiKey || "",
-      ai_custom_url: source.ai_custom_url || source.aiCustomUrl || "",
-      ai_voice_enabled: source.ai_voice_enabled !== undefined ? source.ai_voice_enabled : 1,
-      ai_auto_speak: source.ai_auto_speak !== undefined ? source.ai_auto_speak : 0,
-      ocr_engine: source.ocr_engine || source.ocrEngine || "auto",
-      hicelltek_api_key: (() => {
-        if (source.hicelltek_api_key) return source.hicelltek_api_key;
-        try {
-          const db = getDb();
-          const hk = db.prepare("SELECT api_key FROM hicelltek_keys WHERE is_enabled = 1 ORDER BY position ASC LIMIT 1").get();
-          return hk ? hk.api_key : "";
-        } catch { return ""; }
-      })(),
       setup_completed: 1,
     });
 
@@ -1399,7 +1366,7 @@ export async function pushSettingsToSupabase(settingsRow) {
     const method = hasExisting ? "PATCH" : "POST";
 
     let currentPayload = { ...payload };
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < 30; attempt++) {
       const res = await fetch(endpoint, {
         method,
         headers: supabaseHeaders(key),

@@ -341,6 +341,12 @@ const Setup = () => {
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body?.token) {
+            localStorage.setItem('pz_token', body.token);
+          }
+        } catch {}
         setRestoreStatusText('✅ Restore completed successfully! Redirecting...');
         setRestoreLogs((prev) => [
           ...prev,

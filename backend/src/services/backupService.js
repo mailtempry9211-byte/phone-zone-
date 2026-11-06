@@ -64,10 +64,21 @@ function zip(sourceDirs, outFile) {
   return gz;
 }
 
-export function createBackup({ scope = "all", financialYear = null } = {}) {
+export function createBackup({ scope = "all", financialYear = null, entities = null } = {}) {
   fs.mkdirSync(PATHS.backupsDir, { recursive: true });
   const db = getDb();
   db.pragma("wal_checkpoint(TRUNCATE)"); // flush WAL so the .db file is complete
+
+  let normalizedEntities = null;
+  if (entities) {
+    if (typeof entities === "string") {
+      try { normalizedEntities = JSON.parse(entities); } catch { normalizedEntities = entities.split(",").map((s) => s.trim()); }
+    } else if (Array.isArray(entities)) {
+      normalizedEntities = entities;
+    }
+  }
+
+  const isCustomEntities = Array.isArray(normalizedEntities) && normalizedEntities.length > 0 && !normalizedEntities.includes("all") && normalizedEntities.length < 7;
 
   // Resolve FY label if scope is year-based
   let fyLabel = null;
@@ -88,11 +99,17 @@ export function createBackup({ scope = "all", financialYear = null } = {}) {
     }
   }
 
-  const safeScope = fyLabel ? `FY_${fyLabel.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "ALL_YEARS";
+  let safeScope = "ALL_YEARS";
+  if (isCustomEntities) {
+    safeScope = `CUSTOM_${normalizedEntities.slice(0, 3).join("_")}`;
+  } else if (fyLabel) {
+    safeScope = `FY_${fyLabel.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  }
+
   const desiredName = `PhoneZone_Backup_${safeScope}_${stamp()}.tar.gz`;
   const desiredFile = path.join(PATHS.backupsDir, desiredName);
 
-  if (scope === "all" || !fyLabel) {
+  if (!isCustomEntities && (scope === "all" || !fyLabel)) {
     let dbHash = null;
     if (fs.existsSync(PATHS.databaseFile)) {
       const dbBytes = fs.readFileSync(PATHS.databaseFile);
@@ -140,7 +157,7 @@ export function createBackup({ scope = "all", financialYear = null } = {}) {
     return { file: desiredFile, name: path.basename(desiredFile), manifest, sizeBytes: fs.statSync(desiredFile).size };
   }
 
-  // Scoped backup for a specific FY (or older)
+  // Scoped or Custom Selective backup
   const scopedDir = path.join(PATHS.dataDir, `.backup_temp_${stamp()}`);
   const scopedDbDir = path.join(scopedDir, "database");
   const scopedStorageDir = path.join(scopedDir, "storage");
@@ -155,18 +172,48 @@ export function createBackup({ scope = "all", financialYear = null } = {}) {
 
   try {
     scopedDb.pragma("journal_mode = WAL");
+
     // Prune transactional rows that don't belong to this financial year
-    // Keep master records: sellers, customers, dealers, repair_customers, admin_settings, user_roles
-    scopedDb.prepare("DELETE FROM phones WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
-    try {
-      scopedDb.prepare("DELETE FROM repair_jobs WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
-    } catch {}
-    try {
-      scopedDb.prepare("DELETE FROM invoices WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
-    } catch {}
-    try {
-      scopedDb.prepare("DELETE FROM returns WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
-    } catch {}
+    if (fyLabel) {
+      scopedDb.prepare("DELETE FROM phones WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+      try {
+        scopedDb.prepare("DELETE FROM repair_jobs WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+      } catch {}
+      try {
+        scopedDb.prepare("DELETE FROM invoices WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+      } catch {}
+      try {
+        scopedDb.prepare("DELETE FROM returns WHERE (financial_year != ? AND financial_year IS NOT NULL)").run(fyLabel);
+      } catch {}
+    }
+
+    // Prune unselected entities for custom selective backup
+    if (isCustomEntities) {
+      if (!normalizedEntities.includes("settings")) {
+        try { scopedDb.prepare("DELETE FROM admin_settings").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("phones")) {
+        try { scopedDb.prepare("DELETE FROM phones").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("sellers")) {
+        try { scopedDb.prepare("DELETE FROM sellers").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("customers")) {
+        try { scopedDb.prepare("DELETE FROM customers").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("dealers")) {
+        try { scopedDb.prepare("DELETE FROM dealers").run(); } catch {}
+        try { scopedDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("repairs")) {
+        try { scopedDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
+        try { scopedDb.prepare("DELETE FROM repair_job_items").run(); } catch {}
+        try { scopedDb.prepare("DELETE FROM repair_customers").run(); } catch {}
+      }
+      if (!normalizedEntities.includes("returns")) {
+        try { scopedDb.prepare("DELETE FROM returns").run(); } catch {}
+      }
+    }
 
     scopedDb.pragma("wal_checkpoint(TRUNCATE)");
     scopedDb.close();
@@ -178,8 +225,9 @@ export function createBackup({ scope = "all", financialYear = null } = {}) {
     const manifest = {
       createdAt: new Date().toISOString(),
       app: "PhoneZone",
-      scope: fyLabel,
-      financialYear: fyLabel,
+      scope: isCustomEntities ? "custom" : fyLabel,
+      entities: isCustomEntities ? normalizedEntities : ["all"],
+      financialYear: fyLabel || null,
     };
     fs.writeFileSync(path.join(scopedDir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
@@ -200,8 +248,8 @@ export function createBackup({ scope = "all", financialYear = null } = {}) {
   if (!fs.existsSync(desiredFile) || fs.statSync(desiredFile).size === 0) {
     throw new AppError("The scoped backup file could not be written.", 500);
   }
-  logger.info("Scoped backup created", { outFile: desiredFile, scope: fyLabel });
-  return { file: desiredFile, name: path.basename(desiredFile), sizeBytes: fs.statSync(desiredFile).size };
+  logger.info("Backup created", { outFile: desiredFile, scope: isCustomEntities ? "custom" : fyLabel, entities: normalizedEntities });
+  return { file: desiredFile, name: path.basename(desiredFile), sizeBytes: fs.statSync(desiredFile).size, entities: isCustomEntities ? normalizedEntities : ["all"] };
 }
 
 export function listBackups() {

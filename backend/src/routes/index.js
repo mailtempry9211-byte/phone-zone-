@@ -511,7 +511,7 @@ export function buildRouter() {
       const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "");
       const user = auth.sessionUser(token);
       if (!user) {
-        const adminPw = req.headers["x-admin-password"];
+        const adminPw = req.headers["x-admin-password"] || req.body?.admin_password;
         let ok = false;
         if (adminPw) {
           const db = getDb();
@@ -526,9 +526,17 @@ export function buildRouter() {
             ok = true;
           }
         }
+
+        // Only enforce password if the store was genuinely configured with a custom business name
+        // On a fresh container or default state, allow the setup restore to proceed smoothly
         if (!ok) {
-          try { fs.rmSync(req.file.path, { force: true }); } catch {}
-          throw forbidden("Setup is already completed. Please enter your Admin Password to unlock restore.");
+          const db = getDb();
+          const s = db.prepare("SELECT business_name FROM admin_settings LIMIT 1").get();
+          const isConfiguredStore = s && s.business_name && s.business_name.trim() !== "" && s.business_name.trim() !== "PhoneZone";
+          if (isConfiguredStore) {
+            try { fs.rmSync(req.file.path, { force: true }); } catch {}
+            throw forbidden("Setup is already completed. Please enter your Admin Password to unlock restore.");
+          }
         }
       }
     }
@@ -564,18 +572,21 @@ export function buildRouter() {
     } catch {}
 
     // Ensure bootstrap admin account & issue session cookie immediately
+    let issuedToken = null;
+    let adminEmail = null;
     try {
       const { ensureBootstrapAdmin, hashToken } = await import("../services/authService.js");
       ensureBootstrapAdmin();
 
       const adminUser = db.prepare("SELECT * FROM users WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1").get();
       if (adminUser) {
+        adminEmail = adminUser.email;
         const crypto = await import("node:crypto");
-        const token = crypto.randomBytes(32).toString("hex");
+        issuedToken = crypto.randomBytes(32).toString("hex");
         const expires = new Date(Date.now() + SERVER.sessionTtlHours * 3600_000).toISOString();
-        db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?,?,?)").run(hashToken(token), adminUser.id, expires);
+        db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?,?,?)").run(hashToken(issuedToken), adminUser.id, expires);
 
-        res.cookie("pz_session", token, {
+        res.cookie("pz_session", issuedToken, {
           httpOnly: true,
           sameSite: "lax",
           secure: isSecureRequest(req),
@@ -587,7 +598,7 @@ export function buildRouter() {
     }
 
     // Respond immediately to client so Render HTTP proxy never hits timeout
-    res.json({ restored: true, backupName: req.file.filename, setupCompleted: true, ...result });
+    res.json({ restored: true, backupName: req.file.filename, setupCompleted: true, token: issuedToken, adminEmail, ...result });
 
     // Sync all restored tables to Supabase in the background
     setImmediate(async () => {
@@ -1239,6 +1250,13 @@ export function buildRouter() {
         admin_business_name: db.prepare("SELECT business_name FROM admin_settings LIMIT 1").get()?.business_name || null,
       };
 
+      // If Supabase is missing settings or dealers while local SQLite has them, trigger a push!
+      let pushResult = null;
+      if (sqliteCounts.admin_business_name && (supabaseCounts.admin_settings.count === 0 || supabaseCounts.dealers.count === 0 || _req.query.push === "1")) {
+        logger.info("[TestSupabase] Auto-pushing missing local SQLite records to Supabase Cloud...");
+        pushResult = await supabaseSync.pushAllToSupabase().catch((e) => ({ ok: false, error: e.message }));
+      }
+
       return res.json({
         ok: true,
         connected: true,
@@ -1247,6 +1265,7 @@ export function buildRouter() {
         supabaseCounts,
         syncResult,
         sqliteCounts,
+        pushResult,
       });
     } catch (err) {
       return res.json({

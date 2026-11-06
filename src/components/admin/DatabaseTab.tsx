@@ -70,6 +70,16 @@ const DatabaseTab = () => {
   const [selectedDealers, setSelectedDealers] = useState<string[]>([]);
   const [selectedDealerBatches, setSelectedDealerBatches] = useState<string[]>([]);
   const [backupScope, setBackupScope] = useState<string>("all");
+  const [backupMode, setBackupMode] = useState<'full' | 'custom'>('full');
+  const [backupEntities, setBackupEntities] = useState<Record<string, boolean>>({
+    settings: true,
+    phones: true,
+    sellers: true,
+    customers: true,
+    dealers: true,
+    repairs: true,
+    returns: true,
+  });
   const [storageUsage, setStorageUsage] = useState<number>(0);
   const [totalStorage, setTotalStorage] = useState<number>(1024); // 1GB in MB
   const [exportFormat, setExportFormat] = useState<string>('json');
@@ -310,8 +320,26 @@ const DatabaseTab = () => {
     // then downloads that real backup as a .zip the user can keep anywhere.
     try {
       setBackupBusy(true);
-      const suggestedName = `PhoneZone_Backup_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
+      const isCustom = backupMode === 'custom';
+      const activeEntities = isCustom
+        ? Object.entries(backupEntities).filter(([_, v]) => v).map(([k]) => k)
+        : null;
+
+      if (isCustom && (!activeEntities || activeEntities.length === 0)) {
+        toast.error('Please select at least one data category to backup');
+        setBackupBusy(false);
+        return;
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const suggestedName = isCustom
+        ? `PhoneZone_Custom_Backup_${timestamp}.tar.gz`
+        : `PhoneZone_Backup_${backupScope}_${timestamp}.tar.gz`;
       const win = window as any;
+
+      const payload = isCustom
+        ? { scope: 'custom', entities: activeEntities }
+        : { scope: backupScope };
 
       // Electron build: use the native Windows "Save As" dialog (via IPC).
       if (win.phonezone?.isElectron) {
@@ -319,7 +347,7 @@ const DatabaseTab = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ scope: backupScope }),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Failed to create backup'); }
         const backup = await res.json();
@@ -357,7 +385,7 @@ const DatabaseTab = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ scope: backupScope }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
@@ -387,7 +415,7 @@ const DatabaseTab = () => {
         URL.revokeObjectURL(url);
       }
 
-      toast.success(`Full backup saved (${(blob.size / (1024 * 1024)).toFixed(2)} MB) - includes all data and images`);
+      toast.success(`${isCustom ? 'Custom selective' : 'Full'} backup saved (${(blob.size / (1024 * 1024)).toFixed(2)} MB)`);
     } catch (error: any) {
       console.error('Backup error:', error);
       toast.error(error.message || 'Failed to create backup');
@@ -1224,34 +1252,137 @@ const DatabaseTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Select Backup Scope / Financial Year
-              </label>
-              <Select value={backupScope} onValueChange={setBackupScope}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    🌐 Full Complete Backup (Till Date - All Years & Master Books)
-                  </SelectItem>
-                  <SelectItem value="current_fy">
-                    📅 Current Financial Year Only (FY 2026-27 Books & Inventory)
-                  </SelectItem>
-                  <SelectItem value="previous_fy_1">
-                    ⏮️ 1st Previous Financial Year Only (FY 2025-26 Books)
-                  </SelectItem>
-                  <SelectItem value="older_fy">
-                    🗄️ 2nd Previous FY / 3rd Year Archive (FY 2024-25 & Older)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Backup Mode Toggle: Full Complete vs Custom Selective */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900/60 rounded-lg border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setBackupMode('full')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all ${
+                backupMode === 'full'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Database className="h-3.5 w-3.5" />
+              Full Complete Backup
+            </button>
+            <button
+              type="button"
+              onClick={() => setBackupMode('custom')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all ${
+                backupMode === 'custom'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Custom Selective Backup
+            </button>
+          </div>
+
+          {backupMode === 'full' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Select Backup Scope / Financial Year
+                </label>
+                <Select value={backupScope} onValueChange={setBackupScope}>
+                  <SelectTrigger className="bg-slate-900 border-slate-700 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      🌐 Full Complete Backup (Till Date - All Years & Master Books)
+                    </SelectItem>
+                    <SelectItem value="current_fy">
+                      📅 Current Financial Year Only (FY 2026-27 Books & Inventory)
+                    </SelectItem>
+                    <SelectItem value="previous_fy_1">
+                      ⏮️ 1st Previous Financial Year Only (FY 2025-26 Books)
+                    </SelectItem>
+                    <SelectItem value="older_fy">
+                      🗄️ 2nd Previous FY / 3rd Year Archive (FY 2024-25 & Older)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-300">
+                  Select Data Categories to Include:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allSelected = Object.values(backupEntities).every(Boolean);
+                    const updated: Record<string, boolean> = {};
+                    Object.keys(backupEntities).forEach((k) => {
+                      updated[k] = !allSelected;
+                    });
+                    setBackupEntities(updated);
+                  }}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  {Object.values(backupEntities).every(Boolean) ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { id: 'settings', label: 'Store Settings & Branding', desc: 'Shop name, owner signature, logo, bank details, terms', icon: Settings, color: 'text-amber-500' },
+                  { id: 'phones', label: 'Phone Inventory & Stock', desc: 'Active & sold phones, specs, photos, bills', icon: Smartphone, color: 'text-blue-500' },
+                  { id: 'sellers', label: 'Sellers Database & KYC', desc: 'Seller profiles, Aadhaar photos, signatures', icon: Users, color: 'text-violet-500' },
+                  { id: 'customers', label: 'Customers Database', desc: 'Customer directory, contact numbers, buyer history', icon: UserCheck, color: 'text-emerald-500' },
+                  { id: 'dealers', label: 'B2B Dealers & Batches', desc: 'Wholesale suppliers, invoices, dealer ledger', icon: Building2, color: 'text-cyan-500' },
+                  { id: 'repairs', label: 'Workshop Repairs', desc: 'Repair job sheets, technician logs, repair tickets', icon: Wrench, color: 'text-orange-500' },
+                  { id: 'returns', label: 'Sales Returns & Refunds', desc: 'Returned devices, reasons, refund records', icon: RotateCcw, color: 'text-rose-500' },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isChecked = !!backupEntities[item.id];
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setBackupEntities((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                      className={`flex items-start gap-2.5 p-2 rounded-lg border cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-primary/40 bg-primary/5'
+                          : 'border-border/50 opacity-60 hover:opacity-100 hover:bg-muted/30'
+                      }`}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(c) => setBackupEntities((prev) => ({ ...prev, [item.id]: !!c }))}
+                        className="mt-0.5"
+                      />
+                      <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${item.color}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-foreground flex items-center justify-between">
+                          <span>{item.label}</span>
+                          {isChecked && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3 border-primary/30 text-primary">
+                              Selected
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground line-clamp-1">{item.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 pt-2">
             <Button onClick={createBackup} disabled={backupBusy} className="w-full bg-emerald-600 hover:bg-emerald-700 font-bold">
               <Download className="h-4 w-4 mr-2" />
-              {backupBusy ? 'Creating backup...' : `Create ${backupScope === 'all' ? 'Full Complete' : 'Scoped FY'} Backup (.tar.gz)`}
+              {backupBusy
+                ? 'Creating backup...'
+                : backupMode === 'custom'
+                ? `Create Custom Selective Backup (${Object.values(backupEntities).filter(Boolean).length} Selected)`
+                : `Create ${backupScope === 'all' ? 'Full Complete' : 'Scoped FY'} Backup (.tar.gz)`}
             </Button>
             <Button
               type="button"
