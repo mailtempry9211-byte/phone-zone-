@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 
 // Lazy-load secondary routes to keep the initial load ultra-fast on mobile phones
@@ -74,32 +75,33 @@ const App: React.FC = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-
-          <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-slate-950 text-cyan-400">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400"></div>
-            </div>
-          }>
-            <Routes>
-              {setupComplete === false ? (
-                <>
-                  <Route path="/setup" element={<Setup />} />
-                  <Route path="*" element={<Navigate to="/setup" replace />} />
-                </>
-              ) : (
-                <>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/setup" element={<Setup />} />
-                  <Route path="/mobile-preview" element={<MobileEmulator />} />
-                  <Route path="/preview" element={<MobileEmulator />} />
-                  <Route path="/emulator" element={<MobileEmulator />} />
-                  <Route path="/track" element={<TrackRepair />} />
-                  <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-                  <Route path="*" element={<NotFound />} />
-                </>
-              )}
-            </Routes>
-          </Suspense>
+          <ErrorBoundary label="PhoneZone Application">
+            <Suspense fallback={
+              <div className="min-h-screen flex items-center justify-center bg-slate-950 text-cyan-400">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-400"></div>
+              </div>
+            }>
+              <Routes>
+                {setupComplete === false ? (
+                  <>
+                    <Route path="/setup" element={<Setup />} />
+                    <Route path="*" element={<Navigate to="/setup" replace />} />
+                  </>
+                ) : (
+                  <>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/setup" element={<Setup />} />
+                    <Route path="/mobile-preview" element={<MobileEmulator />} />
+                    <Route path="/preview" element={<MobileEmulator />} />
+                    <Route path="/emulator" element={<MobileEmulator />} />
+                    <Route path="/track" element={<TrackRepair />} />
+                    <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+                    <Route path="*" element={<NotFound />} />
+                  </>
+                )}
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

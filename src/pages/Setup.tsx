@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Store, Upload, History, ShieldCheck, Star, Cloud, CheckCircle2, RotateCcw, Building2, Smartphone, Users, UserCheck, Wrench, Settings, Layers, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Store, Upload, History, ShieldCheck, Star, Cloud, CheckCircle2, RotateCcw, Building2, Smartphone, Users, UserCheck, Wrench, Settings, Layers, Sparkles, Trash2, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 

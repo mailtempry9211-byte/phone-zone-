@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Download, Trash2, Database, HardDrive, FileText, FileSpreadsheet, Code, Upload, Cloud, RefreshCw, CheckCircle2, AlertCircle, Zap, Building2, Smartphone, Users, UserCheck, Wrench, RotateCcw, Settings, Layers, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import JSZip from 'jszip';
 import StorageManagementCard from "./StorageManagementCard";
@@ -87,6 +88,7 @@ const DatabaseTab = () => {
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const restoreFileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   // Advanced Selective & Strategy Restore Wizard
   const [restoreModalOpen, setRestoreModalOpen] = useState(false);
