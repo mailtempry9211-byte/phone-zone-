@@ -45,10 +45,13 @@ const SettingsTab = () => {
   const { data: supabaseStatus, refetch: refetchSupabaseStatus } = useQuery({
     queryKey: ['supabase-status'],
     queryFn: async () => {
-      const res = await fetch('/api/supabase/status');
+      const token = typeof window !== 'undefined' ? (sessionStorage.getItem('pz_token') || localStorage.getItem('pz_token')) : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/supabase/status', { credentials: 'include', headers });
       return res.ok ? res.json() : null;
     },
-    refetchInterval: 30000,
+    refetchInterval: 15000,
   });
 
   const { data: settings, isLoading } = useQuery({
@@ -413,15 +416,16 @@ const SettingsTab = () => {
 
   const handleTacExport = async () => {
     try {
-      const res = await fetch('/api/tac/export', { credentials: 'include' });
-      if (!res.ok) throw new Error('Export failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const token = typeof window !== 'undefined' ? (sessionStorage.getItem('pz_token') || localStorage.getItem('pz_token')) : null;
+      const exportUrl = `/api/tac/export${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      
       const a = document.createElement('a');
-      a.href = url;
+      a.href = exportUrl;
       a.download = `PhoneZone_TAC_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('TAC Database download started!');
     } catch (err: any) {
       toast.error(err.message || 'Export failed');
     }
@@ -1782,9 +1786,13 @@ const SettingsTab = () => {
                 onClick={async () => {
                   setIsSavingSupabaseCreds(true);
                   try {
+                    const token = typeof window !== 'undefined' ? (sessionStorage.getItem('pz_token') || localStorage.getItem('pz_token')) : null;
+                    const headers: Record<string, string> = { "Content-Type": "application/json" };
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
                     const res = await fetch("/api/settings", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers,
+                      credentials: "include",
                       body: JSON.stringify({
                         supabase_url: formData.supabase_url,
                         supabase_anon_key: formData.supabase_anon_key,
@@ -1816,9 +1824,13 @@ const SettingsTab = () => {
               onClick={async () => {
                 setIsSyncingSupabase(true);
                 try {
+                  const token = typeof window !== 'undefined' ? (sessionStorage.getItem('pz_token') || localStorage.getItem('pz_token')) : null;
+                  const headers: Record<string, string> = { "Content-Type": "application/json" };
+                  if (token) headers['Authorization'] = `Bearer ${token}`;
                   const res = await fetch("/api/supabase/sync-now", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" }
+                    headers,
+                    credentials: "include",
                   });
                   const json = await res.json();
                   if (!res.ok || !json.ok) {

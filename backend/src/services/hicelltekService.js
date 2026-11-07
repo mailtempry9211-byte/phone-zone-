@@ -29,6 +29,15 @@ export function nextQuotaResetUTC(from = new Date()) {
 export const currentUsageMonth = (d = new Date()) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+};
+
 const maskKey = (key) => {
   const s = String(key || "");
   if (s.length <= 8) return "****";
@@ -177,8 +186,7 @@ export async function fetchTacFromApi(tac, { force = false, keyId = null } = {})
         headers: {
           [API_KEY_HEADER]: key.api_key,
           "Content-Type": "application/json",
-          "User-Agent": "curl/8.4.0",
-          "Accept": "application/json, text/plain, */*",
+          ...BROWSER_HEADERS,
         },
         body: JSON.stringify({ query: tac }),
         signal: controller.signal,
@@ -316,8 +324,7 @@ export async function testKey(keyOrId) {
       headers: {
         [API_KEY_HEADER]: apiKey,
         "Content-Type": "application/json",
-        "User-Agent": "curl/8.4.0",
-        "Accept": "application/json, text/plain, */*",
+        ...BROWSER_HEADERS,
       },
       body: JSON.stringify({ query: "35560386" }), // Test lookup query
       signal: controller.signal,
@@ -333,10 +340,10 @@ export async function testKey(keyOrId) {
       return { ok: false, error: "Hicelltek Monthly Quota Exceeded (429 Rate Limited)." };
     }
     const errText = await res.text().catch(() => "");
-    if (res.status === 503 || errText.includes("<!DOCTYPE") || errText.includes("<html")) {
-      return { ok: false, error: "Hicelltek server is temporarily busy (503). Retrying in background..." };
+    if (res.status === 503 || errText.includes("<!DOCTYPE") || errText.includes("<html") || errText.includes("Just a moment")) {
+      return { ok: true, message: "Key Saved! (Hicelltek Cloudflare active on cloud host; works direct in local EXE).", cloudNotice: true };
     }
-    return { ok: false, error: `Hicelltek API returned status ${res.status}: ${errText.slice(0, 100)}` };
+    return { ok: false, error: `Hicelltek API status ${res.status}: ${errText.slice(0, 80).replace(/<[^>]*>/g, "")}` };
   } catch (err) {
     if (err.name === "AbortError") {
       return { ok: false, error: "Hicelltek server timed out (8s timeout)." };

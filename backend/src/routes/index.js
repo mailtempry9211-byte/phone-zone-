@@ -199,7 +199,7 @@ const restoreUpload = multer({ storage: restoreDiskStorage, limits: { fileSize: 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function requireAuth(req, _res, next) {
-  const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const token = req.cookies?.pz_session || req.get("authorization")?.replace(/^Bearer\s+/i, "") || req.query?.token;
   const user = sessionUser(token);
   if (!user) return next(unauthorized());
   req.user = user;

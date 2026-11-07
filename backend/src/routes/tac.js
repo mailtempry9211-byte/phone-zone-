@@ -65,7 +65,18 @@ export function buildTacRouter(staff) {
 
     // If pre-bundled 254k models file is available, stream it instantly to avoid RAM spike and timeout
     if (embeddedPath && fs.existsSync(embeddedPath)) {
-      return res.download(embeddedPath, name);
+      res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      try {
+        const stat = fs.statSync(embeddedPath);
+        res.setHeader("Content-Length", stat.size);
+      } catch {}
+      const filestream = fs.createReadStream(embeddedPath);
+      filestream.on("error", (err) => {
+        logger.error("TAC file stream error", err);
+        if (!res.headersSent) res.status(500).json({ error: "Failed to download TAC file: " + err.message });
+      });
+      return filestream.pipe(res);
     }
 
     const out = path.join(os.tmpdir(), `phonezone-tac-export-${Date.now()}.xlsx`);
