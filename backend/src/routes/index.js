@@ -194,7 +194,7 @@ const restoreDiskStorage = multer.diskStorage({
     cb(null, `uploaded_restore_${Date.now()}.${ext}`);
   },
 });
-const restoreUpload = multer({ storage: restoreDiskStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+const restoreUpload = multer({ storage: restoreDiskStorage, limits: { fileSize: 1024 * 1024 * 1024 } }); // 1 GB limit for large shops
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function requireAuth(req, _res, next) {
@@ -559,6 +559,13 @@ export function buildRouter() {
     logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size, strategy, entities, wipeCloud });
     const result = await restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     logger.info("Restore succeeded", { result });
+
+    // Clean up temporary uploaded archive to keep disk lean (essential for 500MB+ backups)
+    try {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.rmSync(req.file.path, { force: true });
+      }
+    } catch {}
 
     // Mark setup_completed = 1 explicitly so the application knows setup is done!
     const db = getDb();
@@ -1109,20 +1116,26 @@ export function buildRouter() {
     }
     const wipeCloud = req.body?.wipe_existing === true || req.body?.wipe_existing === "true";
 
-    if (wipeCloud && strategy === "replace") {
-      logger.info("[Restore] Wiping Supabase records before admin restore-upload...", { entities });
-      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
-    }
-
     logger.info("Admin backup restore received", { file: req.file.filename, size: req.file.size, strategy, entities, wipeCloud });
     const restoreRes = await backups.restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
     
+    // Clean up temporary uploaded archive to keep disk lean (essential for 500MB+ backups)
+    try {
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.rmSync(req.file.path, { force: true });
+      }
+    } catch {}
+
     // Respond immediately to avoid Render timeout
     res.json(restoreRes);
 
     // Sync to Supabase in the background
     setImmediate(async () => {
       try {
+        if (wipeCloud && strategy === "replace") {
+          logger.info("[Restore] Background wiping Supabase records before admin push...", { entities });
+          await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Background wipe warning:", e));
+        }
         logger.info("[Restore] Post-restore background Supabase push started...");
         await supabaseSync.pushAllToSupabase();
         logger.info("[Restore] Post-restore background Supabase push complete!");
