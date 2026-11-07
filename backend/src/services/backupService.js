@@ -373,216 +373,221 @@ function restoreFromJsonData(data, tempDir, { strategy = "replace", entities = [
   const db = getDb();
   const shouldReplace = strategy === "replace";
 
-  db.transaction(() => {
-    // 1. admin_settings
-    if ((isAll || entities.includes("settings")) && data.admin_settings && data.admin_settings[0]) {
-      const s = data.admin_settings[0];
-      db.prepare(`
-        UPDATE admin_settings SET
-          business_name = COALESCE(?, business_name),
-          business_tagline = COALESCE(?, business_tagline),
-          owner_name = COALESCE(?, owner_name),
-          address = COALESCE(?, address),
-          phone_primary = COALESCE(?, phone_primary),
-          email = COALESCE(?, email),
-          setup_completed = 1
-        WHERE id = '00000000-0000-0000-0000-000000000001'
-      `).run(s.business_name || null, s.business_tagline || null, s.owner_name || null, s.address || null, s.phone_primary || null, s.email || null);
-    }
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.transaction(() => {
+      // 1. admin_settings
+      if ((isAll || entities.includes("settings")) && data.admin_settings && data.admin_settings[0]) {
+        const s = data.admin_settings[0];
+        db.prepare(`
+          UPDATE admin_settings SET
+            business_name = COALESCE(?, business_name),
+            business_tagline = COALESCE(?, business_tagline),
+            owner_name = COALESCE(?, owner_name),
+            address = COALESCE(?, address),
+            phone_primary = COALESCE(?, phone_primary),
+            email = COALESCE(?, email),
+            setup_completed = 1
+          WHERE id = '00000000-0000-0000-0000-000000000001'
+        `).run(s.business_name || null, s.business_tagline || null, s.owner_name || null, s.address || null, s.phone_primary || null, s.email || null);
+      }
 
-    // 2. sellers
-    if ((isAll || entities.includes("sellers")) && Array.isArray(data.sellers)) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM sellers").run(); } catch {}
+      // 2. dealers & batches (parents before phones)
+      if ((isAll || entities.includes("dealers")) && (Array.isArray(data.dealers) || Array.isArray(data.dealer_batches))) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM dealer_batches").run(); } catch {}
+          try { db.prepare("DELETE FROM dealers").run(); } catch {}
+        }
+        if (Array.isArray(data.dealers)) {
+          const stmt = db.prepare(`
+            INSERT INTO dealers (id, business_name, contact_person, phone, email, address, gst_number, pan_number, created_at, updated_at)
+            VALUES (@id, @business_name, @contact_person, @phone, @email, @address, @gst_number, @pan_number, @created_at, @updated_at)
+            ON CONFLICT(id) DO UPDATE SET business_name = excluded.business_name, phone = excluded.phone
+          `);
+          for (const item of data.dealers) {
+            try {
+              stmt.run({
+                ...item,
+                contact_person: item.contact_person || "",
+                phone: item.phone || "",
+                email: item.email || "",
+                address: item.address || "",
+                gst_number: item.gst_number || "",
+                pan_number: item.pan_number || "",
+                created_at: item.created_at || new Date().toISOString(),
+                updated_at: item.updated_at || new Date().toISOString()
+              });
+            } catch {}
+          }
+        }
+        if (Array.isArray(data.dealer_batches)) {
+          const stmt = db.prepare(`
+            INSERT INTO dealer_batches (id, dealer_id, invoice_number, purchase_date, total_phones, total_amount, payment_status, created_at)
+            VALUES (@id, @dealer_id, @invoice_number, @purchase_date, @total_phones, @total_amount, @payment_status, @created_at)
+            ON CONFLICT(id) DO UPDATE SET total_amount = excluded.total_amount
+          `);
+          for (const item of data.dealer_batches) {
+            try {
+              stmt.run({
+                ...item,
+                invoice_number: item.invoice_number || "",
+                purchase_date: item.purchase_date || new Date().toISOString().slice(0, 10),
+                total_phones: Number(item.total_phones) || 0,
+                total_amount: Number(item.total_amount) || 0,
+                payment_status: item.payment_status || "paid",
+                created_at: item.created_at || new Date().toISOString()
+              });
+            } catch {}
+          }
+        }
       }
-      const stmt = db.prepare(`
-        INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number, seller_photo_url, aadhaar_photo_url, created_at, updated_at)
-        VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @seller_photo_url, @aadhaar_photo_url, @created_at, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone, address = excluded.address
-      `);
-      for (const item of data.sellers) {
-        try {
-          stmt.run({
-            ...item,
-            address: item.address || "",
-            id_proof_type: item.id_proof_type || "aadhaar",
-            id_number: item.id_number || "",
-            seller_photo_url: item.seller_photo_url || null,
-            aadhaar_photo_url: item.aadhaar_photo_url || null,
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: item.updated_at || new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
 
-    // 3. customers
-    if ((isAll || entities.includes("customers")) && Array.isArray(data.customers)) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM customers").run(); } catch {}
-      }
-      const stmt = db.prepare(`
-        INSERT INTO customers (id, name, phone, address, id_proof_type, id_number, created_at, updated_at)
-        VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @created_at, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone
-      `);
-      for (const item of data.customers) {
-        try {
-          stmt.run({
-            ...item,
-            address: item.address || "",
-            id_proof_type: item.id_proof_type || "aadhaar",
-            id_number: item.id_number || "",
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: item.updated_at || new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
-
-    // 4. phones
-    if ((isAll || entities.includes("phones")) && Array.isArray(data.phones)) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM phones").run(); } catch {}
-      }
-      const stmt = db.prepare(`
-        INSERT INTO phones (id, phone_name, model, imei_number, condition, purchase_price, selling_price, is_sold, sold_date, seller_id, customer_id, product_photos, payment_proof_photos, purchase_documents, seller_signature_url, seller_photo_url, created_at, updated_at)
-        VALUES (@id, @phone_name, @model, @imei_number, @condition, @purchase_price, @selling_price, @is_sold, @sold_date, @seller_id, @customer_id, @product_photos, @payment_proof_photos, @purchase_documents, @seller_signature_url, @seller_photo_url, @created_at, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET phone_name = excluded.phone_name, model = excluded.model, selling_price = excluded.selling_price
-      `);
-      for (const item of data.phones) {
-        try {
-          stmt.run({
-            ...item,
-            condition: item.condition || "good",
-            purchase_price: Number(item.purchase_price) || 0,
-            selling_price: Number(item.selling_price) || 0,
-            is_sold: item.is_sold ? 1 : 0,
-            sold_date: item.sold_date || null,
-            seller_id: item.seller_id || null,
-            customer_id: item.customer_id || null,
-            product_photos: typeof item.product_photos === "string" ? item.product_photos : JSON.stringify(item.product_photos || []),
-            payment_proof_photos: typeof item.payment_proof_photos === "string" ? item.payment_proof_photos : JSON.stringify(item.payment_proof_photos || []),
-            purchase_documents: typeof item.purchase_documents === "string" ? item.purchase_documents : JSON.stringify(item.purchase_documents || []),
-            seller_signature_url: item.seller_signature_url || null,
-            seller_photo_url: item.seller_photo_url || null,
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: item.updated_at || new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
-
-    // 5. repair_jobs
-    if ((isAll || entities.includes("repairs")) && Array.isArray(data.repairs)) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM repair_job_items").run(); } catch {}
-        try { db.prepare("DELETE FROM repair_jobs").run(); } catch {}
-        try { db.prepare("DELETE FROM repair_customers").run(); } catch {}
-      }
-      const stmt = db.prepare(`
-        INSERT INTO repair_jobs (id, job_no, shop_id, repair_customer_id, device_brand, device_model, problem, estimate, advance_paid, final_price, status, payment_status, warranty_days, technician, created_at, updated_at)
-        VALUES (@id, @job_no, @shop_id, @repair_customer_id, @device_brand, @device_model, @problem, @estimate, @advance_paid, @final_price, @status, @payment_status, @warranty_days, @technician, @created_at, @updated_at)
-        ON CONFLICT(id) DO UPDATE SET status = excluded.status, final_price = excluded.final_price
-      `);
-      for (const item of data.repairs) {
-        try {
-          stmt.run({
-            id: item.id || crypto.randomUUID(),
-            job_no: item.job_no || item.job_number || "RJ-001",
-            shop_id: item.shop_id || "shop_1",
-            repair_customer_id: item.repair_customer_id || item.customer_id || null,
-            device_brand: item.device_brand || item.brand || "Device",
-            device_model: item.device_model || item.model || "",
-            problem: item.problem || item.problem_description || "Repair",
-            estimate: Number(item.estimate || item.total_cost || 0),
-            advance_paid: Number(item.advance_paid || 0),
-            final_price: Number(item.final_price || item.total_cost || 0),
-            status: item.status || "delivered",
-            payment_status: item.payment_status || "paid",
-            warranty_days: Number(item.warranty_days || 7),
-            technician: item.technician || "Main Workshop",
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: item.updated_at || new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
-
-    // 6. dealers & batches
-    if ((isAll || entities.includes("dealers")) && (Array.isArray(data.dealers) || Array.isArray(data.dealer_batches))) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM dealer_batches").run(); } catch {}
-        try { db.prepare("DELETE FROM dealers").run(); } catch {}
-      }
-      if (Array.isArray(data.dealers)) {
+      // 3. sellers
+      if ((isAll || entities.includes("sellers")) && Array.isArray(data.sellers)) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM sellers").run(); } catch {}
+        }
         const stmt = db.prepare(`
-          INSERT INTO dealers (id, business_name, contact_person, phone, email, address, gst_number, pan_number, created_at, updated_at)
-          VALUES (@id, @business_name, @contact_person, @phone, @email, @address, @gst_number, @pan_number, @created_at, @updated_at)
-          ON CONFLICT(id) DO UPDATE SET business_name = excluded.business_name, phone = excluded.phone
+          INSERT INTO sellers (id, name, phone, address, id_proof_type, id_number, seller_photo_url, aadhaar_photo_url, created_at, updated_at)
+          VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @seller_photo_url, @aadhaar_photo_url, @created_at, @updated_at)
+          ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone, address = excluded.address
         `);
-        for (const item of data.dealers) {
+        for (const item of data.sellers) {
           try {
             stmt.run({
               ...item,
-              contact_person: item.contact_person || "",
-              phone: item.phone || "",
-              email: item.email || "",
               address: item.address || "",
-              gst_number: item.gst_number || "",
-              pan_number: item.pan_number || "",
+              id_proof_type: item.id_proof_type || "aadhaar",
+              id_number: item.id_number || "",
+              seller_photo_url: item.seller_photo_url || null,
+              aadhaar_photo_url: item.aadhaar_photo_url || null,
               created_at: item.created_at || new Date().toISOString(),
               updated_at: item.updated_at || new Date().toISOString()
             });
           } catch {}
         }
       }
-      if (Array.isArray(data.dealer_batches)) {
+
+      // 4. customers
+      if ((isAll || entities.includes("customers")) && Array.isArray(data.customers)) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM customers").run(); } catch {}
+        }
         const stmt = db.prepare(`
-          INSERT INTO dealer_batches (id, dealer_id, invoice_number, purchase_date, total_phones, total_amount, payment_status, created_at)
-          VALUES (@id, @dealer_id, @invoice_number, @purchase_date, @total_phones, @total_amount, @payment_status, @created_at)
-          ON CONFLICT(id) DO UPDATE SET total_amount = excluded.total_amount
+          INSERT INTO customers (id, name, phone, address, id_proof_type, id_number, created_at, updated_at)
+          VALUES (@id, @name, @phone, @address, @id_proof_type, @id_number, @created_at, @updated_at)
+          ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone
         `);
-        for (const item of data.dealer_batches) {
+        for (const item of data.customers) {
           try {
             stmt.run({
               ...item,
-              invoice_number: item.invoice_number || "",
-              purchase_date: item.purchase_date || new Date().toISOString().slice(0, 10),
-              total_phones: Number(item.total_phones) || 0,
-              total_amount: Number(item.total_amount) || 0,
+              address: item.address || "",
+              id_proof_type: item.id_proof_type || "aadhaar",
+              id_number: item.id_number || "",
+              created_at: item.created_at || new Date().toISOString(),
+              updated_at: item.updated_at || new Date().toISOString()
+            });
+          } catch {}
+        }
+      }
+
+      // 5. phones (references sellers, customers, dealers)
+      if ((isAll || entities.includes("phones")) && Array.isArray(data.phones)) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM phones").run(); } catch {}
+        }
+        const stmt = db.prepare(`
+          INSERT INTO phones (id, phone_name, model, imei_number, condition, purchase_price, selling_price, is_sold, sold_date, seller_id, customer_id, product_photos, payment_proof_photos, purchase_documents, seller_signature_url, seller_photo_url, created_at, updated_at)
+          VALUES (@id, @phone_name, @model, @imei_number, @condition, @purchase_price, @selling_price, @is_sold, @sold_date, @seller_id, @customer_id, @product_photos, @payment_proof_photos, @purchase_documents, @seller_signature_url, @seller_photo_url, @created_at, @updated_at)
+          ON CONFLICT(id) DO UPDATE SET phone_name = excluded.phone_name, model = excluded.model, selling_price = excluded.selling_price
+        `);
+        for (const item of data.phones) {
+          try {
+            stmt.run({
+              ...item,
+              condition: item.condition || "good",
+              purchase_price: Number(item.purchase_price) || 0,
+              selling_price: Number(item.selling_price) || 0,
+              is_sold: item.is_sold ? 1 : 0,
+              sold_date: item.sold_date || null,
+              seller_id: item.seller_id || null,
+              customer_id: item.customer_id || null,
+              product_photos: typeof item.product_photos === "string" ? item.product_photos : JSON.stringify(item.product_photos || []),
+              payment_proof_photos: typeof item.payment_proof_photos === "string" ? item.payment_proof_photos : JSON.stringify(item.payment_proof_photos || []),
+              purchase_documents: typeof item.purchase_documents === "string" ? item.purchase_documents : JSON.stringify(item.purchase_documents || []),
+              seller_signature_url: item.seller_signature_url || null,
+              seller_photo_url: item.seller_photo_url || null,
+              created_at: item.created_at || new Date().toISOString(),
+              updated_at: item.updated_at || new Date().toISOString()
+            });
+          } catch {}
+        }
+      }
+
+      // 6. repair_jobs
+      if ((isAll || entities.includes("repairs")) && Array.isArray(data.repairs)) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM repair_job_items").run(); } catch {}
+          try { db.prepare("DELETE FROM repair_jobs").run(); } catch {}
+          try { db.prepare("DELETE FROM repair_customers").run(); } catch {}
+        }
+        const stmt = db.prepare(`
+          INSERT INTO repair_jobs (id, job_no, shop_id, repair_customer_id, device_brand, device_model, problem, estimate, advance_paid, final_price, status, payment_status, warranty_days, technician, created_at, updated_at)
+          VALUES (@id, @job_no, @shop_id, @repair_customer_id, @device_brand, @device_model, @problem, @estimate, @advance_paid, @final_price, @status, @payment_status, @warranty_days, @technician, @created_at, @updated_at)
+          ON CONFLICT(id) DO UPDATE SET status = excluded.status, final_price = excluded.final_price
+        `);
+        for (const item of data.repairs) {
+          try {
+            stmt.run({
+              id: item.id || crypto.randomUUID(),
+              job_no: item.job_no || item.job_number || "RJ-001",
+              shop_id: item.shop_id || "shop_1",
+              repair_customer_id: item.repair_customer_id || item.customer_id || null,
+              device_brand: item.device_brand || item.brand || "Device",
+              device_model: item.device_model || item.model || "",
+              problem: item.problem || item.problem_description || "Repair",
+              estimate: Number(item.estimate || item.total_cost || 0),
+              advance_paid: Number(item.advance_paid || 0),
+              final_price: Number(item.final_price || item.total_cost || 0),
+              status: item.status || "delivered",
               payment_status: item.payment_status || "paid",
+              warranty_days: Number(item.warranty_days || 7),
+              technician: item.technician || "Main Workshop",
+              created_at: item.created_at || new Date().toISOString(),
+              updated_at: item.updated_at || new Date().toISOString()
+            });
+          } catch {}
+        }
+      }
+
+      // 7. returns
+      if ((isAll || entities.includes("returns")) && Array.isArray(data.returns)) {
+        if (shouldReplace) {
+          try { db.prepare("DELETE FROM returns").run(); } catch {}
+        }
+        const stmt = db.prepare(`
+          INSERT INTO returns (id, phone_id, return_date, reason, refund_amount, processed_by, created_at)
+          VALUES (@id, @phone_id, @return_date, @reason, @refund_amount, @processed_by, @created_at)
+          ON CONFLICT(id) DO UPDATE SET reason = excluded.reason, refund_amount = excluded.refund_amount
+        `);
+        for (const item of data.returns) {
+          try {
+            stmt.run({
+              ...item,
+              return_date: item.return_date || new Date().toISOString().slice(0, 10),
+              reason: item.reason || "Return",
+              refund_amount: Number(item.refund_amount) || 0,
+              processed_by: item.processed_by || "Admin",
               created_at: item.created_at || new Date().toISOString()
             });
           } catch {}
         }
       }
-    }
-
-    // 7. returns
-    if ((isAll || entities.includes("returns")) && Array.isArray(data.returns)) {
-      if (shouldReplace) {
-        try { db.prepare("DELETE FROM returns").run(); } catch {}
-      }
-      const stmt = db.prepare(`
-        INSERT INTO returns (id, phone_id, return_date, reason, refund_amount, processed_by, created_at)
-        VALUES (@id, @phone_id, @return_date, @reason, @refund_amount, @processed_by, @created_at)
-        ON CONFLICT(id) DO UPDATE SET reason = excluded.reason, refund_amount = excluded.refund_amount
-      `);
-      for (const item of data.returns) {
-        try {
-          stmt.run({
-            ...item,
-            return_date: item.return_date || new Date().toISOString().slice(0, 10),
-            reason: item.reason || "Return",
-            refund_amount: Number(item.refund_amount) || 0,
-            processed_by: item.processed_by || "Admin",
-            created_at: item.created_at || new Date().toISOString()
-          });
-        } catch {}
-      }
-    }
-  })();
+    })();
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
 
   const imagesDir = path.join(tempDir, "images");
   if (fs.existsSync(imagesDir)) {
@@ -673,130 +678,143 @@ export async function restoreBackup(backupName, {
       const sourceDb = new Database(sourceDbPath, { readonly: true });
       const targetDb = getDb();
 
-      const entityRestoreMap = {
-        settings: () => {
-          try {
-            const sRow = sourceDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
-            if (sRow) {
-              const targetCols = targetDb.prepare(`PRAGMA table_info("admin_settings")`).all().map((c) => c.name);
-              const sourceCols = Object.keys(sRow).filter((c) => targetCols.includes(c));
-              const normalizedRow = { ...sRow, id: "00000000-0000-0000-0000-000000000001", setup_completed: 1 };
+      // CRITICAL: Disable foreign key constraint enforcement during restore
+      // so foreign key checks do not block batch insertions.
+      targetDb.pragma("foreign_keys = OFF");
 
-              if (shouldReplace) {
-                targetDb.prepare("DELETE FROM admin_settings").run();
-                const cols = sourceCols.map((c) => `"${c}"`).join(", ");
-                const placeholders = sourceCols.map((c) => `@${c}`).join(", ");
-                targetDb.prepare(`INSERT OR REPLACE INTO admin_settings (${cols}) VALUES (${placeholders})`).run(normalizedRow);
-              } else {
-                const tRow = targetDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
-                if (tRow) {
-                  const updates = {};
-                  for (const [k, v] of Object.entries(normalizedRow)) {
-                    if (v !== null && v !== undefined && v !== "" && (tRow[k] === null || tRow[k] === "" || tRow[k] === undefined)) {
-                      updates[k] = v;
-                    }
-                  }
-                  if (Object.keys(updates).length > 0) {
-                    const sets = Object.keys(updates).map((k) => `"${k}" = @${k}`).join(", ");
-                    targetDb.prepare(`UPDATE admin_settings SET ${sets} WHERE id = ?`).run({ ...updates, id: tRow.id });
-                  }
-                } else {
+      try {
+        const entityRestoreMap = {
+          settings: () => {
+            try {
+              const sRow = sourceDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+              if (sRow) {
+                const targetCols = targetDb.prepare(`PRAGMA table_info("admin_settings")`).all().map((c) => c.name);
+                const sourceCols = Object.keys(sRow).filter((c) => targetCols.includes(c));
+                const normalizedRow = { ...sRow, id: "00000000-0000-0000-0000-000000000001", setup_completed: 1 };
+
+                if (shouldReplace) {
+                  targetDb.prepare("DELETE FROM admin_settings").run();
                   const cols = sourceCols.map((c) => `"${c}"`).join(", ");
                   const placeholders = sourceCols.map((c) => `@${c}`).join(", ");
                   targetDb.prepare(`INSERT OR REPLACE INTO admin_settings (${cols}) VALUES (${placeholders})`).run(normalizedRow);
+                } else {
+                  const tRow = targetDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+                  if (tRow) {
+                    const updates = {};
+                    for (const [k, v] of Object.entries(normalizedRow)) {
+                      if (v !== null && v !== undefined && v !== "" && (tRow[k] === null || tRow[k] === "" || tRow[k] === undefined)) {
+                        updates[k] = v;
+                      }
+                    }
+                    if (Object.keys(updates).length > 0) {
+                      const sets = Object.keys(updates).map((k) => `"${k}" = @${k}`).join(", ");
+                      targetDb.prepare(`UPDATE admin_settings SET ${sets} WHERE id = ?`).run({ ...updates, id: tRow.id });
+                    }
+                  } else {
+                    const cols = sourceCols.map((c) => `"${c}"`).join(", ");
+                    const placeholders = sourceCols.map((c) => `@${c}`).join(", ");
+                    targetDb.prepare(`INSERT OR REPLACE INTO admin_settings (${cols}) VALUES (${placeholders})`).run(normalizedRow);
+                  }
                 }
               }
+            } catch (e) {
+              logger.warn("[Restore] admin_settings restore warning:", e.message);
             }
-          } catch (e) {
-            logger.warn("[Restore] admin_settings restore warning:", e.message);
+          },
+          dealers: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM dealer_ledger").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM dealers").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "dealers", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "dealer_batches", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "dealer_ledger", "REPLACE");
+          },
+          sellers: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM sellers").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "sellers", "REPLACE");
+          },
+          customers: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM customers").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "customers", "REPLACE");
+          },
+          repairs: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM repair_status_log").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM repair_job_items").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM repair_customers").run(); } catch {}
+              try { targetDb.prepare("DELETE FROM repair_job_counters").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "repair_customers", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "repair_jobs", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "repair_job_items", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "repair_status_log", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "repair_job_counters", "REPLACE");
+          },
+          phones: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM phones").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "phones", "REPLACE");
+          },
+          returns: () => {
+            if (shouldReplace) {
+              try { targetDb.prepare("DELETE FROM returns").run(); } catch {}
+            }
+            copyTableRows(sourceDb, targetDb, "returns", "REPLACE");
           }
-        },
-        phones: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM phones").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "phones", "REPLACE");
-        },
-        sellers: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM sellers").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "sellers", "REPLACE");
-        },
-        customers: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM customers").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "customers", "REPLACE");
-        },
-        dealers: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM dealer_ledger").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM dealers").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "dealers", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "dealer_batches", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "dealer_ledger", "REPLACE");
-        },
-        repairs: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM repair_status_log").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM repair_job_items").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM repair_customers").run(); } catch {}
-            try { targetDb.prepare("DELETE FROM repair_job_counters").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "repair_customers", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "repair_jobs", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "repair_job_items", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "repair_status_log", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "repair_job_counters", "REPLACE");
-        },
-        returns: () => {
-          if (shouldReplace) {
-            try { targetDb.prepare("DELETE FROM returns").run(); } catch {}
-          }
-          copyTableRows(sourceDb, targetDb, "returns", "REPLACE");
-        }
-      };
+        };
 
-      targetDb.transaction(() => {
-        // When replacing all, cleanly clear transactional records first
-        if (isAll && shouldReplace) {
-          const wipeTables = [
-            "phones", "sellers", "customers", "dealers", "dealer_batches", "dealer_ledger",
-            "repair_job_items", "repair_jobs", "repair_customers", "repair_status_log",
-            "returns", "invoices", "messages", "files"
-          ];
-          for (const tbl of wipeTables) {
-            try { targetDb.prepare(`DELETE FROM "${tbl}"`).run(); } catch {}
+        targetDb.transaction(() => {
+          // When replacing all, cleanly clear transactional records first
+          if (isAll && shouldReplace) {
+            const wipeTables = [
+              "phones", "sellers", "customers", "dealers", "dealer_batches", "dealer_ledger",
+              "repair_job_items", "repair_jobs", "repair_customers", "repair_status_log",
+              "returns", "invoices", "invoice_counters", "messages", "files"
+            ];
+            for (const tbl of wipeTables) {
+              try { targetDb.prepare(`DELETE FROM "${tbl}"`).run(); } catch {}
+            }
           }
-        }
 
-        for (const [entityName, restoreHandler] of Object.entries(entityRestoreMap)) {
-          if (isAll || normalizedEntities.includes(entityName)) {
-            restoreHandler();
+          // Restore entities in correct dependency order
+          for (const [entityName, restoreHandler] of Object.entries(entityRestoreMap)) {
+            if (isAll || normalizedEntities.includes(entityName)) {
+              restoreHandler();
+            }
           }
-        }
 
-        // Universal System Tables: Always restore files, shops, invoices, financial_years
-        copyTableRows(sourceDb, targetDb, "files", "REPLACE");
-        copyTableRows(sourceDb, targetDb, "shops", "REPLACE");
-        copyTableRows(sourceDb, targetDb, "invoices", "REPLACE");
-        copyTableRows(sourceDb, targetDb, "financial_years", "IGNORE");
+          // Universal System Tables: Always restore shops, files, invoices, financial_years
+          copyTableRows(sourceDb, targetDb, "shops", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "files", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "invoices", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "invoice_counters", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "financial_years", "IGNORE");
 
-        // When restoring all, restore system config, users, auth, license, and integrations
-        if (isAll) {
-          copyTableRows(sourceDb, targetDb, "users", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "user_roles", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "license_state", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "ngrok_config", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "messages", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "hicelltek_keys", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "audit_logs", "IGNORE");
-        }
-      })();
+          // When restoring all, restore system config, users, auth, license, and integrations
+          if (isAll) {
+            copyTableRows(sourceDb, targetDb, "users", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "user_roles", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "license_state", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "ngrok_config", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "messages", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "hicelltek_keys", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "audit_logs", "IGNORE");
+            copyTableRows(sourceDb, targetDb, "wa_templates", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "wa_tokens", "REPLACE");
+            copyTableRows(sourceDb, targetDb, "wa_campaigns", "REPLACE");
+          }
+        })();
+      } finally {
+        targetDb.pragma("foreign_keys = ON");
+      }
 
       sourceDb.close();
 

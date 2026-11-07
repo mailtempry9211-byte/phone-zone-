@@ -9,11 +9,12 @@ import { logger } from "../lib/logger.js";
 import crypto from "node:crypto";
 
 export function getSupabaseConfig() {
-  let url = (process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  let url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   let key = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     ""
   ).trim();
 
@@ -1405,13 +1406,13 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
   };
 
   const entityBucketMap = {
-    settings: ["branding", "signatures"],
-    phones: ["phones", "product-photos"],
-    sellers: ["sellers"],
-    customers: ["customers"],
-    dealers: ["dealers"],
-    repairs: ["repairs"],
-    returns: [],
+    settings: ["branding", "signatures", "phonezone-uploads"],
+    phones: ["phones", "product-photos", "phonezone-uploads"],
+    sellers: ["sellers", "phonezone-uploads"],
+    customers: ["customers", "phonezone-uploads"],
+    dealers: ["dealers", "phonezone-uploads"],
+    repairs: ["repairs", "phonezone-uploads"],
+    returns: ["phonezone-uploads"],
   };
 
   let tablesToWipe = [];
@@ -1431,9 +1432,10 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
       "messages",
       "audit_logs",
       "user_roles",
-      "admin_settings"
+      "admin_settings",
+      "files"
     ];
-    bucketsToWipe = ["phones", "sellers", "customers", "invoices", "repairs", "documents", "signatures", "product-photos"];
+    bucketsToWipe = ["phonezone-uploads", "phones", "sellers", "customers", "invoices", "repairs", "documents", "signatures", "product-photos"];
   } else {
     for (const ent of normalizedEntities) {
       if (entityTableMap[ent]) tablesToWipe.push(...entityTableMap[ent]);
@@ -1452,26 +1454,44 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
     );
     await Promise.allSettled(tablePromises);
 
-    // Wipe storage buckets concurrently with 4s timeout
-    const bucketPromises = bucketsToWipe.map(async (b) => {
+    // Wipe storage buckets thoroughly including subfolders
+    const knownSubfolders = ["", "phones", "sellers", "dealers", "customers", "signatures", "invoices", "repairs", "branding", "documents", "product-photos"];
+    const bucketPromises = [...new Set(bucketsToWipe)].map(async (b) => {
       try {
-        const listRes = await fetch(`${url}/storage/v1/object/list/${b}`, {
-          method: "POST",
-          headers: supabaseHeaders(key),
-          body: JSON.stringify({ prefix: "", limit: 1000 }),
-          signal: AbortSignal.timeout(4000),
-        });
-        if (listRes.ok) {
-          const files = await listRes.json().catch(() => []);
-          if (Array.isArray(files) && files.length > 0) {
-            const prefixes = files.map((f) => f.name).filter(Boolean);
+        const allFilePaths = [];
+        for (const sub of knownSubfolders) {
+          try {
+            const listRes = await fetch(`${url}/storage/v1/object/list/${b}`, {
+              method: "POST",
+              headers: supabaseHeaders(key),
+              body: JSON.stringify({ prefix: sub, limit: 1000 }),
+              signal: AbortSignal.timeout(3000),
+            });
+            if (listRes.ok) {
+              const files = await listRes.json().catch(() => []);
+              if (Array.isArray(files)) {
+                for (const f of files) {
+                  if (f && f.name) {
+                    const fullPath = sub ? `${sub}/${f.name}` : f.name;
+                    allFilePaths.push(fullPath);
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+
+        if (allFilePaths.length > 0) {
+          for (let i = 0; i < allFilePaths.length; i += 100) {
+            const chunk = allFilePaths.slice(i, i + 100);
             await fetch(`${url}/storage/v1/object/${b}`, {
               method: "DELETE",
               headers: supabaseHeaders(key),
-              body: JSON.stringify({ prefixes }),
+              body: JSON.stringify({ prefixes: chunk }),
               signal: AbortSignal.timeout(4000),
-            });
+            }).catch(() => {});
           }
+          logger.info(`[SupabaseSync] Deleted ${allFilePaths.length} objects from bucket ${b}`);
         }
       } catch (e) {
         logger.warn(`[SupabaseSync] Wipe bucket ${b} warning:`, e.message);
@@ -1870,5 +1890,48 @@ export async function getSupabaseSyncStatus() {
       comparison: [],
       isFullySynced: false,
     };
+  }
+}
+
+/**
+ * Delete a specific file from Supabase Storage and files index
+ */
+export async function deleteFileFromSupabaseStorage(fileId) {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured || !fileId) return;
+
+  try {
+    // 1. Delete from files table in Supabase
+    await fetch(`${url}/rest/v1/files?id=eq.${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(key),
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {});
+
+    // 2. Delete candidate prefixes from phonezone-uploads bucket
+    const candidatePrefixes = [
+      fileId,
+      `${fileId}.jpg`,
+      `${fileId}.png`,
+      `${fileId}.webp`,
+      `phones/${fileId}`,
+      `phones/${fileId}.jpg`,
+      `sellers/${fileId}`,
+      `dealers/${fileId}`,
+      `customers/${fileId}`,
+      `signatures/${fileId}`,
+      `signatures/${fileId}.png`,
+      `branding/${fileId}`,
+      `invoices/${fileId}`
+    ];
+
+    await fetch(`${url}/storage/v1/object/phonezone-uploads`, {
+      method: "DELETE",
+      headers: supabaseHeaders(key),
+      body: JSON.stringify({ prefixes: candidatePrefixes }),
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {});
+  } catch (err) {
+    logger.warn("[SupabaseSync] deleteFileFromSupabaseStorage error: " + err.message);
   }
 }

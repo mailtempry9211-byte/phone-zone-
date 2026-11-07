@@ -989,8 +989,9 @@ export function buildRouter() {
     setSafeFileHeaders(res, file.mime_type);
     res.type(file.mime_type).send(storage.readFile(file.relative_path));
   }));
-  r.delete("/files/:id", staff, wrap((req, res) => {
+  r.delete("/files/:id", staff, wrap(async (req, res) => {
     storage.deleteFile(req.params.id);
+    supabaseSync.deleteFileFromSupabaseStorage(req.params.id).catch(() => {});
     res.json({ ok: true });
   }));
   r.get("/storage/usage", staff, wrap((_req, res) => res.json(storage.storageUsage())));
