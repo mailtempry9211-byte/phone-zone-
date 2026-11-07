@@ -528,8 +528,11 @@ const DatabaseTab = () => {
       `[${new Date().toLocaleTimeString()}] Backup file selected: ${pendingRestoreFile.name} (${(pendingRestoreFile.size / (1024 * 1024)).toFixed(2)} MB)`,
       `[${new Date().toLocaleTimeString()}] Strategy: ${restoreStrategy === 'replace' ? 'Clean Replace' : 'Smart Merge'}`,
       `[${new Date().toLocaleTimeString()}] Restoring categories: ${isAll ? 'All Categories' : entitiesPayload.join(', ')}`,
-      `[${new Date().toLocaleTimeString()}] Initiating secure HTTP upload...`,
+      `[${new Date().toLocaleTimeString()}] Phase 1: Initiating secure upload to server...`,
     ]);
+
+    // Protect against accidental tab refresh during restore
+    window.onbeforeunload = () => 'Restore is in progress. Leaving or refreshing may interrupt your database restore.';
 
     const fd = new FormData();
     fd.append('backup', pendingRestoreFile);
@@ -544,32 +547,59 @@ const DatabaseTab = () => {
     xhr.timeout = 300000;
     xhr.withCredentials = true;
 
+    let stageTimer: any = null;
+
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         const percent = Math.round((event.loaded / event.total) * 100);
         const loadedMB = (event.loaded / (1024 * 1024)).toFixed(2);
         const totalMB = (event.total / (1024 * 1024)).toFixed(2);
         setRestoreUploadProgress(percent);
-        setRestoreStatusText(`Uploading file: ${percent}% (${loadedMB} MB / ${totalMB} MB)...`);
+        setRestoreStatusText(`Phase 1/2: Uploading file ${percent}% (${loadedMB} MB / ${totalMB} MB)...`);
       }
     };
 
     xhr.upload.onload = () => {
       setRestoreUploadProgress(100);
-      setRestoreStatusText('Upload complete! Server is extracting archive & restoring tables...');
+      setRestoreStatusText('Phase 2/2: Server extracting archive & restoring tables...');
       setRestoreLogs((prev) => [
         ...prev,
-        `[${new Date().toLocaleTimeString()}] Upload 100% complete!`,
-        `[${new Date().toLocaleTimeString()}] Server is now extracting archive and restoring SQLite tables...`,
+        `[${new Date().toLocaleTimeString()}] Phase 1 Complete: Upload 100% finished!`,
+        `[${new Date().toLocaleTimeString()}] Phase 2 Started: Server extracting archive & restoring SQLite tables...`,
+        `[${new Date().toLocaleTimeString()}] ⚠️ Please do not close or refresh this tab. Restoring safely...`,
       ]);
+
+      const steps = [
+        { text: '📦 Step 1/6: Unpacking archive & verifying SQLite integrity...', status: 'Extracting archive...' },
+        { text: '⚙️ Step 2/6: Restoring store branding, settings, and business profile...', status: 'Restoring Business Settings...' },
+        { text: '📱 Step 3/6: Restoring phones inventory, IMEI specs, and price lists...', status: 'Restoring Inventory...' },
+        { text: '👥 Step 4/6: Restoring customer directory, sellers, and dealer ledgers...', status: 'Restoring Stakeholders...' },
+        { text: '🛠️ Step 5/6: Restoring workshop repairs, job sheets, and history...', status: 'Restoring Workshop Repairs...' },
+        { text: '🖼️ Step 6/6: Synchronizing product photos, logos, and digital storage...', status: 'Synchronizing Media Storage...' },
+        { text: '⏳ Finalizing atomic transaction and indexing database...', status: 'Finalizing database transaction...' },
+      ];
+
+      let stepIdx = 0;
+      stageTimer = setInterval(() => {
+        if (stepIdx < steps.length) {
+          const s = steps[stepIdx];
+          setRestoreStatusText(`Phase 2/2: ${s.status}`);
+          setRestoreLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${s.text}`]);
+          stepIdx++;
+        }
+      }, 700);
     };
 
     xhr.onload = async () => {
+      if (stageTimer) clearInterval(stageTimer);
+      window.onbeforeunload = null;
+
       if (xhr.status >= 200 && xhr.status < 300) {
-        setRestoreStatusText('✅ Restore completed successfully!');
+        setRestoreUploadProgress(100);
+        setRestoreStatusText('✅ Phase 2/2: Restore completed successfully!');
         setRestoreLogs((prev) => [
           ...prev,
-          `[${new Date().toLocaleTimeString()}] ✅ Database tables & storage restored successfully!`,
+          `[${new Date().toLocaleTimeString()}] ✅ 100% Complete! All database tables & storage restored successfully!`,
           `[${new Date().toLocaleTimeString()}] Background cloud sync queued.`,
         ]);
         toast.success(
@@ -600,6 +630,8 @@ const DatabaseTab = () => {
     };
 
     xhr.onerror = () => {
+      if (stageTimer) clearInterval(stageTimer);
+      window.onbeforeunload = null;
       const err = 'Network connection lost during upload. Please check your internet connection.';
       setRestoreStatusText(`❌ ${err}`);
       setRestoreLogs((prev) => [
@@ -611,6 +643,8 @@ const DatabaseTab = () => {
     };
 
     xhr.ontimeout = () => {
+      if (stageTimer) clearInterval(stageTimer);
+      window.onbeforeunload = null;
       const err = 'Server took longer than expected. Please refresh the page to check if restore completed.';
       setRestoreStatusText(`⚠️ ${err}`);
       setRestoreLogs((prev) => [
@@ -1736,7 +1770,9 @@ const DatabaseTab = () => {
                   )}
                   {restoreStatusText}
                 </span>
-                <span className="font-mono font-bold text-xs text-indigo-900 dark:text-indigo-200">{restoreUploadProgress}%</span>
+                <span className="font-mono font-bold text-xs text-indigo-900 dark:text-indigo-200">
+                  {restoreUploadProgress < 100 ? `${restoreUploadProgress}% Uploaded` : 'Restoring Data...'}
+                </span>
               </div>
 
               {/* Visual Progress Bar */}
@@ -1749,12 +1785,18 @@ const DatabaseTab = () => {
                 />
               </div>
 
+              {/* Active Protection Notice when restoring */}
+              <div className="flex items-center gap-2 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1.5 rounded-md border border-amber-200 dark:border-amber-800/40">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span>Please do not refresh, close, or navigate away from this tab until restore completes.</span>
+              </div>
+
               {/* Real-Time Terminal Logs Output */}
-              <div className="bg-slate-900 text-slate-200 p-3 rounded-lg font-mono text-[11px] max-h-40 overflow-y-auto space-y-1 border border-slate-800 shadow-inner">
+              <div className="bg-slate-900 text-slate-200 p-3 rounded-lg font-mono text-[11px] max-h-48 overflow-y-auto space-y-1 border border-slate-800 shadow-inner">
                 {restoreLogs.map((log, idx) => (
                   <div key={idx} className="flex items-start gap-1.5 leading-relaxed">
                     <span className="text-slate-500 select-none">&gt;</span>
-                    <span className={log.includes('✅') ? 'text-emerald-400 font-bold' : log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('100%') ? 'text-amber-300 font-semibold' : 'text-slate-300'}>
+                    <span className={log.includes('✅') ? 'text-emerald-400 font-bold' : log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('⚠️') ? 'text-amber-300 font-semibold' : log.includes('Step') ? 'text-sky-300 font-medium' : 'text-slate-300'}>
                       {log}
                     </span>
                   </div>
