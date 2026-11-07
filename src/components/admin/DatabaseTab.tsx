@@ -17,6 +17,7 @@ import StorageManagementCard from "./StorageManagementCard";
 import { GoogleDriveBackupCard } from "./GoogleDriveBackupCard";
 import { DataRetentionCard } from "./DataRetentionCard";
 import { CloudQuotaMonitorCard } from "./CloudQuotaMonitorCard";
+import { RecycleBinDialog } from "./RecycleBinDialog";
 import { generateOfflineHTML, generateOfflineCSS } from "@/utils/offlineWebsiteGenerator";
 
 interface Message {
@@ -109,6 +110,9 @@ const DatabaseTab = () => {
   const [restoreLogs, setRestoreLogs] = useState<string[]>([]);
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [recycleBinOpen, setRecycleBinOpen] = useState(false);
+  const [recycleBinCount, setRecycleBinCount] = useState<number>(0);
+  const [deletePhotosWithRecords, setDeletePhotosWithRecords] = useState(false);
   const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [isPullingSupabase, setIsPullingSupabase] = useState(false);
@@ -318,6 +322,13 @@ const DatabaseTab = () => {
       setRepairCustomers(resolvedRepairCust);
       setDealers(resolvedDealers);
       setDealerBatches(resolvedBatches);
+
+      fetch('/api/recycle-bin', { credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d) setRecycleBinCount(d.count || 0);
+        })
+        .catch(() => {});
 
       setSelectedPhones(phonesData.map((p: any) => p.id));
       setSelectedSellers(sellersData.map((s: any) => s.id));
@@ -926,12 +937,15 @@ const DatabaseTab = () => {
 
   const deleteSelectedData = async () => {
     try {
-      // Delete selected records through the backend API so soft-deletes
-      // (archived_at) are applied instead of hard DELETEs.
+      // If deletePhotosWithRecords is true, passes deleteMedia=true to permanently purge records + photos.
+      // Otherwise, soft-deletes into the Recycle Bin (15 days on Render / 30 days on Desktop) with 1-click restore.
+      const mediaParam = deletePhotosWithRecords ? "?deleteMedia=true" : "";
+      const mediaHeaders = { "x-delete-media": deletePhotosWithRecords ? "true" : "false" };
+
       const deleteOps = [
-        ...selectedPhones.map(id => fetch(`/api/phones/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" })),
-        ...selectedSellers.map(id => fetch(`/api/sellers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" })),
-        ...selectedCustomers.map(id => fetch(`/api/customers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" })),
+        ...selectedPhones.map(id => fetch(`/api/phones/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders })),
+        ...selectedSellers.map(id => fetch(`/api/sellers/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders })),
+        ...selectedCustomers.map(id => fetch(`/api/customers/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders })),
         ...selectedMessages.map(id => fetch(`/api/messages/${encodeURIComponent(id)}/read`, { method: "PUT", credentials: "include" })),
       ].filter(Boolean);
 
@@ -953,7 +967,11 @@ const DatabaseTab = () => {
 
       await fetchData();
       await calculateStorageUsage();
-      toast.success('Selected data deleted successfully');
+      if (deletePhotosWithRecords) {
+        toast.success('Selected data and linked photos permanently deleted.');
+      } else {
+        toast.success('Selected data moved to Recycle Bin (safe recovery window available).');
+      }
     } catch (error) {
       console.error('Error deleting selected data:', error);
       toast.error('Failed to delete selected data');
@@ -961,12 +979,16 @@ const DatabaseTab = () => {
   };
 
   const deleteAllData = async () => {
-    if (!confirm("Are you sure you want to archive ALL data? This cannot be undone. Phones, sellers and customers will be soft-deleted (archived_at). Messages will be marked as read. You can restore from a backup if needed.")) return;
+    const confirmMsg = deletePhotosWithRecords
+      ? "⚠️ PERMANENT WIPE WARNING:\n\nAre you sure you want to permanently delete ALL data AND their photos from storage and Supabase Cloud?\n\nThis action CANNOT be undone."
+      : "Move ALL data to Recycle Bin? You will have a safe recovery window (15 days on Render / 30 days on Desktop) to restore records anytime.";
+
+    if (!confirm(confirmMsg)) return;
 
     try {
-      // Operate on everything currently loaded in this tab, via the backend
-      // soft-delete endpoints. That is the same path the row-level "delete"
-      // buttons use, so FK protection + audit logging still apply.
+      const mediaParam = deletePhotosWithRecords ? "?deleteMedia=true" : "";
+      const mediaHeaders = { "x-delete-media": deletePhotosWithRecords ? "true" : "false" };
+
       const ids = {
         phones: selectedPhones.length > 0 ? selectedPhones : phones.map((p) => p.id),
         sellers: selectedSellers.length > 0 ? selectedSellers : sellers.map((s) => s.id),
@@ -975,13 +997,13 @@ const DatabaseTab = () => {
 
       const ops = [
         ...ids.phones.map((id) =>
-          fetch(`/api/phones/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }),
+          fetch(`/api/phones/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders }),
         ),
         ...ids.sellers.map((id) =>
-          fetch(`/api/sellers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }),
+          fetch(`/api/sellers/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders }),
         ),
         ...ids.customers.map((id) =>
-          fetch(`/api/customers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }),
+          fetch(`/api/customers/${encodeURIComponent(id)}${mediaParam}`, { method: "DELETE", credentials: "include", headers: mediaHeaders }),
         ),
       ];
 
@@ -1011,7 +1033,11 @@ const DatabaseTab = () => {
 
       await fetchData();
       await calculateStorageUsage();
-      toast.success('All data archived successfully. Your files are still in storage.');
+      if (deletePhotosWithRecords) {
+        toast.success('All data and linked photos permanently purged.');
+      } else {
+        toast.success('All data moved to Recycle Bin. You can restore records anytime.');
+      }
     } catch (error) {
       console.error('Error archiving all data:', error);
       toast.error('Failed to archive data');
@@ -2212,6 +2238,43 @@ const DatabaseTab = () => {
         </CardContent>
       </Card>
 
+      {/* PhoneZone Recycle Bin (Trash & Safe Restore) */}
+      <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-slate-900 to-slate-900 shadow-md">
+        <CardHeader className="py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                <RotateCcw className="h-6 w-6" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                  PhoneZone Recycle Bin (रीसायकल बिन)
+                  {recycleBinCount > 0 ? (
+                    <Badge className="bg-emerald-600 text-white text-xs px-2 py-0.5">
+                      {recycleBinCount} Deleted {recycleBinCount === 1 ? 'Item' : 'Items'} Safe
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-slate-700 text-slate-400 text-xs px-2 py-0.5">
+                      Empty
+                    </Badge>
+                  )}
+                </CardTitle>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Deleted phones, repairs, customers, sellers &amp; dealers are kept safe here with 1-click restore. Auto-purged after 15 days on Render / 30 days on Desktop.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => setRecycleBinOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-4 shrink-0 shadow-md flex items-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Open Recycle Bin ({recycleBinCount})
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
       {/* Delete Controls */}
       <Card>
         <CardHeader>
@@ -2221,6 +2284,27 @@ const DatabaseTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Checkbox for deleting photos along with records */}
+          <div className="flex items-start space-x-2.5 p-3 rounded-lg border border-red-500/20 bg-red-950/20">
+            <Checkbox
+              id="delete-photos-records"
+              checked={deletePhotosWithRecords}
+              onCheckedChange={(checked) => setDeletePhotosWithRecords(!!checked)}
+              className="mt-0.5 border-red-500/50 data-[state=checked]:bg-red-600"
+            />
+            <label
+              htmlFor="delete-photos-records"
+              className="text-xs text-slate-300 cursor-pointer select-none space-y-0.5"
+            >
+              <span className="font-semibold text-red-400 block">
+                Delete Photos along with Records (साथ में फ़ोटो और डाक्यूमेंट्स भी स्टोरेज और क्लाउड से हमेशा के लिए डिलीट करें)
+              </span>
+              <span className="text-[11px] text-slate-400 block leading-relaxed">
+                When checked, linked product photos, bill scans, and KYC Aadhaar images will be permanently erased from disk and Supabase Cloud storage to free up quota. If unchecked, records go to the <strong>Recycle Bin</strong> for safe recovery.
+              </span>
+            </label>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-2">
             {/* Button lives OUTSIDE AlertDialog - Radix only accepts AlertDialogTrigger as child */}
             <Button 
@@ -2230,15 +2314,19 @@ const DatabaseTab = () => {
               onClick={() => setDeleteSelectedOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected Data
+              {deletePhotosWithRecords ? "Permanently Delete Selected" : "Move Selected to Recycle Bin"}
             </Button>
             <AlertDialog open={deleteSelectedOpen} onOpenChange={setDeleteSelectedOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Selected Data</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {deletePhotosWithRecords ? "Permanently Delete Selected Data & Photos" : "Move Selected Data to Recycle Bin"}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete the selected data. This action cannot be undone.
-                    <br />
+                    {deletePhotosWithRecords
+                      ? "This will permanently destroy the selected data AND wipe all linked photos from storage and Supabase Cloud. This action cannot be undone."
+                      : "This will move the selected items to the Recycle Bin. You can restore them anytime within the retention period."}
+                    <br /><br />
                     Selected: {selectedPhones.length} phones, {selectedSellers.length} sellers, 
                     {selectedCustomers.length} customers, {selectedMessages.length} messages
                   </AlertDialogDescription>
@@ -2252,7 +2340,7 @@ const DatabaseTab = () => {
                     }} 
                     className="bg-red-600 hover:bg-red-700"
                   >
-                    Delete Selected
+                    {deletePhotosWithRecords ? "Permanently Delete" : "Move to Recycle Bin"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -2264,16 +2352,18 @@ const DatabaseTab = () => {
               onClick={() => setDeleteAllOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Archive All Data
+              {deletePhotosWithRecords ? "Permanently Purge All Data" : "Move All to Recycle Bin"}
             </Button>
             <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Archive All Data</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {deletePhotosWithRecords ? "Permanently Purge ALL Data & Photos" : "Move ALL Data to Recycle Bin"}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will soft-delete (archive) every phone, seller and customer currently loaded in this tab.
-                    Messages will be marked as read. Files in storage are kept. You can restore from a backup if needed.
-                    This action cannot be undone.
+                    {deletePhotosWithRecords
+                      ? "This will permanently wipe all phones, sellers, customers, and their photos from disk storage and Supabase Cloud. This action CANNOT be undone."
+                      : "This will move all loaded records to the Recycle Bin. You can restore them anytime with 1-click within the retention period (15 days on Render / 30 days on Desktop)."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -2285,7 +2375,7 @@ const DatabaseTab = () => {
                     }} 
                     className="bg-red-600 hover:bg-red-700"
                   >
-                    Archive All Data
+                    {deletePhotosWithRecords ? "Permanently Purge All" : "Move All to Recycle Bin"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -2293,6 +2383,16 @@ const DatabaseTab = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Recycle Bin Dialog */}
+      <RecycleBinDialog
+        open={recycleBinOpen}
+        onOpenChange={setRecycleBinOpen}
+        onActionComplete={async () => {
+          await fetchData();
+          await calculateStorageUsage();
+        }}
+      />
     </div>
   );
 };

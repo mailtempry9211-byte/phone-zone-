@@ -396,6 +396,76 @@ export function deleteFile(id) {
   getDb().prepare("DELETE FROM files WHERE id = ?").run(id);
 }
 
+/**
+ * Permanently delete linked photo/file from local disk storage, SQLite files index,
+ * and Supabase Cloud storage bucket to free maximum storage quota.
+ */
+export function deleteMediaByUrlOrPath(urlOrPath) {
+  if (!urlOrPath || typeof urlOrPath !== "string") return;
+  const s = urlOrPath.trim();
+  const db = getDb();
+
+  // 1. If it's a files table UUID: /api/files/<uuid> or /api/public/files/<uuid>
+  const uuidMatch = s.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) {
+    const fileId = uuidMatch[0];
+    try {
+      deleteFile(fileId);
+    } catch {}
+    try {
+      import("./supabaseSyncService.js").then((m) => m.deleteFileFromSupabaseStorage(fileId)).catch(() => {});
+    } catch {}
+  }
+
+  // 2. Extract relative path or filename
+  const cleanPath = s
+    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/^\/?(?:api\/)?(?:pg\/)?storage\/object\/(?:public\/)?[^/]+\//i, "")
+    .replace(/^\/?storage\//i, "")
+    .replace(/^\/+/, "");
+
+  if (cleanPath) {
+    const filename = path.basename(cleanPath);
+    // Delete candidate local files on disk
+    const candidatePaths = [
+      path.join(PATHS.storageDir, cleanPath),
+      path.join(PATHS.storageDir, "buckets", "phonezone-uploads", cleanPath),
+      path.join(PATHS.storageDir, "product-photos", filename),
+      path.join(PATHS.storageDir, "phones", filename),
+      path.join(PATHS.storageDir, "sellers", filename),
+      path.join(PATHS.storageDir, "customers", filename),
+      path.join(PATHS.storageDir, "signatures", filename),
+      path.join(PATHS.storageDir, "dealers", filename),
+      path.join(PATHS.storageDir, "invoices", filename),
+    ];
+    for (const p of candidatePaths) {
+      try {
+        if (fs.existsSync(p)) fs.rmSync(p, { force: true });
+      } catch {}
+    }
+
+    // Delete from SQLite files index
+    try {
+      db.prepare("DELETE FROM files WHERE relative_path LIKE ? OR relative_path LIKE ?").run(`%${cleanPath}%`, `%${filename}%`);
+    } catch {}
+
+    // Delete from Supabase Storage
+    try {
+      import("./supabaseSyncService.js").then((m) => {
+        m.deleteObjectFromSupabaseStorage("phonezone-uploads", [
+          cleanPath,
+          filename,
+          `phones/${filename}`,
+          `product-photos/${filename}`,
+          `sellers/${filename}`,
+          `customers/${filename}`,
+          `dealers/${filename}`
+        ]).catch(() => {});
+      }).catch(() => {});
+    } catch {}
+  }
+}
+
 /** Delete every file belonging to a record (storage hygiene on record delete). */
 export function deleteFilesFor(ownerType, ownerId) {
   const rows = getDb().prepare("SELECT id FROM files WHERE owner_type = ? AND owner_id = ?").all(ownerType, ownerId);

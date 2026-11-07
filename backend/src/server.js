@@ -202,6 +202,14 @@ if (isMain) {
       .then((m) => m.ensureEmbeddedTacLoaded().catch((err) => logger.warn("TAC auto-load error", err)))
       .catch(() => {});
 
+    // Recycle Bin auto-purge worker (15 days on Render / 30 days on Desktop)
+    import("./services/recycleBinService.js")
+      .then((m) => {
+        m.autoPurgeExpiredRecycleBin().catch(() => {});
+        setInterval(() => m.autoPurgeExpiredRecycleBin().catch(() => {}), 12 * 60 * 60 * 1000);
+      })
+      .catch(() => {});
+
     // Automated keep-alive pinger for Render / cloud hosting (pings /api/health every 10 min)
     const keepAliveUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
     if (keepAliveUrl) {

@@ -1912,6 +1912,23 @@ export async function getSupabaseSyncStatus() {
 /**
  * Delete a specific file from Supabase Storage and files index
  */
+export async function deleteObjectFromSupabaseStorage(bucket = "phonezone-uploads", prefixes = []) {
+  const { url, key, isConfigured } = getSupabaseConfig();
+  if (!isConfigured || !prefixes || prefixes.length === 0) return;
+  try {
+    const validPrefixes = Array.isArray(prefixes) ? prefixes.filter(Boolean) : [prefixes];
+    if (validPrefixes.length === 0) return;
+    await fetch(`${url}/storage/v1/object/${bucket}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(key),
+      body: JSON.stringify({ prefixes: validPrefixes }),
+      signal: AbortSignal.timeout(4000),
+    }).catch(() => {});
+  } catch (err) {
+    logger.warn(`[SupabaseSync] deleteObjectFromSupabaseStorage warning: ${err.message}`);
+  }
+}
+
 export async function deleteFileFromSupabaseStorage(fileId) {
   const { url, key, isConfigured } = getSupabaseConfig();
   if (!isConfigured || !fileId) return;

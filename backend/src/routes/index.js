@@ -21,6 +21,7 @@ import * as dashboardService from "../services/dashboardService.js";
 import * as ngrokService from "../services/ngrokService.js";
 import * as googleDrive from "../services/googleDriveService.js";
 import * as retention from "../services/dataRetentionService.js";
+import * as recycleBin from "../services/recycleBinService.js";
 import * as supabaseSync from "../services/supabaseSyncService.js";
 import { getLiveQuotaMetrics } from "../services/quotaService.js";
 import * as licenseService from "../services/licenseService.js";
@@ -770,11 +771,17 @@ export function buildRouter() {
       supabaseSync.triggerBackgroundSync();
       res.json(person);
     }));
-    r.delete(`${base}/:id`, staff, wrap((req, res) => {
-      people.archivePerson(kind, req.params.id, req.user.id);
-      supabaseSync.deleteRowFromSupabase(table, req.params.id).catch(() => {});
-      supabaseSync.triggerBackgroundSync();
-      res.json({ ok: true, archived: true });
+    r.delete(`${base}/:id`, staff, wrap(async (req, res) => {
+      const deleteMedia = req.query.deleteMedia === "true" || req.headers["x-delete-media"] === "true";
+      if (deleteMedia) {
+        await recycleBin.permanentlyDeleteItem(kind, req.params.id, req.user?.id);
+        res.json({ ok: true, permanentlyDeleted: true });
+      } else {
+        people.archivePerson(kind, req.params.id, req.user.id);
+        supabaseSync.deleteRowFromSupabase(table, req.params.id).catch(() => {});
+        supabaseSync.triggerBackgroundSync();
+        res.json({ ok: true, archived: true });
+      }
     }));
   }
   r.get("/customers/:id/history", staff, wrap((req, res) => res.json(people.customerHistory(req.params.id))));
@@ -805,11 +812,17 @@ export function buildRouter() {
     supabaseSync.triggerBackgroundSync();
     res.json(d);
   }));
-  r.delete("/dealers/:id", staff, wrap((req, res) => {
-    const d = dealers.deleteDealer(req.params.id, req.user.id);
-    supabaseSync.deleteRowFromSupabase("dealers", req.params.id).catch(() => {});
-    supabaseSync.triggerBackgroundSync();
-    res.json(d);
+  r.delete("/dealers/:id", staff, wrap(async (req, res) => {
+    const deleteMedia = req.query.deleteMedia === "true" || req.headers["x-delete-media"] === "true";
+    if (deleteMedia) {
+      await recycleBin.permanentlyDeleteItem("dealer", req.params.id, req.user?.id);
+      res.json({ ok: true, permanentlyDeleted: true });
+    } else {
+      const d = dealers.deleteDealer(req.params.id, req.user.id);
+      supabaseSync.deleteRowFromSupabase("dealers", req.params.id).catch(() => {});
+      supabaseSync.triggerBackgroundSync();
+      res.json(d);
+    }
   }));
   r.post("/dealers/batch-purchase", staff, wrap((req, res) => {
     const b = dealers.createBatchPurchase(req.body, req.user.id);
@@ -912,11 +925,17 @@ export function buildRouter() {
     supabaseSync.triggerBackgroundSync();
     res.json(p);
   }));
-  r.delete("/phones/:id", staff, wrap((req, res) => {
-    inventory.archivePhone(req.params.id, req.user.id);
-    supabaseSync.deleteRowFromSupabase("phones", req.params.id).catch(() => {});
-    supabaseSync.triggerBackgroundSync();
-    res.json({ ok: true, archived: true });
+  r.delete("/phones/:id", staff, wrap(async (req, res) => {
+    const deleteMedia = req.query.deleteMedia === "true" || req.headers["x-delete-media"] === "true";
+    if (deleteMedia) {
+      await recycleBin.permanentlyDeleteItem("phone", req.params.id, req.user?.id);
+      res.json({ ok: true, permanentlyDeleted: true });
+    } else {
+      inventory.archivePhone(req.params.id, req.user.id);
+      supabaseSync.deleteRowFromSupabase("phones", req.params.id).catch(() => {});
+      supabaseSync.triggerBackgroundSync();
+      res.json({ ok: true, archived: true });
+    }
   }));
   r.post("/sales", staff, wrap((req, res) => {
     const s = inventory.sellPhone(req.body?.phone_id, req.body, req.user.id);
@@ -975,9 +994,15 @@ export function buildRouter() {
   r.get("/repairs/:id", staff, wrap((req, res) => res.json(repairs.getRepair(req.params.id))));
   r.post("/repairs", staff, wrap((req, res) => res.status(201).json(repairs.createRepair(req.body, req.user.id))));
   r.put("/repairs/:id", staff, wrap((req, res) => res.json(repairs.updateRepair(req.params.id, req.body, req.user.id))));
-  r.delete("/repairs/:id", staff, wrap((req, res) => {
-    repairs.archiveRepair(req.params.id, req.user.id);
-    res.json({ ok: true, archived: true });
+  r.delete("/repairs/:id", staff, wrap(async (req, res) => {
+    const deleteMedia = req.query.deleteMedia === "true" || req.headers["x-delete-media"] === "true";
+    if (deleteMedia) {
+      await recycleBin.permanentlyDeleteItem("repair", req.params.id, req.user?.id);
+      res.json({ ok: true, permanentlyDeleted: true });
+    } else {
+      repairs.archiveRepair(req.params.id, req.user.id);
+      res.json({ ok: true, archived: true });
+    }
   }));
 
   // ---------------- files ----------------
@@ -1165,6 +1190,31 @@ export function buildRouter() {
         logger.warn("[Restore] Post-restore background Supabase sync warning:", e.message);
       }
     });
+  }));
+
+  // ---------------- recycle bin (trash & 15/30-day restore) ----------------
+  r.get("/recycle-bin", staff, wrap((_req, res) => {
+    res.json(recycleBin.listRecycleBin());
+  }));
+  r.post("/recycle-bin/restore", staff, wrap(async (req, res) => {
+    const { type, id } = req.body || {};
+    if (!type || !id) throw badRequest("Item type and ID are required to restore.");
+    const result = await recycleBin.restoreRecycleItem(type, id, req.user?.id);
+    res.json(result);
+  }));
+  r.post("/recycle-bin/permanent-delete", staff, wrap(async (req, res) => {
+    const { type, id } = req.body || {};
+    if (!type || !id) throw badRequest("Item type and ID are required for permanent deletion.");
+    const result = await recycleBin.permanentlyDeleteItem(type, id, req.user?.id);
+    res.json(result);
+  }));
+  r.post("/recycle-bin/empty", staff, wrap(async (req, res) => {
+    const result = await recycleBin.emptyRecycleBin(req.user?.id);
+    res.json(result);
+  }));
+  r.post("/recycle-bin/auto-purge", staff, wrap(async (_req, res) => {
+    const result = await recycleBin.autoPurgeExpiredRecycleBin();
+    res.json(result);
   }));
 
   // ---------------- supabase cloud database sync ----------------
