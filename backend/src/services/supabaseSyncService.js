@@ -481,6 +481,20 @@ export async function pushAllToSupabase() {
       if (repCust.length > 0) {
         const r = await pushBatchToSupabase("repair_customers", repCust);
         results.repair_customers = r.count;
+
+        // Dual-protect repair customers by also syncing into public.customers
+        // (Guarantees cloud visibility even if repair_customers has missing RLS policy)
+        const custMirror = repCust.map((rc) => ({
+          id: rc.id,
+          name: rc.name,
+          phone: rc.phone,
+          address: rc.address || "",
+          id_proof_type: rc.id_proof_type || "repair_customer",
+          id_number: rc.id_number || "",
+          created_at: rc.created_at,
+          updated_at: rc.updated_at,
+        }));
+        await pushBatchToSupabase("customers", custMirror).catch(() => {});
       }
     } catch (e) { logger.warn("[SupabaseSync] repair_customers sync:", e.message); }
 
@@ -1172,6 +1186,32 @@ export async function syncFromSupabaseOnBoot() {
             counts.repair_customers++;
           } catch {}
         }
+      }
+
+      // Fallback: If repair_customers table was empty or blocked by RLS, check mirrored customers
+      if (counts.repair_customers === 0) {
+        try {
+          const mirrorRes = await fetch(`${url}/rest/v1/customers?id_proof_type=eq.repair_customer&select=*`, {
+            headers: { apikey: key, Authorization: `Bearer ${key}` },
+            signal: AbortSignal.timeout(4000),
+          });
+          if (mirrorRes.ok) {
+            const mirrored = await mirrorRes.json().catch(() => []);
+            for (const rc of mirrored) {
+              try {
+                db.prepare(`
+                  INSERT INTO repair_customers (id, name, phone, address, id_proof_type, id_number, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO UPDATE SET name = excluded.name, phone = excluded.phone
+                `).run(
+                  rc.id, rc.name, rc.phone, rc.address || "", rc.id_proof_type || "aadhaar",
+                  rc.id_number || "", rc.created_at || new Date().toISOString(), rc.updated_at || new Date().toISOString()
+                );
+                counts.repair_customers++;
+              } catch {}
+            }
+          }
+        } catch {}
       }
     } catch {}
 

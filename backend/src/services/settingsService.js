@@ -40,7 +40,12 @@ const WHATSAPP_CHANNELS = new Set(["click_to_chat", "openwa", "evolution_api", "
 const empty = (v) => (v === undefined || v === null ? "" : String(v));
 
 export function getRawSettings() {
-  return getDb().prepare(`SELECT * FROM admin_settings WHERE id = ?`).get(SETTINGS_ID) || null;
+  const db = getDb();
+  let row = db.prepare(`SELECT * FROM admin_settings WHERE id = ?`).get(SETTINGS_ID);
+  if (!row) {
+    row = db.prepare(`SELECT * FROM admin_settings LIMIT 1`).get();
+  }
+  return row || null;
 }
 
 function parseHours(raw) {

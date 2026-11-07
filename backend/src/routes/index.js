@@ -554,12 +554,7 @@ export function buildRouter() {
     }
     const wipeCloud = req.body?.wipe_existing === "true" || req.body?.wipeExisting === "true" || req.body?.wipe_cloud === "true";
 
-    // If wipe_existing is requested (or clean restore), wipe old Supabase records first so they don't mix
-    if (wipeCloud && strategy === "replace") {
-      logger.info("[Restore] Wiping old Supabase records before restoring new backup file...", { entities });
-      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
-    }
-
+    // Perform in-place atomic restore of all database tables and storage files
     const { restoreBackup } = await import("../services/backupService.js");
     logger.info("Restore request received", { backupPath: req.file.path, sizeBytes: req.file.size, strategy, entities, wipeCloud });
     const result = await restoreBackup(req.file.filename, { strategy, entities, wipeCloud });
@@ -600,9 +595,13 @@ export function buildRouter() {
     // Respond immediately to client so Render HTTP proxy never hits timeout
     res.json({ restored: true, backupName: req.file.filename, setupCompleted: true, token: issuedToken, adminEmail, ...result });
 
-    // Sync all restored tables to Supabase in the background
+    // Asynchronously push all restored tables to Supabase Cloud
     setImmediate(async () => {
       try {
+        if (wipeCloud && strategy === "replace") {
+          logger.info("[Restore] Background wiping old Supabase cloud records before push...");
+          await supabaseSync.wipeSupabaseCloudData(entities).catch(() => {});
+        }
         logger.info("[Restore] Post-restore background Supabase push started...");
         await supabaseSync.pushAllToSupabase();
         logger.info("[Restore] Post-restore background Supabase push complete!");

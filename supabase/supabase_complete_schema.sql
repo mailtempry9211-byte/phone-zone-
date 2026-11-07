@@ -300,6 +300,9 @@ BEGIN
     DROP POLICY IF EXISTS "Public access to phones" ON public.phones;
     CREATE POLICY "Public access to phones" ON public.phones FOR ALL USING (true) WITH CHECK (true);
 
+    DROP POLICY IF EXISTS "Public access to repair_customers" ON public.repair_customers;
+    CREATE POLICY "Public access to repair_customers" ON public.repair_customers FOR ALL USING (true) WITH CHECK (true);
+
     DROP POLICY IF EXISTS "Public access to repair_jobs" ON public.repair_jobs;
     CREATE POLICY "Public access to repair_jobs" ON public.repair_jobs FOR ALL USING (true) WITH CHECK (true);
 
@@ -317,6 +320,9 @@ BEGIN
 
     DROP POLICY IF EXISTS "Public access to audit_logs" ON public.audit_logs;
     CREATE POLICY "Public access to audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "Public access to user_roles" ON public.user_roles;
+    CREATE POLICY "Public access to user_roles" ON public.user_roles FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ----------------------------------------------------------------------------

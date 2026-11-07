@@ -54,6 +54,52 @@ const SettingsTab = () => {
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
     queryFn: async () => {
+      // 1. Prioritize reading verified settings from local backend API
+      try {
+        const res = await fetch('/api/settings', { credentials: 'include' });
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && (apiData.businessName || apiData.business_name)) {
+            return {
+              id: '00000000-0000-0000-0000-000000000001',
+              business_name: apiData.businessName || apiData.business_name || '',
+              business_tagline: apiData.businessTagline || apiData.business_tagline || '',
+              owner_name: apiData.ownerName || apiData.owner_name || '',
+              address: apiData.address || '',
+              phone_primary: apiData.primaryPhone || apiData.phone_primary || '',
+              phone_secondary: apiData.secondaryPhone || apiData.phone_secondary || '',
+              email: apiData.email || '',
+              instagram: (apiData.instagram || '').replace(/^@+/, ''),
+              logo_url: apiData.logoUrl || apiData.logo_url || '',
+              signature_url: apiData.signatureUrl || apiData.signature_url || '',
+              udyam_number: apiData.udyamNumber || apiData.udyam_number || '',
+              udyam_verified: !!apiData.udyamVerified,
+              google_business_url: apiData.googleBusinessUrl || apiData.google_business_url || '',
+              google_business_verified: !!apiData.googleBusinessVerified,
+              show_google_business: !!apiData.showGoogleBusiness,
+              terms_and_conditions: apiData.termsAndConditions || apiData.terms_and_conditions || '',
+              terms_and_conditions_sale: apiData.termsAndConditionsSale || apiData.terms_and_conditions_sale || '',
+              terms_and_conditions_purchase: apiData.termsAndConditionsPurchase || apiData.terms_and_conditions_purchase || '',
+              bank_name: apiData.bankName || apiData.bank_name || '',
+              account_holder_name: apiData.accountHolderName || apiData.account_holder_name || '',
+              account_number: apiData.accountNumber || apiData.account_number || '',
+              ifsc_code: apiData.ifscCode || apiData.ifsc_code || '',
+              whatsapp_number: apiData.whatsappNumber || apiData.whatsapp_number || '',
+              whatsapp_channel: apiData.whatsappChannel || apiData.whatsapp_channel || 'click_to_chat',
+              evolution_api_url: apiData.evolutionApiUrl || apiData.evolution_api_url || '',
+              evolution_api_key: apiData.evolutionApiKey || apiData.evolution_api_key || '',
+              evolution_instance_name: apiData.evolutionInstanceName || apiData.evolution_instance_name || 'phonezone',
+              tac_fetch_mode: apiData.tacFetchMode || apiData.tac_fetch_mode || 'ask',
+              supabase_url: apiData.supabaseUrl || apiData.supabase_url || 'https://rkhzhozrslrfsqlpgjav.supabase.co',
+              supabase_anon_key: apiData.supabaseAnonKey || apiData.supabase_anon_key || '',
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Could not read from /api/settings:', err);
+      }
+
+      // 2. Fallback to Supabase query
       const { data, error } = await supabase
         .from('admin_settings')
         .select('*')

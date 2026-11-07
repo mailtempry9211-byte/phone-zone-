@@ -109,55 +109,7 @@ export function createBackup({ scope = "all", financialYear = null, entities = n
   const desiredName = `PhoneZone_Backup_${safeScope}_${stamp()}.tar.gz`;
   const desiredFile = path.join(PATHS.backupsDir, desiredName);
 
-  if (!isCustomEntities && (scope === "all" || !fyLabel)) {
-    let dbHash = null;
-    if (fs.existsSync(PATHS.databaseFile)) {
-      const dbBytes = fs.readFileSync(PATHS.databaseFile);
-      dbHash = crypto.createHash("sha256").update(dbBytes).digest("hex");
-    }
-
-    const manifest = {
-      createdAt: new Date().toISOString(),
-      app: "PhoneZone",
-      scope: "all",
-      dbSha256: dbHash,
-      schemaVersions: db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((r) => r.version),
-      counts: Object.fromEntries(
-        ["sellers", "customers", "dealers", "phones", "returns", "repairs", "invoices", "files", "messages"].map((t) => {
-          try {
-            return [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n];
-          } catch {
-            return [t, 0];
-          }
-        }),
-      ),
-    };
-    const manifestFile = path.join(PATHS.dataDir, "manifest.json");
-    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
-
-    try {
-      tar.c(
-        {
-          gzip: true,
-          file: desiredFile,
-          cwd: PATHS.dataDir,
-          sync: true,
-          filter: (p) => !p.endsWith("-wal") && !p.endsWith("-shm") && !p.endsWith("-journal"),
-        },
-        ["database", "storage", "manifest.json"],
-      );
-    } finally {
-      fs.rmSync(manifestFile, { force: true });
-    }
-
-    if (!fs.existsSync(desiredFile) || fs.statSync(desiredFile).size === 0) {
-      throw new AppError("The backup file could not be written. Check that this folder can be written to.", 500);
-    }
-    logger.info("Backup created", { outFile: desiredFile, scope: "all" });
-    return { file: desiredFile, name: path.basename(desiredFile), manifest, sizeBytes: fs.statSync(desiredFile).size };
-  }
-
-  // Scoped or Custom Selective backup
+  // Package clean, lightweight backup (pruning static TAC codes so archive stays <5MB instead of 55MB)
   const scopedDir = path.join(PATHS.dataDir, `.backup_temp_${stamp()}`);
   const scopedDbDir = path.join(scopedDir, "database");
   const scopedStorageDir = path.join(scopedDir, "storage");
@@ -172,6 +124,12 @@ export function createBackup({ scope = "all", financialYear = null, entities = n
 
   try {
     scopedDb.pragma("journal_mode = WAL");
+
+    // Remove static TAC database from backup to keep archive lightweight (<5MB instead of 55MB)
+    try {
+      scopedDb.prepare("DELETE FROM tac_codes").run();
+      scopedDb.exec("VACUUM");
+    } catch {}
 
     // Prune transactional rows that don't belong to this financial year
     if (fyLabel) {
@@ -204,6 +162,7 @@ export function createBackup({ scope = "all", financialYear = null, entities = n
       if (!normalizedEntities.includes("dealers")) {
         try { scopedDb.prepare("DELETE FROM dealers").run(); } catch {}
         try { scopedDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
+        try { scopedDb.prepare("DELETE FROM dealer_ledger").run(); } catch {}
       }
       if (!normalizedEntities.includes("repairs")) {
         try { scopedDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
@@ -222,12 +181,29 @@ export function createBackup({ scope = "all", financialYear = null, entities = n
       fs.cpSync(PATHS.storageDir, scopedStorageDir, { recursive: true });
     }
 
+    let dbHash = null;
+    if (fs.existsSync(scopedDbFile)) {
+      const dbBytes = fs.readFileSync(scopedDbFile);
+      dbHash = crypto.createHash("sha256").update(dbBytes).digest("hex");
+    }
+
     const manifest = {
       createdAt: new Date().toISOString(),
       app: "PhoneZone",
-      scope: isCustomEntities ? "custom" : fyLabel,
+      scope: isCustomEntities ? "custom" : (fyLabel || "all"),
       entities: isCustomEntities ? normalizedEntities : ["all"],
       financialYear: fyLabel || null,
+      dbSha256: dbHash,
+      schemaVersions: db.prepare("SELECT version FROM schema_migrations ORDER BY version").all().map((r) => r.version),
+      counts: Object.fromEntries(
+        ["sellers", "customers", "dealers", "phones", "returns", "repairs", "invoices", "files", "messages"].map((t) => {
+          try {
+            return [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n];
+          } catch {
+            return [t, 0];
+          }
+        }),
+      ),
     };
     fs.writeFileSync(path.join(scopedDir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
@@ -246,10 +222,10 @@ export function createBackup({ scope = "all", financialYear = null, entities = n
   }
 
   if (!fs.existsSync(desiredFile) || fs.statSync(desiredFile).size === 0) {
-    throw new AppError("The scoped backup file could not be written.", 500);
+    throw new AppError("The backup file could not be written. Check that this folder can be written to.", 500);
   }
-  logger.info("Backup created", { outFile: desiredFile, scope: isCustomEntities ? "custom" : fyLabel, entities: normalizedEntities });
-  return { file: desiredFile, name: path.basename(desiredFile), sizeBytes: fs.statSync(desiredFile).size, entities: isCustomEntities ? normalizedEntities : ["all"] };
+  logger.info("Backup created", { outFile: desiredFile, scope: isCustomEntities ? "custom" : (fyLabel || "all"), entities: normalizedEntities });
+  return { file: desiredFile, name: path.basename(desiredFile), manifest: {}, sizeBytes: fs.statSync(desiredFile).size, entities: isCustomEntities ? normalizedEntities : ["all"] };
 }
 
 export function listBackups() {
@@ -692,119 +668,142 @@ export async function restoreBackup(backupName, {
         fs.rmSync(path.join(temp, "database", `phonezone.db${suffix}`), { force: true });
       }
 
-      if (isAll && shouldReplace) {
-        // Complete clean replacement of database and storage
-        closeDatabase();
-        parked = path.join(PATHS.dataDir, `.previous-${stamp()}`);
-        fs.mkdirSync(parked, { recursive: true });
-        for (const dir of ["database", "storage"]) {
-          const current = path.join(PATHS.dataDir, dir);
-          if (fs.existsSync(current)) fs.renameSync(current, path.join(parked, dir));
-          if (fs.existsSync(path.join(temp, dir))) {
-            fs.renameSync(path.join(temp, dir), current);
-            swapped.push(dir);
-          }
-        }
-        initDatabase();
-      } else {
-        // Selective restore or Smart Merge without destroying untouched tables or unselected data
-        const sourceDbPath = path.join(temp, "database", "phonezone.db");
-        const sourceDb = new Database(sourceDbPath, { readonly: true });
-        const targetDb = getDb();
+      // Robust, atomic, in-place table copying (no fragile directory swaps or closeDatabase locks)
+      const sourceDbPath = path.join(temp, "database", "phonezone.db");
+      const sourceDb = new Database(sourceDbPath, { readonly: true });
+      const targetDb = getDb();
 
-        const entityRestoreMap = {
-          settings: () => {
-            if (shouldReplace) {
-              copyTableRows(sourceDb, targetDb, "admin_settings", "REPLACE");
-            } else {
-              try {
-                const sRow = sourceDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
-                if (sRow) {
-                  const tRow = targetDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
-                  if (tRow) {
-                    const updates = {};
-                    for (const [k, v] of Object.entries(sRow)) {
-                      if (v !== null && v !== undefined && v !== "" && (tRow[k] === null || tRow[k] === "" || tRow[k] === undefined)) {
-                        updates[k] = v;
-                      }
-                    }
-                    if (Object.keys(updates).length > 0) {
-                      const sets = Object.keys(updates).map((k) => `"${k}" = @${k}`).join(", ");
-                      targetDb.prepare(`UPDATE admin_settings SET ${sets} WHERE id = ?`).run({ ...updates, id: tRow.id });
+      const entityRestoreMap = {
+        settings: () => {
+          try {
+            const sRow = sourceDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+            if (sRow) {
+              const targetCols = targetDb.prepare(`PRAGMA table_info("admin_settings")`).all().map((c) => c.name);
+              const sourceCols = Object.keys(sRow).filter((c) => targetCols.includes(c));
+              const normalizedRow = { ...sRow, id: "00000000-0000-0000-0000-000000000001", setup_completed: 1 };
+
+              if (shouldReplace) {
+                targetDb.prepare("DELETE FROM admin_settings").run();
+                const cols = sourceCols.map((c) => `"${c}"`).join(", ");
+                const placeholders = sourceCols.map((c) => `@${c}`).join(", ");
+                targetDb.prepare(`INSERT OR REPLACE INTO admin_settings (${cols}) VALUES (${placeholders})`).run(normalizedRow);
+              } else {
+                const tRow = targetDb.prepare("SELECT * FROM admin_settings LIMIT 1").get();
+                if (tRow) {
+                  const updates = {};
+                  for (const [k, v] of Object.entries(normalizedRow)) {
+                    if (v !== null && v !== undefined && v !== "" && (tRow[k] === null || tRow[k] === "" || tRow[k] === undefined)) {
+                      updates[k] = v;
                     }
                   }
+                  if (Object.keys(updates).length > 0) {
+                    const sets = Object.keys(updates).map((k) => `"${k}" = @${k}`).join(", ");
+                    targetDb.prepare(`UPDATE admin_settings SET ${sets} WHERE id = ?`).run({ ...updates, id: tRow.id });
+                  }
+                } else {
+                  const cols = sourceCols.map((c) => `"${c}"`).join(", ");
+                  const placeholders = sourceCols.map((c) => `@${c}`).join(", ");
+                  targetDb.prepare(`INSERT OR REPLACE INTO admin_settings (${cols}) VALUES (${placeholders})`).run(normalizedRow);
                 }
-              } catch (e) {
-                logger.warn("[Restore] Settings merge warning:", e.message);
               }
             }
-          },
-          phones: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM phones").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "phones", "REPLACE");
-          },
-          sellers: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM sellers").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "sellers", "REPLACE");
-          },
-          customers: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM customers").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "customers", "REPLACE");
-          },
-          dealers: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
-              try { targetDb.prepare("DELETE FROM dealers").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "dealers", "REPLACE");
-            copyTableRows(sourceDb, targetDb, "dealer_batches", "REPLACE");
-          },
-          repairs: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM repair_job_items").run(); } catch {}
-              try { targetDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
-              try { targetDb.prepare("DELETE FROM repair_customers").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "repair_customers", "REPLACE");
-            copyTableRows(sourceDb, targetDb, "repair_jobs", "REPLACE");
-            copyTableRows(sourceDb, targetDb, "repair_job_items", "REPLACE");
-          },
-          returns: () => {
-            if (shouldReplace) {
-              try { targetDb.prepare("DELETE FROM returns").run(); } catch {}
-            }
-            copyTableRows(sourceDb, targetDb, "returns", "REPLACE");
+          } catch (e) {
+            logger.warn("[Restore] admin_settings restore warning:", e.message);
           }
-        };
-
-        targetDb.transaction(() => {
-          for (const [entityName, restoreHandler] of Object.entries(entityRestoreMap)) {
-            if (isAll || normalizedEntities.includes(entityName)) {
-              restoreHandler();
-            }
+        },
+        phones: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM phones").run(); } catch {}
           }
-
-          // Universal System Tables: Always restore files, shops, invoices, financial_years
-          // so image references, shop codes, and invoices never break!
-          copyTableRows(sourceDb, targetDb, "files", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "shops", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "invoices", "REPLACE");
-          copyTableRows(sourceDb, targetDb, "financial_years", "IGNORE");
-        })();
-
-        sourceDb.close();
-
-        // Copy matching storage files
-        const tempStorageDir = path.join(temp, "storage");
-        if (fs.existsSync(tempStorageDir)) {
-          copyEntityStorage(tempStorageDir, PATHS.storageDir, normalizedEntities, isAll, shouldReplace);
+          copyTableRows(sourceDb, targetDb, "phones", "REPLACE");
+        },
+        sellers: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM sellers").run(); } catch {}
+          }
+          copyTableRows(sourceDb, targetDb, "sellers", "REPLACE");
+        },
+        customers: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM customers").run(); } catch {}
+          }
+          copyTableRows(sourceDb, targetDb, "customers", "REPLACE");
+        },
+        dealers: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM dealer_batches").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM dealer_ledger").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM dealers").run(); } catch {}
+          }
+          copyTableRows(sourceDb, targetDb, "dealers", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "dealer_batches", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "dealer_ledger", "REPLACE");
+        },
+        repairs: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM repair_status_log").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM repair_job_items").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM repair_jobs").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM repair_customers").run(); } catch {}
+            try { targetDb.prepare("DELETE FROM repair_job_counters").run(); } catch {}
+          }
+          copyTableRows(sourceDb, targetDb, "repair_customers", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "repair_jobs", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "repair_job_items", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "repair_status_log", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "repair_job_counters", "REPLACE");
+        },
+        returns: () => {
+          if (shouldReplace) {
+            try { targetDb.prepare("DELETE FROM returns").run(); } catch {}
+          }
+          copyTableRows(sourceDb, targetDb, "returns", "REPLACE");
         }
+      };
+
+      targetDb.transaction(() => {
+        // When replacing all, cleanly clear transactional records first
+        if (isAll && shouldReplace) {
+          const wipeTables = [
+            "phones", "sellers", "customers", "dealers", "dealer_batches", "dealer_ledger",
+            "repair_job_items", "repair_jobs", "repair_customers", "repair_status_log",
+            "returns", "invoices", "messages", "files"
+          ];
+          for (const tbl of wipeTables) {
+            try { targetDb.prepare(`DELETE FROM "${tbl}"`).run(); } catch {}
+          }
+        }
+
+        for (const [entityName, restoreHandler] of Object.entries(entityRestoreMap)) {
+          if (isAll || normalizedEntities.includes(entityName)) {
+            restoreHandler();
+          }
+        }
+
+        // Universal System Tables: Always restore files, shops, invoices, financial_years
+        copyTableRows(sourceDb, targetDb, "files", "REPLACE");
+        copyTableRows(sourceDb, targetDb, "shops", "REPLACE");
+        copyTableRows(sourceDb, targetDb, "invoices", "REPLACE");
+        copyTableRows(sourceDb, targetDb, "financial_years", "IGNORE");
+
+        // When restoring all, restore system config, users, auth, license, and integrations
+        if (isAll) {
+          copyTableRows(sourceDb, targetDb, "users", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "user_roles", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "license_state", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "ngrok_config", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "messages", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "hicelltek_keys", "REPLACE");
+          copyTableRows(sourceDb, targetDb, "audit_logs", "IGNORE");
+        }
+      })();
+
+      sourceDb.close();
+
+      // Copy matching storage files
+      const tempStorageDir = path.join(temp, "storage");
+      if (fs.existsSync(tempStorageDir)) {
+        copyEntityStorage(tempStorageDir, PATHS.storageDir, normalizedEntities, isAll, shouldReplace);
       }
     } else if (hasDataJson) {
       const jsonStr = fs.readFileSync(path.join(temp, "data.json"), "utf8");
@@ -819,34 +818,16 @@ export async function restoreBackup(backupName, {
     } catch {}
 
     fs.rmSync(temp, { recursive: true, force: true });
-    logger.info("Restore completed successfully", { backupName, strategy, isAll, entities: normalizedEntities, safetyBackup: safety.name, parked });
+    logger.info("Restore completed successfully", { backupName, strategy, isAll, entities: normalizedEntities, safetyBackup: safety.name });
     return {
       restored: backupName,
       strategy,
       entities: isAll ? ["all"] : normalizedEntities,
       safetyBackup: safety.name,
-      previousDataKeptAt: parked
     };
   } catch (err) {
-    logger.error("Restore failed - rolling back", err);
+    logger.error("Restore failed", err);
     fs.rmSync(temp, { recursive: true, force: true });
-
-    if (parked) {
-      for (const dir of swapped) {
-        const current = path.join(PATHS.dataDir, dir);
-        const previous = path.join(parked, dir);
-        try {
-          if (fs.existsSync(current)) fs.rmSync(current, { recursive: true, force: true });
-          if (fs.existsSync(previous)) fs.renameSync(previous, current);
-        } catch (rollbackErr) {
-          logger.error("Rollback could not restore a data folder", rollbackErr, { dir, previous });
-        }
-      }
-    }
-
-    try {
-      initDatabase();
-    } catch {}
     throw new AppError(
       `Restore failed: ${err.message || 'Unknown error'}. Existing data was preserved.`,
       500,

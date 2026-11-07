@@ -96,8 +96,10 @@ const Setup = () => {
       if (!res.ok) {
         throw new Error(await readError(res, 'Cloud restore failed'));
       }
+      sessionStorage.setItem('phonezone_admin_active', 'true');
+      sessionStorage.setItem('phonezone_admin_tab', 'inventory');
       toast.success('Data restored successfully from Google Drive backup! Welcome back.');
-      window.location.replace('/');
+      window.location.replace('/?admin=1');
     } catch (err: any) {
       toast.error(err.message || 'Failed to restore cloud backup');
     } finally {
@@ -345,8 +347,11 @@ const Setup = () => {
           const body = JSON.parse(xhr.responseText);
           if (body?.token) {
             localStorage.setItem('pz_token', body.token);
+            sessionStorage.setItem('pz_token', body.token);
           }
         } catch {}
+        sessionStorage.setItem('phonezone_admin_active', 'true');
+        sessionStorage.setItem('phonezone_admin_tab', 'inventory');
         setRestoreStatusText('✅ Restore completed successfully! Redirecting...');
         setRestoreLogs((prev) => [
           ...prev,
@@ -414,8 +419,10 @@ const Setup = () => {
       if (!res.ok) {
         throw new Error(await readError(res, 'Setup failed'));
       }
+      sessionStorage.setItem('phonezone_admin_active', 'true');
+      sessionStorage.setItem('phonezone_admin_tab', 'inventory');
       toast.success('Setup complete! Welcome to your new business dashboard.');
-      window.location.replace('/'); // full reload so App re-reads setup status
+      window.location.replace('/?admin=1'); // full reload so App re-reads setup status
     } catch (err: any) {
       toast.error(err instanceof TypeError ? 'Cannot reach the PhoneZone backend. Is it running?' : (err.message || 'Setup failed. Please try again.'));
     } finally {

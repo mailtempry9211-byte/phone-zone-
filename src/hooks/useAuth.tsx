@@ -59,8 +59,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (isOfflineMode()) {
-      // Offline mode: restore session from backend cookie on mount.
-      fetch("/api/auth/me", { credentials: "include" })
+      // Offline mode: restore session from backend cookie or Bearer token on mount.
+      const savedToken = typeof window !== "undefined" ? (sessionStorage.getItem('pz_token') || localStorage.getItem('pz_token')) : null;
+      const headers: Record<string, string> = {};
+      if (savedToken) headers['Authorization'] = `Bearer ${savedToken}`;
+
+      fetch("/api/auth/me", { credentials: "include", headers })
         .then((r) => (r.ok ? r.json() : null))
         .then((me) => {
           if (me) {
