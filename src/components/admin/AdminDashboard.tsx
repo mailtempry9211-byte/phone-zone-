@@ -12,6 +12,7 @@ import DealersTab from "./DealersTab";
 import MessagesTab from "./MessagesTab";
 import AccountingTab from "./AccountingTab";
 import DatabaseTab from "./DatabaseTab";
+import RecycleBinTab from "./RecycleBinTab";
 import SettingsTab from "./SettingsTab";
 import ReturnsTab from "./ReturnsTab";
 import StorageTab from "./StorageTab";
@@ -536,6 +537,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             id: "database",
             label: "Database & Backup",
             icon: Database,
+          },
+          {
+            id: "recycle_bin",
+            label: "Recycle Bin (रीसायकल बिन)",
+            icon: RotateCcw,
           },
           {
             id: "settings",
@@ -1466,6 +1472,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {activeTab === "database" && isAdminOrOwner && (
                 <ErrorBoundary label="Database">
                   <DatabaseTab />
+                </ErrorBoundary>
+              )}
+
+              {activeTab === "recycle_bin" && isAdminOrOwner && (
+                <ErrorBoundary label="Recycle Bin">
+                  <RecycleBinTab />
                 </ErrorBoundary>
               )}
 
