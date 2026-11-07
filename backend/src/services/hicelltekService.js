@@ -174,7 +174,12 @@ export async function fetchTacFromApi(tac, { force = false, keyId = null } = {})
     try {
       res = await fetch(BASE_URL, {
         method: "POST",
-        headers: { [API_KEY_HEADER]: key.api_key, "Content-Type": "application/json" },
+        headers: {
+          [API_KEY_HEADER]: key.api_key,
+          "Content-Type": "application/json",
+          "User-Agent": "curl/8.4.0",
+          "Accept": "application/json, text/plain, */*",
+        },
         body: JSON.stringify({ query: tac }),
         signal: controller.signal,
       });
@@ -308,7 +313,12 @@ export async function testKey(keyOrId) {
   try {
     const res = await fetch(BASE_URL, {
       method: "POST",
-      headers: { [API_KEY_HEADER]: apiKey, "Content-Type": "application/json" },
+      headers: {
+        [API_KEY_HEADER]: apiKey,
+        "Content-Type": "application/json",
+        "User-Agent": "curl/8.4.0",
+        "Accept": "application/json, text/plain, */*",
+      },
       body: JSON.stringify({ query: "35560386" }), // Test lookup query
       signal: controller.signal,
     });
@@ -323,6 +333,9 @@ export async function testKey(keyOrId) {
       return { ok: false, error: "Hicelltek Monthly Quota Exceeded (429 Rate Limited)." };
     }
     const errText = await res.text().catch(() => "");
+    if (res.status === 503 || errText.includes("<!DOCTYPE") || errText.includes("<html")) {
+      return { ok: false, error: "Hicelltek server is temporarily busy (503). Retrying in background..." };
+    }
     return { ok: false, error: `Hicelltek API returned status ${res.status}: ${errText.slice(0, 100)}` };
   } catch (err) {
     if (err.name === "AbortError") {

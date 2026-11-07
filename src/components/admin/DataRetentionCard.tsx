@@ -132,6 +132,11 @@ export const DataRetentionCard: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
             <div className="text-xs text-muted-foreground">
               Threshold: Data from <strong>{cutoffLabel}</strong>
+              {counts.total === 0 && (
+                <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                  • All records are current &amp; safe (0 old data)
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">

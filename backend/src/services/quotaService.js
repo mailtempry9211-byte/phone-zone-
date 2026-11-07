@@ -66,26 +66,41 @@ export function getLiveQuotaMetrics() {
     dbSizeBytes = 5 * 1024 * 1024; // default baseline estimate
   }
 
-  // 2. Calculate File Storage Size
+  // 2. Calculate File Storage Size (Disk Storage Tree + Database Files Metadata)
   try {
-    const uploadsDir = PATHS.uploadsDir;
-    const { size, fileCount } = calculateDirSize(uploadsDir);
+    const storageDir = PATHS.storageDir;
+    const { size, fileCount } = calculateDirSize(storageDir);
     storageSizeBytes = size;
     storageFilesCount = fileCount;
+
+    // Check files database index (reconciles cloud-synced photos and metadata)
+    const fileStats = db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(size_bytes), 0) AS total_bytes FROM files").get();
+    if (fileStats && fileStats.count > 0) {
+      if (storageFilesCount === 0 || storageSizeBytes === 0) {
+        storageFilesCount = fileStats.count;
+        storageSizeBytes = fileStats.total_bytes;
+      } else {
+        storageFilesCount = Math.max(storageFilesCount, fileStats.count);
+        storageSizeBytes = Math.max(storageSizeBytes, fileStats.total_bytes);
+      }
+    }
   } catch (_e) {
     storageSizeBytes = 0;
   }
 
-  // 3. Estimate monthly bandwidth egress based on transactions and audit log counts
+  // 3. Estimate monthly bandwidth egress based on transactions, invoices, and photos
   let estimatedMonthlyTransferBytes = 0;
   try {
-    const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    const phoneCount = db.prepare("SELECT COUNT(*) AS c FROM phones WHERE created_at >= ?").get(`${currentMonth}-01`)?.c || 0;
-    const repairCount = db.prepare("SELECT COUNT(*) AS c FROM repair_jobs WHERE created_at >= ?").get(`${currentMonth}-01`)?.c || 0;
+    const phoneCount = db.prepare("SELECT COUNT(*) AS c FROM phones").get()?.c || 0;
+    const repairCount = db.prepare("SELECT COUNT(*) AS c FROM repair_jobs").get()?.c || 0;
+    const invoiceCount = db.prepare("SELECT COUNT(*) AS c FROM invoices").get()?.c || 0;
     // Estimate: Each transaction ~ 1.5MB average data transfer (photo views, invoices, API requests)
-    estimatedMonthlyTransferBytes = (phoneCount + repairCount) * 1.5 * 1024 * 1024 + (storageFilesCount * 250 * 1024);
+    estimatedMonthlyTransferBytes = Math.max(
+      (phoneCount + repairCount + invoiceCount) * 1.5 * 1024 * 1024 + (storageFilesCount * 300 * 1024),
+      storageSizeBytes > 0 ? storageSizeBytes * 1.2 : 5 * 1024 * 1024
+    );
   } catch (_e) {
-    estimatedMonthlyTransferBytes = 50 * 1024 * 1024;
+    estimatedMonthlyTransferBytes = 15 * 1024 * 1024;
   }
 
   const dbPercentage = Number(((dbSizeBytes / DB_FREE_LIMIT_BYTES) * 100).toFixed(1));

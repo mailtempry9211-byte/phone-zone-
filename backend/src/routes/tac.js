@@ -61,6 +61,13 @@ export function buildTacRouter(staff) {
   r.get("/export", staff, wrap(async (_req, res) => {
     const stamp = new Date().toISOString().slice(0, 10);
     const name = `PhoneZone_TAC_${stamp}.xlsx`;
+    const embeddedPath = tac.getEmbeddedTacPath();
+
+    // If pre-bundled 254k models file is available, stream it instantly to avoid RAM spike and timeout
+    if (embeddedPath && fs.existsSync(embeddedPath)) {
+      return res.download(embeddedPath, name);
+    }
+
     const out = path.join(os.tmpdir(), `phonezone-tac-export-${Date.now()}.xlsx`);
     try {
       await tac.exportDatabase(out);

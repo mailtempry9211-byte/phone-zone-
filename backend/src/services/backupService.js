@@ -305,7 +305,8 @@ async function assertSafeArchive(src) {
         const normalized = raw.replace(/\/+$/, "");
         if (!normalized || normalized === ".") return;
         if (normalized.startsWith("._") || normalized === ".DS_Store" || normalized.includes("pax_global_header") || normalized.includes("PaxHeader")) return;
-        if (!ALLOWED_ENTRY.test(normalized)) {
+        const stripped = normalized.replace(/^[^/]+\//, "");
+        if (!ALLOWED_ENTRY.test(normalized) && !ALLOWED_ENTRY.test(stripped)) {
           throw new AppError("This backup contains unexpected files and was rejected. No data was changed.", 400);
         }
         if (entry.type === "SymbolicLink" || entry.type === "Link") {
@@ -706,8 +707,35 @@ export async function restoreBackup(backupName, {
     }
 
     const manifestPath = path.join(temp, "manifest.json");
-    const hasDatabase = fs.existsSync(path.join(temp, "database", "phonezone.db"));
-    const hasDataJson = fs.existsSync(path.join(temp, "data.json"));
+    let hasDatabase = fs.existsSync(path.join(temp, "database", "phonezone.db"));
+    let hasDataJson = fs.existsSync(path.join(temp, "data.json"));
+    let sourceDbPath = path.join(temp, "database", "phonezone.db");
+    let jsonSourcePath = path.join(temp, "data.json");
+    let resolvedStorageDir = path.join(temp, "storage");
+
+    // Auto-detect nested root folder if archive was wrapped in an outer directory
+    if (!hasDatabase && !hasDataJson) {
+      try {
+        const subdirs = fs.readdirSync(temp).filter((d) => {
+          try { return fs.statSync(path.join(temp, d)).isDirectory(); } catch { return false; }
+        });
+        for (const d of subdirs) {
+          const candidateDb = path.join(temp, d, "database", "phonezone.db");
+          const candidateJson = path.join(temp, d, "data.json");
+          if (fs.existsSync(candidateDb)) {
+            hasDatabase = true;
+            sourceDbPath = candidateDb;
+            resolvedStorageDir = path.join(temp, d, "storage");
+            break;
+          } else if (fs.existsSync(candidateJson)) {
+            hasDataJson = true;
+            jsonSourcePath = candidateJson;
+            resolvedStorageDir = path.join(temp, d, "images");
+            break;
+          }
+        }
+      } catch {}
+    }
 
     if (!hasDatabase && !hasDataJson && !fs.existsSync(manifestPath)) {
       throw new AppError(
@@ -718,11 +746,10 @@ export async function restoreBackup(backupName, {
 
     if (hasDatabase) {
       for (const suffix of ["-wal", "-shm", "-journal"]) {
-        fs.rmSync(path.join(temp, "database", `phonezone.db${suffix}`), { force: true });
+        fs.rmSync(`${sourceDbPath}${suffix}`, { force: true });
       }
 
       // Robust, atomic, in-place table copying (no fragile directory swaps or closeDatabase locks)
-      const sourceDbPath = path.join(temp, "database", "phonezone.db");
       const sourceDb = new Database(sourceDbPath, { readonly: true });
       const targetDb = getDb();
 
@@ -867,14 +894,14 @@ export async function restoreBackup(backupName, {
       sourceDb.close();
 
       // Copy matching storage files
-      const tempStorageDir = path.join(temp, "storage");
+      const tempStorageDir = resolvedStorageDir || path.join(temp, "storage");
       if (fs.existsSync(tempStorageDir)) {
         copyEntityStorage(tempStorageDir, PATHS.storageDir, normalizedEntities, isAll, shouldReplace);
       }
     } else if (hasDataJson) {
-      const jsonStr = fs.readFileSync(path.join(temp, "data.json"), "utf8");
+      const jsonStr = fs.readFileSync(jsonSourcePath || path.join(temp, "data.json"), "utf8");
       const data = JSON.parse(jsonStr);
-      restoreFromJsonData(data, temp, { strategy, entities: normalizedEntities, isAll });
+      restoreFromJsonData(data, path.dirname(jsonSourcePath), { strategy, entities: normalizedEntities, isAll });
     }
 
     // Guarantee setup_completed = 1 is always set on restored store

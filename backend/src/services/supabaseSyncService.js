@@ -1876,10 +1876,20 @@ export async function getSupabaseSyncStatus() {
     return {
       connected,
       isConfigured: true,
+      configured: isConfigured && connected,
       pingMs,
       url: url.replace(/^https?:\/\//, ""),
       localCounts,
       cloudCounts,
+      counts: {
+        phones: cloudCounts.phones || localCounts.phones || 0,
+        repair_jobs: cloudCounts.repairs || localCounts.repairs || 0,
+        sellers: cloudCounts.sellers || localCounts.sellers || 0,
+        customers: cloudCounts.customers || localCounts.customers || 0,
+        dealers: cloudCounts.dealers || localCounts.dealers || 0,
+        returns: cloudCounts.returns || localCounts.returns || 0,
+        files: cloudCounts.files || localCounts.files || 0,
+      },
       comparison,
       isFullySynced,
     };
@@ -1887,10 +1897,12 @@ export async function getSupabaseSyncStatus() {
     return {
       connected: false,
       isConfigured: true,
+      configured: false,
       pingMs: Date.now() - startPing,
       error: err.message,
       localCounts,
       cloudCounts: { phones: 0, sellers: 0, customers: 0, dealers: 0, dealer_batches: 0, repairs: 0, returns: 0, files: 0, users: 0, settings: 0 },
+      counts: { phones: 0, repair_jobs: 0, sellers: 0, customers: 0, dealers: 0, returns: 0, files: 0 },
       comparison: [],
       isFullySynced: false,
     };

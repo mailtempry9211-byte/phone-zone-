@@ -1721,8 +1721,8 @@ const SettingsTab = () => {
               <Cloud className="h-5 w-5 text-emerald-400" />
               Supabase Cloud Database & Two-Way Sync
             </CardTitle>
-            <Badge className={supabaseStatus?.configured ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
-              {supabaseStatus?.configured ? "🟢 Cloud Connected" : "🟡 Not Configured"}
+            <Badge className={(supabaseStatus?.connected || supabaseStatus?.configured || supabaseStatus?.isConfigured) ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
+              {(supabaseStatus?.connected || supabaseStatus?.configured || supabaseStatus?.isConfigured) ? "🟢 Cloud Connected" : "🟡 Not Configured"}
             </Badge>
           </div>
           <p className="text-xs text-slate-300">
@@ -1733,19 +1733,19 @@ const SettingsTab = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
             <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
               <span className="text-slate-400 block">Phones</span>
-              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.phones ?? "-"}</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.phones ?? supabaseStatus?.cloudCounts?.phones ?? supabaseStatus?.localCounts?.phones ?? 0}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
               <span className="text-slate-400 block">Repair Jobs</span>
-              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.repair_jobs ?? "-"}</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.repair_jobs ?? supabaseStatus?.cloudCounts?.repairs ?? supabaseStatus?.localCounts?.repairs ?? 0}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
               <span className="text-slate-400 block">Sellers</span>
-              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.sellers ?? "-"}</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.sellers ?? supabaseStatus?.cloudCounts?.sellers ?? supabaseStatus?.localCounts?.sellers ?? 0}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
               <span className="text-slate-400 block">Customers</span>
-              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.customers ?? "-"}</span>
+              <span className="text-lg font-bold text-white">{supabaseStatus?.counts?.customers ?? supabaseStatus?.cloudCounts?.customers ?? supabaseStatus?.localCounts?.customers ?? 0}</span>
             </div>
           </div>
 
