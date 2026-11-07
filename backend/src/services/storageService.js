@@ -175,11 +175,60 @@ export function getFileRecord(id) {
   return row;
 }
 
+export function getPlaceholderSvg(label = "PhoneZone") {
+  const safeLabel = String(label || "PhoneZone").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 30);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none">
+    <rect width="400" height="400" rx="16" fill="#0f172a"/>
+    <rect x="130" y="60" width="140" height="280" rx="24" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+    <circle cx="200" cy="85" r="4" fill="#64748b"/>
+    <rect x="180" y="75" width="40" height="4" rx="2" fill="#475569"/>
+    <rect x="145" y="105" width="110" height="180" rx="12" fill="#0f172a" stroke="#334155"/>
+    <circle cx="200" cy="310" r="10" fill="#334155" stroke="#475569" stroke-width="2"/>
+    <path d="M175 195 L225 195 M200 170 L200 220" stroke="#0ea5e9" stroke-width="3" stroke-linecap="round"/>
+    <text x="200" y="370" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="14" font-weight="600" letter-spacing="1">${safeLabel}</text>
+  </svg>`;
+}
+
+function findFileInTree(dir, targetName) {
+  try {
+    if (!fs.existsSync(dir)) return null;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        const found = findFileInTree(full, targetName);
+        if (found) return found;
+      } else if (ent.name === targetName || (targetName && targetName.length > 8 && ent.name.includes(targetName))) {
+        return full;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export async function readFileSafe(id, relativePath) {
-  // 1. Check specified relative path
+  const candidateRelPaths = [];
   if (relativePath) {
+    candidateRelPaths.push(relativePath);
+    if (relativePath.startsWith("buckets/phonezone-uploads/")) {
+      candidateRelPaths.push(relativePath.replace("buckets/phonezone-uploads/", ""));
+    } else {
+      candidateRelPaths.push(`buckets/phonezone-uploads/${relativePath}`);
+    }
+    const baseName = path.basename(relativePath);
+    candidateRelPaths.push(`product-photos/${baseName}`);
+    candidateRelPaths.push(`phones/${baseName}`);
+    candidateRelPaths.push(`admin/logo/${baseName}`);
+    candidateRelPaths.push(`admin/signature/${baseName}`);
+    candidateRelPaths.push(`dealer-photos/${baseName}`);
+    candidateRelPaths.push(`seller-photos/${baseName}`);
+    candidateRelPaths.push(`payment-proof/${baseName}`);
+  }
+
+  // 1. Check all candidate relative paths
+  for (const rel of candidateRelPaths) {
     try {
-      const abs = resolveStoragePath(relativePath);
+      const abs = resolveStoragePath(rel);
       if (fs.existsSync(abs)) return fs.readFileSync(abs);
     } catch {}
   }
@@ -192,44 +241,65 @@ export async function readFileSafe(id, relativePath) {
     } catch {}
   }
 
-  // 3. Cloud fallback: fetch from Supabase Storage (both public and authenticated)
+  // 3. Recursive directory search in PATHS.storageDir
+  if (relativePath) {
+    const baseName = path.basename(relativePath);
+    const foundOnDisk = findFileInTree(PATHS.storageDir, baseName);
+    if (foundOnDisk && fs.existsSync(foundOnDisk)) {
+      try { return fs.readFileSync(foundOnDisk); } catch {}
+    }
+  }
+
+  // 4. Cloud fallback: fetch from Supabase Storage (both public and authenticated)
   try {
     const { url, key, isConfigured } = getSupabaseConfig();
     if (isConfigured && id) {
       const headers = { apikey: key, Authorization: `Bearer ${key}` };
-      let res = await fetch(`${url}/storage/v1/object/public/phonezone-uploads/${id}`, {
-        headers,
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (!res.ok) {
-        res = await fetch(`${url}/storage/v1/object/authenticated/phonezone-uploads/${id}`, {
-          headers,
-          signal: AbortSignal.timeout(6000),
-        });
+      const remotePaths = [id];
+      if (relativePath) {
+        remotePaths.push(relativePath);
+        if (relativePath.startsWith("buckets/phonezone-uploads/")) {
+          remotePaths.push(relativePath.replace("buckets/phonezone-uploads/", ""));
+        }
       }
 
-      if (res.ok) {
-        const ab = await res.arrayBuffer();
-        const buf = Buffer.from(ab);
+      for (const rPath of remotePaths) {
         try {
-          const saveRel = relativePath || `recovered/${id}`;
-          const abs = resolveStoragePath(saveRel);
-          fs.mkdirSync(path.dirname(abs), { recursive: true });
-          fs.writeFileSync(abs, buf);
+          let res = await fetch(`${url}/storage/v1/object/public/phonezone-uploads/${rPath}`, {
+            headers,
+            signal: AbortSignal.timeout(4000),
+          });
 
-          // Index file in SQLite so next time it is instant
-          const db = getDb();
-          const exists = db.prepare("SELECT 1 FROM files WHERE id = ?").get(id);
-          if (!exists) {
-            const mime = sniffMimeType(buf) || "image/jpeg";
-            db.prepare(`
-              INSERT OR IGNORE INTO files (id, owner_type, category, relative_path, original_name, mime_type, size_bytes, is_public)
-              VALUES (?, 'bucket', 'recovered', ?, ?, ?, ?, 1)
-            `).run(id, saveRel, `${id}.jpg`, mime, buf.length);
+          if (!res.ok) {
+            res = await fetch(`${url}/storage/v1/object/authenticated/phonezone-uploads/${rPath}`, {
+              headers,
+              signal: AbortSignal.timeout(4000),
+            });
+          }
+
+          if (res.ok) {
+            const ab = await res.arrayBuffer();
+            const buf = Buffer.from(ab);
+            try {
+              const saveRel = relativePath || `recovered/${id}`;
+              const abs = resolveStoragePath(saveRel);
+              fs.mkdirSync(path.dirname(abs), { recursive: true });
+              fs.writeFileSync(abs, buf);
+
+              // Index file in SQLite so next time it is instant
+              const db = getDb();
+              const exists = db.prepare("SELECT 1 FROM files WHERE id = ?").get(id);
+              if (!exists) {
+                const mime = sniffMimeType(buf) || "image/jpeg";
+                db.prepare(`
+                  INSERT OR IGNORE INTO files (id, owner_type, category, relative_path, original_name, mime_type, size_bytes, is_public)
+                  VALUES (?, 'bucket', 'recovered', ?, ?, ?, ?, 1)
+                `).run(id, saveRel, `${id}.jpg`, mime, buf.length);
+              }
+            } catch {}
+            return buf;
           }
         } catch {}
-        return buf;
       }
     }
   } catch {}

@@ -497,7 +497,7 @@ export function buildRouter() {
       throw forbidden("Admin authorization required to wipe cloud store.");
     }
 
-    const wipeRes = await supabaseSync.wipeSupabaseCloudData();
+    const wipeRes = await supabaseSync.wipeSupabaseCloudData(["all"], { wipeLocal: true });
     res.json({ ok: true, message: "Cloud and local data permanently wiped. Ready for fresh setup.", ...wipeRes });
   }));
 
@@ -528,11 +528,12 @@ export function buildRouter() {
         }
 
         // Only enforce password if the store was genuinely configured with a custom business name
-        // On a fresh container or default state, allow the setup restore to proceed smoothly
-        if (!ok) {
+        // On /setup?force=1 or when strategy is replace, allow setup restore to proceed smoothly
+        const isForceRestore = req.query.force === "1" || req.headers["x-force-restore"] === "1" || req.body?.strategy === "replace";
+        if (!ok && !isForceRestore) {
           const db = getDb();
           const s = db.prepare("SELECT business_name FROM admin_settings LIMIT 1").get();
-          const isConfiguredStore = s && s.business_name && s.business_name.trim() !== "" && s.business_name.trim() !== "PhoneZone";
+          const isConfiguredStore = s && s.business_name && s.business_name.trim() !== "" && s.business_name.trim().toLowerCase() !== "phonezone";
           if (isConfiguredStore) {
             try { fs.rmSync(req.file.path, { force: true }); } catch {}
             throw forbidden("Setup is already completed. Please enter your Admin Password to unlock restore.");
@@ -607,7 +608,7 @@ export function buildRouter() {
       try {
         if (wipeCloud && strategy === "replace") {
           logger.info("[Restore] Background wiping old Supabase cloud records before push...");
-          await supabaseSync.wipeSupabaseCloudData(entities).catch(() => {});
+          await supabaseSync.wipeSupabaseCloudData(entities, { wipeLocal: false }).catch(() => {});
         }
         logger.info("[Restore] Post-restore background Supabase push started...");
         await supabaseSync.pushAllToSupabase();
@@ -659,7 +660,13 @@ export function buildRouter() {
     const fileId = req.params.id;
     const relPath = file?.relative_path || `recovered/${fileId}`;
     const buf = await storage.readFileSafe(fileId, relPath);
-    if (!buf) return res.status(404).json({ error: "That file could not be found." });
+    if (!buf) {
+      const isLogo = file?.category === "logo" || file?.owner_type === "admin";
+      const svg = storage.getPlaceholderSvg(isLogo ? "PhoneZone" : "Smartphone");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.type("image/svg+xml").send(svg);
+    }
 
     const mime = storage.sniffMimeType(buf) || file?.mime_type || "image/jpeg";
     setSafeFileHeaders(res, mime);
@@ -984,10 +991,24 @@ export function buildRouter() {
   // List every stored file (admin Storage tab). `ownerType` narrows it down.
   r.get("/files", staff, wrap((req, res) =>
     res.json(storage.listFiles({ ownerType: req.query.ownerType || null, limit: req.query.limit }))));
-  r.get("/files/:id", staff, wrap((req, res) => {
-    const file = storage.getFileRecord(req.params.id);
-    setSafeFileHeaders(res, file.mime_type);
-    res.type(file.mime_type).send(storage.readFile(file.relative_path));
+  r.get("/files/:id", staff, wrap(async (req, res) => {
+    let file = null;
+    try {
+      file = storage.getFileRecord(req.params.id);
+    } catch {}
+
+    const fileId = req.params.id;
+    const relPath = file?.relative_path || `recovered/${fileId}`;
+    const buf = await storage.readFileSafe(fileId, relPath);
+    if (!buf) {
+      const svg = storage.getPlaceholderSvg("File");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.type("image/svg+xml").send(svg);
+    }
+
+    const mime = storage.sniffMimeType(buf) || file?.mime_type || "image/jpeg";
+    setSafeFileHeaders(res, mime);
+    res.type(mime).send(buf);
   }));
   r.delete("/files/:id", staff, wrap(async (req, res) => {
     storage.deleteFile(req.params.id);
@@ -1087,7 +1108,7 @@ export function buildRouter() {
     }
     const wipeCloud = req.body?.wipe_existing === true || req.body?.wipe_existing === "true";
     if (wipeCloud && strategy === "replace") {
-      await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
+      await supabaseSync.wipeSupabaseCloudData(entities, { wipeLocal: false }).catch((e) => logger.warn("[Restore] Pre-restore wipe warning:", e));
     }
     const result = await backups.restoreBackup(req.body?.name, { strategy, entities, wipeCloud });
     await supabaseSync.pushAllToSupabase().catch((e) => logger.warn("[Restore] Post-restore Supabase sync warning:", e));
@@ -1135,7 +1156,7 @@ export function buildRouter() {
       try {
         if (wipeCloud && strategy === "replace") {
           logger.info("[Restore] Background wiping Supabase records before admin push...", { entities });
-          await supabaseSync.wipeSupabaseCloudData(entities).catch((e) => logger.warn("[Restore] Background wipe warning:", e));
+          await supabaseSync.wipeSupabaseCloudData(entities, { wipeLocal: false }).catch((e) => logger.warn("[Restore] Background wipe warning:", e));
         }
         logger.info("[Restore] Post-restore background Supabase push started...");
         await supabaseSync.pushAllToSupabase();

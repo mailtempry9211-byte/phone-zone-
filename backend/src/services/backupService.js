@@ -364,6 +364,34 @@ function copyEntityStorage(tempStorageDir, targetStorageDir, entities, isAll, ov
   try {
     fs.cpSync(tempStorageDir, targetStorageDir, { recursive: true, force: true });
     logger.info("[Restore] Complete storage directory synchronized.");
+
+    // Cross-compatibility mirrors: ensure photos are accessible regardless of directory style
+    const uploadsProductPhotos = path.join(targetStorageDir, "buckets", "phonezone-uploads", "product-photos");
+    if (fs.existsSync(uploadsProductPhotos)) {
+      const directProductPhotos = path.join(targetStorageDir, "product-photos");
+      const phonesDir = path.join(targetStorageDir, "phones");
+      fs.mkdirSync(directProductPhotos, { recursive: true });
+      fs.mkdirSync(phonesDir, { recursive: true });
+      try { fs.cpSync(uploadsProductPhotos, directProductPhotos, { recursive: true, force: true }); } catch {}
+      try { fs.cpSync(uploadsProductPhotos, phonesDir, { recursive: true, force: true }); } catch {}
+    }
+
+    const uploadsAdmin = path.join(targetStorageDir, "admin");
+    if (fs.existsSync(uploadsAdmin)) {
+      const bucketsAdmin = path.join(targetStorageDir, "buckets", "phonezone-uploads", "admin");
+      fs.mkdirSync(bucketsAdmin, { recursive: true });
+      try { fs.cpSync(uploadsAdmin, bucketsAdmin, { recursive: true, force: true }); } catch {}
+    }
+
+    // Mirror dealer and seller photos
+    for (const cat of ["dealer-photos", "seller-photos", "payment-proof"]) {
+      const srcCat = path.join(targetStorageDir, "buckets", "phonezone-uploads", cat);
+      if (fs.existsSync(srcCat)) {
+        const directCat = path.join(targetStorageDir, cat);
+        fs.mkdirSync(directCat, { recursive: true });
+        try { fs.cpSync(srcCat, directCat, { recursive: true, force: true }); } catch {}
+      }
+    }
   } catch (e) {
     logger.warn("[Restore] Error copying storage tree:", e.message);
   }
@@ -629,12 +657,15 @@ export async function restoreBackup(backupName, {
 
   let safety = { name: "skipped" };
   try {
-    const db = getDb();
-    const hasExistingData = (db.prepare("SELECT count(*) as c FROM phones").get()?.c || 0) > 0;
-    if (hasExistingData) {
-      fs.mkdirSync(path.join(PATHS.dataDir, "database"), { recursive: true });
-      fs.mkdirSync(path.join(PATHS.dataDir, "storage"), { recursive: true });
-      safety = createBackup();
+    if (fs.existsSync(PATHS.databaseFile)) {
+      const db = getDb();
+      const hasExistingData = (db.prepare("SELECT count(*) as c FROM phones").get()?.c || 0) > 0;
+      if (hasExistingData) {
+        fs.mkdirSync(PATHS.backupsDir, { recursive: true });
+        const bakName = `pre_restore_safety_${Date.now()}.db`;
+        fs.copyFileSync(PATHS.databaseFile, path.join(PATHS.backupsDir, bakName));
+        safety = { name: bakName };
+      }
     }
   } catch (safetyErr) {
     logger.warn("Pre-restore safety backup skipped:", safetyErr.message);
@@ -648,12 +679,29 @@ export async function restoreBackup(backupName, {
   try {
     if (isZipFile(src)) {
       const zip = await unzipper.Open.file(src);
-      await zip.extract({ path: temp });
+      for (const entry of zip.files) {
+        const norm = entry.path.replace(/^\.\//, "").toLowerCase();
+        if (norm.includes("temp_sim") || norm.endsWith("-wal") || norm.endsWith("-shm") || norm.endsWith("-journal")) {
+          continue;
+        }
+        const extractTo = path.join(temp, entry.path);
+        if (entry.type === "Directory") {
+          fs.mkdirSync(extractTo, { recursive: true });
+        } else {
+          fs.mkdirSync(path.dirname(extractTo), { recursive: true });
+          const content = await entry.buffer();
+          fs.writeFileSync(extractTo, content);
+        }
+      }
     } else {
       tar.x({
         file: src,
         cwd: temp,
         sync: true,
+        filter: (p) => {
+          const norm = p.toLowerCase();
+          return !norm.includes("temp_sim") && !norm.endsWith("-wal") && !norm.endsWith("-shm") && !norm.endsWith("-journal");
+        },
       });
     }
 

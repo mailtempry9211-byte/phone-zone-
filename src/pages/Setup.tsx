@@ -314,9 +314,15 @@ const Setup = () => {
       fd.append('wipe_existing', 'true');
     }
 
+    const isForce = new URLSearchParams(window.location.search).get('force') === '1';
+    const restoreUrl = isForce ? '/api/setup/restore?force=1' : '/api/setup/restore';
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/setup/restore');
+    xhr.open('POST', restoreUrl);
+    xhr.timeout = 300000;
     xhr.withCredentials = true;
+    if (isForce) {
+      xhr.setRequestHeader('x-force-restore', '1');
+    }
     if (unlockPassword) {
       xhr.setRequestHeader('x-admin-password', unlockPassword);
     }
@@ -385,6 +391,17 @@ const Setup = () => {
       setRestoreLogs((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] ❌ ${err}`,
+      ]);
+      toast.error(err);
+      setRestoring(false);
+    };
+
+    xhr.ontimeout = () => {
+      const err = 'Server took longer than expected. Please refresh the page to check if restore completed.';
+      setRestoreStatusText(`⚠️ ${err}`);
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ⚠️ ${err}`,
       ]);
       toast.error(err);
       setRestoring(false);

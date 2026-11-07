@@ -1377,7 +1377,7 @@ export async function checkSupabaseSetupStatus() {
  * plus reset local SQLite, to cleanly free up all quota for a fresh store.
  * Supports selective entities: ['settings', 'phones', 'sellers', 'customers', 'dealers', 'repairs', 'returns'] or ['all'].
  */
-export async function wipeSupabaseCloudData(entities = ["all"]) {
+export async function wipeSupabaseCloudData(entities = ["all"], { wipeLocal = false } = {}) {
   const { url, key, isConfigured } = getSupabaseConfig();
   const db = getDb();
 
@@ -1393,7 +1393,7 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
   }
   const isAll = !normalizedEntities || normalizedEntities.includes("all") || normalizedEntities.length === 0 || normalizedEntities.includes("*");
 
-  logger.info("[SupabaseSync] Starting Cloud and Local Storage Wipe...", { isAll, entities: normalizedEntities });
+  logger.info("[SupabaseSync] Starting Cloud Wipe...", { isAll, entities: normalizedEntities, wipeLocal });
 
   const entityTableMap = {
     settings: ["admin_settings"],
@@ -1500,73 +1500,77 @@ export async function wipeSupabaseCloudData(entities = ["all"]) {
     await Promise.allSettled(bucketPromises);
   }
 
-  // Wipe local SQLite data
-  const localTableMap = {
-    settings: [],
-    phones: ["phones"],
-    sellers: ["sellers"],
-    customers: ["customers"],
-    dealers: ["dealer_batches", "dealers"],
-    repairs: ["repair_job_items", "repair_jobs", "repair_customers"],
-    returns: ["returns"],
-  };
+  // Only wipe local SQLite and local storage files if wipeLocal is explicitly requested (e.g. from /setup/wipe-all).
+  // During backup restore, the user chose "Wipe old cloud records & photos first in Supabase" to clear remote quota,
+  // NOT to delete the newly restored local database or local storage files!
+  if (wipeLocal) {
+    const localTableMap = {
+      settings: [],
+      phones: ["phones"],
+      sellers: ["sellers"],
+      customers: ["customers"],
+      dealers: ["dealer_batches", "dealers"],
+      repairs: ["repair_job_items", "repair_jobs", "repair_customers"],
+      returns: ["returns"],
+    };
 
-  let localTables = [];
-  if (isAll) {
-    localTables = [
-      "repair_job_items", "repair_jobs", "repair_customers", "returns",
-      "phones", "dealer_batches", "dealers", "customers", "sellers",
-      "messages", "audit_logs", "sessions"
-    ];
-  } else {
-    for (const ent of normalizedEntities) {
-      if (localTableMap[ent]) localTables.push(...localTableMap[ent]);
+    let localTables = [];
+    if (isAll) {
+      localTables = [
+        "repair_job_items", "repair_jobs", "repair_customers", "returns",
+        "phones", "dealer_batches", "dealers", "customers", "sellers",
+        "messages", "audit_logs", "sessions"
+      ];
+    } else {
+      for (const ent of normalizedEntities) {
+        if (localTableMap[ent]) localTables.push(...localTableMap[ent]);
+      }
+    }
+
+    for (const t of localTables) {
+      try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
+    }
+
+    if (isAll) {
+      // Reset admin_settings
+      try {
+        db.prepare(`
+          UPDATE admin_settings SET
+            business_name = 'PhoneZone',
+            business_tagline = 'Second Hand Mobile & Repair Hub',
+            owner_name = '',
+            address = '',
+            phone_primary = '',
+            phone_secondary = '',
+            email = '',
+            instagram = '',
+            whatsapp_number = '',
+            google_business_url = '',
+            udyam_number = '',
+            logo_url = '',
+            signature_url = '',
+            setup_completed = 0
+          WHERE id = '00000000-0000-0000-0000-000000000001'
+        `).run();
+      } catch {}
+
+      // Clean local storage files
+      try {
+        const fs = await import("node:fs");
+        const pathMod = await import("node:path");
+        const { PATHS } = await import("../config/paths.js");
+        if (fs.existsSync(PATHS.storageDir)) {
+          const entries = fs.readdirSync(PATHS.storageDir);
+          for (const e of entries) {
+            try { fs.rmSync(pathMod.join(PATHS.storageDir, e), { recursive: true, force: true }); } catch {}
+          }
+        }
+      } catch {}
     }
   }
 
-  for (const t of localTables) {
-    try { db.prepare(`DELETE FROM ${t}`).run(); } catch {}
-  }
-
-  if (isAll) {
-    // Reset admin_settings
-    try {
-      db.prepare(`
-        UPDATE admin_settings SET
-          business_name = 'PhoneZone',
-          business_tagline = 'Second Hand Mobile & Repair Hub',
-          owner_name = '',
-          address = '',
-          phone_primary = '',
-          phone_secondary = '',
-          email = '',
-          instagram = '',
-          whatsapp_number = '',
-          google_business_url = '',
-          udyam_number = '',
-          logo_url = '',
-          signature_url = '',
-          setup_completed = 0
-        WHERE id = '00000000-0000-0000-0000-000000000001'
-      `).run();
-    } catch {}
-
-    // Clean local storage files
-    try {
-      const fs = await import("node:fs");
-      const pathMod = await import("node:path");
-      const { PATHS } = await import("../config/paths.js");
-      if (fs.existsSync(PATHS.storageDir)) {
-        const entries = fs.readdirSync(PATHS.storageDir);
-        for (const e of entries) {
-          try { fs.rmSync(pathMod.join(PATHS.storageDir, e), { recursive: true, force: true }); } catch {}
-        }
-      }
-    } catch {}
-  }
-
-  logger.info("[SupabaseSync] Cloud & Local Wipe finished successfully!", { isAll, entities: normalizedEntities });
-  return { ok: true, wiped: true, entities: isAll ? ["all"] : normalizedEntities };
+  logger.info("[SupabaseSync] Wipe finished successfully!", { isAll, entities: normalizedEntities, wipeLocal });
+  return { ok: true, wiped: true, entities: isAll ? ["all"] : normalizedEntities, wipeLocal };
 }
 
 /**

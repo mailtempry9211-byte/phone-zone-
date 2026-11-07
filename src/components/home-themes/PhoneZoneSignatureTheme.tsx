@@ -345,6 +345,10 @@ export const PhoneZoneSignatureTheme: React.FC<ThemeProps> = ({
                         src={heroPhone.product_photos[0]}
                         alt={heroPhone.phone_name}
                         className="h-56 object-contain drop-shadow-xl transition-transform duration-500 hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "/placeholder.svg";
+                        }}
                       />
                     ) : (
                       <Smartphone className="h-44 w-44 text-blue-200 stroke-1" />
@@ -543,6 +547,10 @@ export const PhoneZoneSignatureTheme: React.FC<ThemeProps> = ({
                           src={phone.product_photos[0]}
                           alt={phone.phone_name}
                           className="h-36 object-contain transition-transform duration-300 hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/placeholder.svg";
+                          }}
                         />
                       ) : (
                         <Smartphone className="h-24 w-24 text-slate-200" />

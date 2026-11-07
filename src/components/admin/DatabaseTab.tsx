@@ -541,6 +541,7 @@ const DatabaseTab = () => {
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/backups/restore-upload');
+    xhr.timeout = 300000;
     xhr.withCredentials = true;
 
     xhr.upload.onprogress = (event) => {
@@ -604,6 +605,17 @@ const DatabaseTab = () => {
       setRestoreLogs((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] ❌ ${err}`,
+      ]);
+      toast.error(err);
+      setRestoreBusy(false);
+    };
+
+    xhr.ontimeout = () => {
+      const err = 'Server took longer than expected. Please refresh the page to check if restore completed.';
+      setRestoreStatusText(`⚠️ ${err}`);
+      setRestoreLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ⚠️ ${err}`,
       ]);
       toast.error(err);
       setRestoreBusy(false);
