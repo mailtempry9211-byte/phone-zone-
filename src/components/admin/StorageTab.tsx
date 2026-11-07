@@ -40,8 +40,6 @@ interface StorageFile {
  * window.__PHONEZONE_OFFLINE__ once at module load was false in the desktop and
  * dev runs, so this tab silently fell back to the (empty) Supabase bucket.
  */
-const offline = () => isOfflineMode();
-
 const StorageTab = () => {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -51,64 +49,24 @@ const StorageTab = () => {
   const { data: files, isLoading, error, refetch } = useQuery({
     queryKey: ['storage-files'],
     queryFn: async () => {
-      // OFFline: the backend owns every file (seller/customer/phone/repair/
-      // invoice/admin/bucket trees), so list it there. Enumerating one Supabase
-      // bucket reported a fraction of the real usage and could not delete real
-      // app photos at all.
-      if (offline()) {
-        const res = await fetch('/api/files?limit=2000', { credentials: 'include' });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `Could not load stored files (${res.status}).`);
-        }
-        const rows = (await res.json()) as Array<Record<string, any>>;
-        return rows.map((row) => ({
-          name: String(row.relative_path),
-          fullPath: String(row.relative_path),
-          id: row.id,
-          url: `/api/files/${row.id}`,
-          owner: row.owner_type,
-          original_name: row.original_name || undefined,
-          created_at: row.created_at,
-          metadata: { size: row.size_bytes, mimetype: row.mime_type },
-        })) as StorageFile[];
+      // Direct backend API: indexes and serves every single file (phone photos,
+      // seller aadhaar, documents, signatures, logos) across both local & Render cloud!
+      const res = await fetch('/api/files?limit=2000', { credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Could not load stored files (${res.status}).`);
       }
-
-      // Online: first get all folders
-      const { data: folders, error: folderError } = await supabase.storage
-        .from('phonezone-uploads')
-        .list('', {
-          limit: 1000,
-          sortBy: { column: 'name', order: 'asc' }
-        });
-
-      if (folderError) throw folderError;
-
-      // Then get files from each folder
-      let allFiles: StorageFile[] = [];
-      
-      for (const folder of folders || []) {
-        if (folder.name) {
-          const { data: folderFiles, error: fileError } = await supabase.storage
-            .from('phonezone-uploads')
-            .list(folder.name, {
-              limit: 1000,
-              sortBy: { column: 'name', order: 'asc' }
-            });
-
-          if (!fileError && folderFiles) {
-            // Add folder path to file names for proper identification
-            const filesWithPath = folderFiles.map(file => ({
-              ...file,
-              name: `${folder.name}/${file.name}`,
-              fullPath: `${folder.name}/${file.name}`
-            }));
-            allFiles = [...allFiles, ...filesWithPath];
-          }
-        }
-      }
-
-      return allFiles as StorageFile[];
+      const rows = (await res.json()) as Array<Record<string, any>>;
+      return rows.map((row) => ({
+        name: String(row.original_name || row.relative_path || row.id),
+        fullPath: String(row.relative_path || row.id),
+        id: row.id,
+        url: `/api/public/files/${row.id}`,
+        owner: row.owner_type,
+        original_name: row.original_name || undefined,
+        created_at: row.created_at,
+        metadata: { size: row.size_bytes, mimetype: row.mime_type },
+      })) as StorageFile[];
     }
   });
 
@@ -126,25 +84,23 @@ const StorageTab = () => {
 
   const getFileUrl = (file: StorageFile): string => {
     if (file.url) return file.url;
-    const { data } = supabase.storage
-      .from('phonezone-uploads')
-      .getPublicUrl(file.name);
-    return data.publicUrl;
+    if (file.id) return `/api/public/files/${file.id}`;
+    return `/api/public/files/${encodeURIComponent(file.name)}`;
   };
 
   const handleSelectAll = () => {
     if (selectedFiles.length === files?.length) {
       setSelectedFiles([]);
     } else {
-      setSelectedFiles(files?.map(file => file.name) || []);
+      setSelectedFiles(files?.map(file => file.id || file.name) || []);
     }
   };
 
-  const handleFileSelect = (fileName: string, checked: boolean) => {
+  const handleFileSelect = (fileId: string, checked: boolean) => {
     if (checked) {
-      setSelectedFiles([...selectedFiles, fileName]);
+      setSelectedFiles([...selectedFiles, fileId]);
     } else {
-      setSelectedFiles(selectedFiles.filter(f => f !== fileName));
+      setSelectedFiles(selectedFiles.filter(f => f !== fileId));
     }
   };
 
@@ -153,29 +109,13 @@ const StorageTab = () => {
 
     setIsDeleting(true);
     try {
-      // In offline mode, route through the backend /api/files endpoint which
-      // covers ALL owner types. In online mode, use Supabase Storage directly.
-      if (offline()) {
-        // Delete each file by its ID via the backend. The files list from the
-        // bucket compat endpoint includes the file id in the response.
-        for (const fileName of selectedFiles) {
-          const fileRecord = files?.find(f => f.name === fileName);
-          if (fileRecord?.id) {
-            const delRes = await fetch(`/api/files/${fileRecord.id}`, {
-              method: 'DELETE',
-              credentials: 'include',
-            });
-            if (!delRes.ok) {
-              const body = await delRes.json().catch(() => ({}));
-              console.error('Delete error for', fileName, body);
-            }
-          }
-        }
-      } else {
-        const { error } = await supabase.storage
-          .from('phonezone-uploads')
-          .remove(selectedFiles);
-        if (error) throw error;
+      for (const target of selectedFiles) {
+        const fileRecord = files?.find(f => (f.id === target || f.name === target));
+        const fileId = fileRecord?.id || target;
+        await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
       }
 
       toast.success(`Successfully deleted ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`);
@@ -194,29 +134,14 @@ const StorageTab = () => {
 
     setIsDeleting(true);
     try {
-      if (offline()) {
-        // Delete every file record via the backend (one request per file;
-        // the compat write limiter allows far more than any real library).
-        for (const file of files) {
-          if (file.id) {
-            const delRes = await fetch(`/api/files/${file.id}`, {
-              method: 'DELETE',
-              credentials: 'include',
-            });
-            if (!delRes.ok) {
-              const body = await delRes.json().catch(() => ({}));
-              console.error('Delete error for', file.name, body);
-            }
-          }
+      for (const file of files) {
+        if (file.id) {
+          await fetch(`/api/files/${encodeURIComponent(file.id)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
         }
-      } else {
-        const fileNames = files.map(file => file.name);
-        const { error } = await supabase.storage
-          .from('phonezone-uploads')
-          .remove(fileNames);
-        if (error) throw error;
       }
-
       toast.success(`Successfully deleted all ${files.length} files`);
       setSelectedFiles([]);
       refetch();

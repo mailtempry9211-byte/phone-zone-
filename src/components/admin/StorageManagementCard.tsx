@@ -29,17 +29,18 @@ const StorageManagementCard = () => {
   const fetchStorageFiles = async () => {
     try {
       setIsLoading(true);
-      const { data: files, error } = await supabase.storage
-        .from('phonezone-uploads')
-        .list('', {
-          limit: 1000,
-          sortBy: { column: 'created_at', order: 'desc' }
-        });
-
-      if (error) throw error;
-
-      setFiles(files || []);
-      console.log(`Fetched ${files?.length || 0} files from storage`);
+      const res = await fetch('/api/files?limit=2000', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch storage files');
+      const rows = await res.json();
+      const mapped = rows.map((r: any) => ({
+        id: r.id,
+        name: r.original_name || r.relative_path || r.id,
+        updated_at: r.created_at,
+        created_at: r.created_at,
+        last_accessed_at: r.created_at,
+        metadata: { size: r.size_bytes, mimetype: r.mime_type },
+      }));
+      setFiles(mapped || []);
     } catch (error) {
       console.error('Error fetching storage files:', error);
       toast.error('Failed to fetch storage files');
@@ -84,11 +85,14 @@ const StorageManagementCard = () => {
 
     try {
       setIsDeleting(true);
-      const { error } = await supabase.storage
-        .from('phonezone-uploads')
-        .remove(selectedFiles);
-
-      if (error) throw error;
+      for (const target of selectedFiles) {
+        const fileRecord = files.find(f => f.name === target || f.id === target);
+        const fileId = fileRecord?.id || target;
+        await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+      }
 
       toast.success(`Successfully deleted ${selectedFiles.length} files`);
       setSelectedFiles([]);
@@ -109,14 +113,16 @@ const StorageManagementCard = () => {
 
     try {
       setIsDeleting(true);
-      const allFileNames = files.map(file => file.name);
-      const { error } = await supabase.storage
-        .from('phonezone-uploads')
-        .remove(allFileNames);
+      for (const file of files) {
+        if (file.id) {
+          await fetch(`/api/files/${encodeURIComponent(file.id)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        }
+      }
 
-      if (error) throw error;
-
-      toast.success(`Successfully deleted all ${files.length} files from storage`);
+      toast.success(`Successfully deleted all ${files.length} files`);
       setFiles([]);
       setSelectedFiles([]);
     } catch (error) {
@@ -132,11 +138,9 @@ const StorageManagementCard = () => {
     if (fileName.startsWith("http://") || fileName.startsWith("https://") || fileName.startsWith("data:")) {
       return fileName;
     }
-    const clean = fileName.replace(/^\/+/, "");
-    const { data } = supabase.storage
-      .from('phonezone-uploads')
-      .getPublicUrl(clean);
-    return data.publicUrl;
+    const fileRecord = files.find(f => f.name === fileName || f.id === fileName);
+    if (fileRecord?.id) return `/api/public/files/${fileRecord.id}`;
+    return `/api/public/files/${encodeURIComponent(fileName)}`;
   };
 
   const totalSize = files.reduce((sum, file) => sum + (file.metadata?.size || 0), 0);

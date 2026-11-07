@@ -1250,10 +1250,14 @@ export function buildRouter() {
         admin_business_name: db.prepare("SELECT business_name FROM admin_settings LIMIT 1").get()?.business_name || null,
       };
 
-      // If Supabase is missing settings or dealers while local SQLite has them, trigger a push!
+      // If Supabase is missing settings or dealers while local SQLite has them, trigger a push ONLY if local data is real (not blank seeds!)
       let pushResult = null;
-      if (sqliteCounts.admin_business_name && (supabaseCounts.admin_settings.count === 0 || supabaseCounts.dealers.count === 0 || _req.query.push === "1")) {
-        logger.info("[TestSupabase] Auto-pushing missing local SQLite records to Supabase Cloud...");
+      const isRealLocalData = sqliteCounts.admin_business_name &&
+        sqliteCounts.admin_business_name !== "PhoneZone" &&
+        (sqliteCounts.phones > 0 || sqliteCounts.sellers > 0 || sqliteCounts.dealers > 0);
+
+      if ((isRealLocalData && (supabaseCounts.admin_settings.count === 0 || supabaseCounts.dealers.count === 0)) || _req.query.push === "1") {
+        logger.info("[TestSupabase] Pushing verified local SQLite records to Supabase Cloud...");
         pushResult = await supabaseSync.pushAllToSupabase().catch((e) => ({ ok: false, error: e.message }));
       }
 
