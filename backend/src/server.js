@@ -113,6 +113,11 @@ export function createServer() {
     }
   });
 
+  // Ultra-lightweight health check for Railway / cloud keep-alive (0 bandwidth, returns 2 bytes "OK")
+  app.get("/health", (_req, res) => {
+    res.status(200).type("text/plain").send("OK");
+  });
+
   app.use("/api", buildRouter());
 
   // Static frontend (built Vite output or Vite dev server fallback)
@@ -210,10 +215,12 @@ if (isMain) {
       })
       .catch(() => {});
 
-    // Automated keep-alive pinger for Render / cloud hosting (pings /api/health every 10 min)
-    const keepAliveUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+    // Automated keep-alive pinger for Render / Railway / cloud hosting (pings /health every 10 min)
+    const keepAliveUrl = process.env.KEEP_ALIVE_URL || 
+      process.env.RENDER_EXTERNAL_URL || 
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
     if (keepAliveUrl) {
-      const pingTarget = `${keepAliveUrl.replace(/\/$/, "")}/api/health`;
+      const pingTarget = `${keepAliveUrl.replace(/\/$/, "")}/health`;
       setInterval(async () => {
         try {
           await fetch(pingTarget);

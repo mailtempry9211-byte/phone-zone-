@@ -21,7 +21,7 @@ export function reloadBusinessConfig() {
 }
 
 export const SERVER = {
-  host: process.env.PHONEZONE_HOST || (process.env.PORT || process.env.RENDER ? "0.0.0.0" : "127.0.0.1"),
+  host: process.env.PHONEZONE_HOST || (process.env.PORT || process.env.RENDER || process.env.RAILWAY_ENVIRONMENT ? "0.0.0.0" : "127.0.0.1"),
   port: Number(process.env.PORT || process.env.PHONEZONE_PORT || 47713),
   sessionTtlHours: Number(process.env.PHONEZONE_SESSION_HOURS || 12),
   maxUploadBytes: Number(process.env.PHONEZONE_MAX_UPLOAD_BYTES || 10 * 1024 * 1024),

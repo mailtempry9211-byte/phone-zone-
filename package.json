@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "start": "node backend/src/server.js",
+    "railway:build": "npm install --include=dev && cd backend && npm install && cd .. && npm run build",
     "render:build": "npm install --include=dev && cd backend && npm install && cd .. && npm run build",
     "backend": "node backend/ensure-native.cjs && node backend/src/server.js",
     "dev:all": "node scripts/dev.mjs",

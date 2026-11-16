@@ -94,6 +94,7 @@
             <span class="text-xs font-semibold text-slate-300">Software:</span>
             <select id="softwareSelect" onchange="onSoftwareChange()" class="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer">
               <option value="phonezone" class="bg-slate-900 text-white">PhoneZone Store &amp; Repair Manager</option>
+              <option value="phonemanagement" class="bg-slate-900 text-white">PhoneLink Hub (Parental &amp; Remote Management)</option>
             </select>
             <button onclick="openAddSoftwareModal()" class="text-blue-400 hover:text-blue-300 p-1" title="Register New Software (+50 softwares)">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="plus-circle" aria-hidden="true" class="lucide lucide-plus-circle w-4 h-4"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
@@ -255,8 +256,9 @@
       <form id="newLicenseForm" class="space-y-4 text-xs">
         <div>
           <label class="block font-semibold text-slate-300 mb-1">Target Software</label>
-          <select id="modalSoftwareSelect" class="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold focus:outline-none focus:border-blue-500">
+          <select id="modalSoftwareSelect" onchange="generateNewKeyString()" class="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold focus:outline-none focus:border-blue-500">
             <option value="phonezone">PhoneZone Store &amp; Repair Manager</option>
+            <option value="phonemanagement">PhoneLink Hub (Parental &amp; Remote Management)</option>
           </select>
         </div>
 
@@ -548,7 +550,10 @@
     // State
     let currentSoftware = 'phonezone';
     let licensesList = [];
-    let softwaresList = [{ id: 'phonezone', name: 'PhoneZone Store & Repair Manager' }];
+    let softwaresList = [
+      { id: 'phonezone', name: 'PhoneZone Store & Repair Manager' },
+      { id: 'phonemanagement', name: 'PhoneLink Hub (Parental & Remote Management)' }
+    ];
 
     // Embedded Default Supabase Credentials (Pre-baked so HTML works on ANY device: Phone, Laptop, Tablet without setup)
     const EMBEDDED_SUPABASE_URL = 'https://nfktxnjxdmqcvlghlodi.supabase.co';
@@ -667,16 +672,20 @@
             softwaresList = data;
             const select1 = document.getElementById('softwareSelect');
             const select2 = document.getElementById('modalSoftwareSelect');
-            select1.innerHTML = '';
-            select2.innerHTML = '';
-            data.forEach(s => {
-              const opt1 = new Option(s.name, s.id);
-              const opt2 = new Option(s.name, s.id);
-              select1.add(opt1);
-              select2.add(opt2);
-            });
-            select1.value = currentSoftware;
-            select2.value = currentSoftware;
+            if (select1) {
+              select1.innerHTML = '';
+              data.forEach(s => {
+                select1.add(new Option(s.name, s.id));
+              });
+              select1.value = currentSoftware;
+            }
+            if (select2) {
+              select2.innerHTML = '';
+              data.forEach(s => {
+                select2.add(new Option(s.name, s.id));
+              });
+              select2.value = currentSoftware;
+            }
           }
         }
       } catch {}
@@ -842,18 +851,28 @@
       lucide.createIcons();
     }
 
-    function generateKey() {
+    function generateKey(swId) {
+      const selected = swId || document.getElementById('modalSoftwareSelect')?.value || currentSoftware || 'phonezone';
+      const prefix = selected === 'phonemanagement' ? 'PLNK' : 'PZON';
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let part = (len) => Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      return `PZON-${part(4)}-${part(4)}-${part(4)}`;
+      return `${prefix}-${part(4)}-${part(4)}-${part(4)}`;
     }
 
     function generateNewKeyString() {
-      document.getElementById('generatedKey').value = generateKey();
+      const sel = document.getElementById('modalSoftwareSelect')?.value || currentSoftware;
+      document.getElementById('generatedKey').value = generateKey(sel);
     }
 
     function openNewLicenseModal() {
-      document.getElementById('modalSoftwareSelect').value = currentSoftware;
+      const mainSelect = document.getElementById('softwareSelect');
+      const modalSelect = document.getElementById('modalSoftwareSelect');
+      if (mainSelect && modalSelect && mainSelect.options.length > 0) {
+        modalSelect.innerHTML = mainSelect.innerHTML;
+      }
+      if (modalSelect) {
+        modalSelect.value = currentSoftware || 'phonezone';
+      }
       generateNewKeyString();
       document.getElementById('newLicenseModal').classList.remove('hidden');
     }
